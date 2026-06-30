@@ -41,6 +41,7 @@ class ApiConfig {
   static const String paymentPreview = '$baseUrl/payment/preview';
   static const String processPayment = '$baseUrl/payment/process';
   static const String getLinkedBanks = '$baseUrl/wallet/linked-banks';
+  static const String getLinkedServices = '$baseUrl/wallet/linked-services';
   static const String linkBank = '$baseUrl/wallet/link-bank';
   static const String verifyPin = '$baseUrl/wallet/verify-pin';
   static const String deposit = '$baseUrl/transaction/deposit';
@@ -58,4 +59,7 @@ class ApiConfig {
   static const String createRedPacket = '$baseUrl/red-packet/create';
   static String getRedPacketDetails(String id) => '$baseUrl/red-packet/$id';
   static String claimRedPacket(String id) => '$baseUrl/red-packet/$id/claim';
+
+  // --- MERCHANT ENDPOINTS ---
+  static const String generateAuthCode = '$baseUrl/merchant/auth-code/generate';
 }
