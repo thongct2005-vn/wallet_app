@@ -4,15 +4,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
 import '../financial_center_api/financial_center_api.dart';
 import 'package:intl/intl.dart';
+import 'package:wallet_app/features/bank/screens/bank_list_screen.dart';
+import '../../settings/screens/linked_services_screen.dart';
 import '../../bank/screens/bank_link_screen.dart';
 import 'payment_order_screen.dart';
 import '../widgets/financial_center_appbar_actions.dart';
+import '../../profile/screens/limit_info_screen.dart';
 
 class FinancialCenterScreen extends StatefulWidget {
   final String balance;
   final String token;
+  final int initialTabIndex;
 
-  const FinancialCenterScreen({Key? key, required this.balance, required this.token}) : super(key: key);
+  const FinancialCenterScreen({Key? key, required this.balance, required this.token, this.initialTabIndex = 0}) : super(key: key);
 
   @override
   State<FinancialCenterScreen> createState() => _FinancialCenterScreenState();
@@ -20,13 +24,14 @@ class FinancialCenterScreen extends StatefulWidget {
 
 class _FinancialCenterScreenState extends State<FinancialCenterScreen> {
   bool _isBalanceVisible = true;
-  int _selectedIndex = 0;
+  late int _selectedIndex;
   bool _isLoading = true;
   List<dynamic> _linkedBanks = [];
 
   @override
   void initState() {
     super.initState();
+    _selectedIndex = widget.initialTabIndex;
     _fetchLinkedBanks();
   }
 
@@ -166,41 +171,6 @@ class _FinancialCenterScreenState extends State<FinancialCenterScreen> {
           child: Column(
             children: [
               const SizedBox(height: 16),
-              // Toggle Button (Tài sản / Phải trả)
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 60),
-                height: 36,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Text(
-                          'Tài sản',
-                          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: Container(
-                        alignment: Alignment.center,
-                        child: const Text(
-                          'Phải trả',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
               const SizedBox(height: 24),
               const Text(
                 'Tổng tài sản',
@@ -304,22 +274,16 @@ class _FinancialCenterScreenState extends State<FinancialCenterScreen> {
                             _buildOverviewAssetItem(
                               iconData: Icons.account_balance,
                               iconColor: Colors.green,
+                              bankCode: bank['bank_code']?.toString(),
                               title: bank['bank_name'] ?? 'Ngân hàng',
-                              value: 'Bấm xem số dư',
+                              value: '',
                               valueColor: AppColors.primaryPink,
                               subtitle: '--',
                             ),
                           ],
                         );
                       }).toList(),
-                      _buildDivider(),
-                      _buildOverviewAssetItem(
-                        iconData: Icons.pie_chart,
-                        iconColor: Colors.red,
-                        title: 'Tài sản còn lại',
-                        value: '--',
-                        subtitle: '--',
-                      ),
+
                     ],
                   ),
                 ),
@@ -384,6 +348,7 @@ class _FinancialCenterScreenState extends State<FinancialCenterScreen> {
                     return _buildAccountItem(
                       iconData: Icons.account_balance,
                       iconColor: Colors.green,
+                      bankCode: bank['bank_code']?.toString(),
                       title: bank['bank_name'] ?? 'Ngân hàng',
                       value: 'Xem số dư >',
                       valueColor: Colors.black87,
@@ -451,7 +416,35 @@ class _FinancialCenterScreenState extends State<FinancialCenterScreen> {
                     },
                   ),
                   _buildDivider(),
-                  _buildUtilityRow(iconData: Icons.credit_score, iconColor: Colors.pink, title: 'Thông tin hạn mức', subtitle: 'Quản lý hạn mức giao dịch và nạp rút'),
+                  _buildUtilityRow(
+                    iconData: Icons.credit_score, 
+                    iconColor: Colors.pink, 
+                    title: 'Thông tin hạn mức', 
+                    subtitle: 'Quản lý hạn mức giao dịch và nạp rút',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => LimitInfoScreen(token: widget.token),
+                        ),
+                      );
+                    },
+                  ),
+                  _buildDivider(),
+                  _buildUtilityRow(
+                    iconData: Icons.receipt_long_rounded, 
+                    iconColor: Colors.pinkAccent, 
+                    title: 'Dịch vụ liên kết & Hóa đơn định kỳ', 
+                    subtitle: 'Quản lý dịch vụ liên kết và hóa đơn định kỳ',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const LinkedServicesScreen(),
+                        ),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
@@ -465,6 +458,7 @@ class _FinancialCenterScreenState extends State<FinancialCenterScreen> {
   Widget _buildOverviewAssetItem({
     required IconData iconData,
     required Color iconColor,
+    String? bankCode,
     required String title,
     required String value,
     Color? valueColor,
@@ -483,7 +477,16 @@ class _FinancialCenterScreenState extends State<FinancialCenterScreen> {
               border: Border.all(color: Colors.grey.shade200),
             ),
             alignment: Alignment.center,
-            child: Icon(iconData, color: iconColor, size: 20),
+            child: bankCode != null
+                ? Image.network(
+                    'https://api.vietqr.io/img/$bankCode.png',
+                    width: 20,
+                    height: 20,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) =>
+                        Icon(iconData, color: iconColor, size: 20),
+                  )
+                : Icon(iconData, color: iconColor, size: 20),
           ),
           const SizedBox(width: 12),
           Text(
@@ -523,6 +526,7 @@ class _FinancialCenterScreenState extends State<FinancialCenterScreen> {
   Widget _buildAccountItem({
     required IconData iconData,
     required Color iconColor,
+    String? bankCode,
     required String title,
     required String value,
     Color? valueColor,
@@ -553,7 +557,16 @@ class _FinancialCenterScreenState extends State<FinancialCenterScreen> {
                   border: Border.all(color: Colors.grey.shade100),
                 ),
                 alignment: Alignment.center,
-                child: Icon(iconData, color: iconColor, size: 22),
+                child: bankCode != null
+                    ? Image.network(
+                        'https://api.vietqr.io/img/$bankCode.png',
+                        width: 22,
+                        height: 22,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) =>
+                            Icon(iconData, color: iconColor, size: 22),
+                      )
+                    : Icon(iconData, color: iconColor, size: 22),
               ),
               const SizedBox(width: 12),
               Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black87)),

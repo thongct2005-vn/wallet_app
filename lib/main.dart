@@ -10,10 +10,10 @@ import 'features/home/screens/home_screen.dart';
 import 'core/services/custom_http_client.dart';
 import 'core/services/socket_service.dart';
 import 'core/services/network_service.dart';
-import 'package:app_links/app_links.dart';
+import 'core/services/deep_link_service.dart';
 import 'dart:async';
+import 'package:app_links/app_links.dart';
 import 'features/auth/screens/wallet_link_confirm_screen.dart';
-
 import 'package:flutter/services.dart';
 
 void main() async {
@@ -47,6 +47,9 @@ void main() async {
 
     // Xin quyền hiển thị thông báo
     await NotificationService.instance.requestPermissions();
+
+    // Khởi tạo DeepLinkService
+    DeepLinkService().initialize();
 
     // Đọc thông tin phiên đăng nhập trước đó
     const secureStorage = FlutterSecureStorage();
@@ -110,7 +113,18 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
+  String? _lastHandledUri;
+
   void _handleDeepLink(Uri uri) {
+    final uriString = uri.toString();
+    if (_lastHandledUri == uriString) return; // Bỏ qua nếu là sự kiện trùng lặp
+    _lastHandledUri = uriString;
+
+    // Reset cờ sau 1 giây để cho phép mở lại link ở những lần sau
+    Future.delayed(const Duration(seconds: 1), () {
+      _lastHandledUri = null;
+    });
+
     if (uri.scheme == 'mio' && uri.host == 'link') {
       final merchant = uri.queryParameters['merchant'] ?? 'Đối tác';
       // Mở màn hình xác nhận liên kết

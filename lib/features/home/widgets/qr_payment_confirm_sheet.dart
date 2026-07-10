@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
+import 'package:uuid/uuid.dart';
 import 'package:flutter/material.dart';
 import '../../../core/services/custom_http_client.dart';
 import '../../../core/constants/api_config.dart';
@@ -32,24 +33,22 @@ class QrPaymentConfirmSheet extends StatefulWidget {
 class _QrPaymentConfirmSheetState extends State<QrPaymentConfirmSheet> {
   final _client = CustomHttpClient();
   bool isPaying = false;
+  final String _idempotencyKey = const Uuid().v7();
 
   String fmtAmt(int v) => v.toString().replaceAllMapped(
     RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
     (m) => '${m[1]}.',
   );
 
-  Future<void> _processQrPayment(String qrToken, int amount) async {
-    final idempotencyKey =
-        '${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(999999)}';
-
+  Future<void> _processQrPayment(String qrToken, int amount, String pin) async {
     try {
       final response = await _client.post(
         Uri.parse(ApiConfig.processPayment),
         headers: {
           'Content-Type': 'application/json',
-          'idempotency-key': idempotencyKey,
+          'idempotency-key': _idempotencyKey,
         },
-        body: jsonEncode({'qr_token': qrToken}),
+        body: jsonEncode({'qr_token': qrToken, 'pin': pin}),
       );
 
       if (!mounted) return;
@@ -204,27 +203,16 @@ class _QrPaymentConfirmSheetState extends State<QrPaymentConfirmSheet> {
                             builder: (pinSheetCtx) => PinConfirmBottomSheet(
                               onPinEntered: (pin) async {
                                 try {
-                                  final verifyResp = await _client.post(
-                                    Uri.parse(ApiConfig.verifyPin),
-                                    headers: {
-                                      'Content-Type': 'application/json',
-                                    },
-                                    body: jsonEncode({'pin': pin}),
+                                  // Xác thực PIN sẽ được backend thực hiện trực tiếp trong API thanh toán
+                                  if (!mounted) return null;
+                                  Navigator.pop(pinSheetCtx);
+                                  setState(() => isPaying = true);
+                                  await _processQrPayment(
+                                    widget.qrToken,
+                                    widget.amount,
+                                    pin,
                                   );
-                                  if (verifyResp.statusCode == 200) {
-                                    if (!mounted) return null;
-                                    Navigator.pop(pinSheetCtx);
-                                    setState(() => isPaying = true);
-                                    await _processQrPayment(
-                                      widget.qrToken,
-                                      widget.amount,
-                                    );
-                                    return null;
-                                  } else {
-                                    final data = jsonDecode(verifyResp.body);
-                                    return data['error'] ??
-                                        "Mã PIN không chính xác";
-                                  }
+                                  return null;
                                 } catch (e) {
                                   return "Lỗi kết nối máy chủ";
                                 }
