@@ -1,8 +1,11 @@
+import 'package:app/core/network/api_client.dart';
+import 'package:app/core/network/api_config.dart';
 import 'package:flutter/material.dart';
 import 'package:country_flags/country_flags.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'login_password_screen.dart';
+
 
 class LoginPhoneScreen extends StatefulWidget {
   final String? initialPhoneNumber;
@@ -16,24 +19,24 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   bool _hasError = false;
-  bool _isPhoneEmpty = true;
+  bool _isPhoneExists = false;
+  String _msg = '';
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
     _phoneController.text = widget.initialPhoneNumber ?? "";
     _phoneController.addListener(() {
-      
-        setState(() {
-          if (_hasError) {
+      setState(() {
+        if (_hasError) {
           _hasError = false;
-          }
-          _isPhoneEmpty = _phoneController.text.isEmpty;
-        });
+        }
+      });
     });
     _focusNode.addListener(() {
-        setState(() {});
-      });
+      setState(() {});
+    });
   }
 
   @override
@@ -47,191 +50,259 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
     return PopScope(
       canPop: false,
       child: GestureDetector(
-        onTap: (){
+        onTap: () {
           FocusManager.instance.primaryFocus?.unfocus();
         },
         child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: AppBar(
-          title: Text("Nhập SĐT", style: TextStyle(fontSize: 20)),
           backgroundColor: Colors.white,
-        ),
-        body: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                      child: RichText(
-                        text: TextSpan(
-                          children: [
-                            TextSpan(
-                              text: "Số điện thoại",
-                              style: GoogleFonts.dancingScript(
-                                color: Colors.pink,
-                                fontSize: 35,
-                                fontWeight: FontWeight.bold
-                              )
-                            ),
-                            TextSpan(
-                              text: " của bạn",
-                              style: TextStyle(
-                                color: Colors.black,
-                                fontSize: 25,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 25),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                      child: Container(
-                        height: 55,
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: _hasError
-                                ? const Color.fromARGB(255, 253, 51, 36)
-                                : _focusNode.hasFocus
-                                ? Colors.pink
-                                : Colors.grey,
-                            width: _hasError
-                                ? 2
-                                : _focusNode.hasFocus
-                                ? 2
-                                : 1,
-                          ),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          children: [
-                            SizedBox(width: 10),
-                            SizedBox(
-                              width: 30,
-                              height: 20,
-                              child: CountryFlag.fromCountryCode('VN'),
-                            ),
-                            SizedBox(width: 10),
-                            SizedBox(
-                              width: 50,
-                              height: 30,
-                              child: Text(
-                                "+84",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 20,
-                                ),
-                              ),
-                            ),
-
-                            SizedBox(
-                              height: 35,
-                              width: 10,
-                              child: Text(
-                                "|",
-                                style: TextStyle(
-                                  fontSize: 25,
-                                  color: Colors.grey,
-                                  fontWeight: FontWeight.w300,
-                                ),
-                              ),
-                            ),
-                            SizedBox(width: 5),
-                            Expanded(
-                              child: TextField(
-                                controller: _phoneController,
-                                keyboardType: TextInputType.phone,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly,
-                                ],
-                                decoration: const InputDecoration(
-                                  border: InputBorder.none,
-                                  counterText: ""
-                                ),
-                                style: TextStyle(fontSize: 20),
-                                cursorColor: Colors.pink,
-                                focusNode: _focusNode,
-                                maxLength: 10,
-                                
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    if(_hasError)...[
-                      const SizedBox(height: 5),
+          appBar: AppBar(
+            title: Text("Nhập SĐT", style: TextStyle(fontSize: 20)),
+            backgroundColor: Colors.white,
+          ),
+          body: SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
                       Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                      child: Row(children: [
-                        Icon(Icons.error_outline_rounded, color: Colors.red, size: 15),
-                        SizedBox(width: 3),
-                        Text(_isPhoneEmpty?"Vui lòng nhập số điện thoại":"Số điện thoại không hợp lệ", style: GoogleFonts.roboto(color: Colors.red),)
-                      ],),
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                        child: RichText(
+                          text: TextSpan(
+                            children: [
+                              TextSpan(
+                                text: "Số điện thoại",
+                                style: GoogleFonts.dancingScript(
+                                  color: Colors.pink,
+                                  fontSize: 35,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              TextSpan(
+                                text: " của bạn",
+                                style: TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 25,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ]
-                  ],
+                      const SizedBox(height: 25),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                        child: Container(
+                          height: 55,
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: _hasError
+                                  ? const Color.fromARGB(255, 253, 51, 36)
+                                  : _focusNode.hasFocus
+                                  ? Colors.pink
+                                  : Colors.grey,
+                              width: _hasError
+                                  ? 2
+                                  : _focusNode.hasFocus
+                                  ? 2
+                                  : 1,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            children: [
+                              SizedBox(width: 10),
+                              SizedBox(
+                                width: 30,
+                                height: 20,
+                                child: CountryFlag.fromCountryCode('VN'),
+                              ),
+                              SizedBox(width: 10),
+                              SizedBox(
+                                width: 50,
+                                height: 30,
+                                child: Text(
+                                  "+84",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 20,
+                                  ),
+                                ),
+                              ),
+
+                              SizedBox(
+                                height: 35,
+                                width: 10,
+                                child: Text(
+                                  "|",
+                                  style: TextStyle(
+                                    fontSize: 25,
+                                    color: Colors.grey,
+                                    fontWeight: FontWeight.w300,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 5),
+                              Expanded(
+                                child: TextField(
+                                  controller: _phoneController,
+                                  keyboardType: TextInputType.phone,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                  ],
+                                  decoration: const InputDecoration(
+                                    border: InputBorder.none,
+                                    counterText: "",
+                                  ),
+                                  style: TextStyle(fontSize: 20),
+                                  cursorColor: Colors.pink,
+                                  focusNode: _focusNode,
+                                  maxLength: 10,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (_hasError) ...[
+                        const SizedBox(height: 5),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.error_outline_rounded,
+                                color: Colors.red,
+                                size: 15,
+                              ),
+                              SizedBox(width: 3),
+                              Text(
+                                _msg,
+                                style: GoogleFonts.roboto(color: Colors.red),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-              ),
-              Padding(
-                padding: EdgeInsets.fromLTRB(15, 10, 15, 10),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 55,
-                  child: ElevatedButton(
-                    onPressed: () {
-                        if(_phoneController.text.isEmpty){
-                          setState(() {
-                            _isPhoneEmpty = true;
-                            _hasError = true;
-                          });
-                        }
-                        else if(!isValidPhoneNumber(_phoneController.text)){
-                          setState(() {
-                            _hasError = true;
-                            _isPhoneEmpty = false;
-                          });
-                        }
+                Padding(
+                  padding: EdgeInsets.fromLTRB(15, 10, 15, 10),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 55,
+                    child: ElevatedButton(
+                      onPressed: _isLoading
+                          ? null
+                          : () async {
+                              if (_phoneController.text.isEmpty) {
+                                setState(() {
+                                  _hasError = true;
+                                  _msg = "Vui lòng nhập số điện thoại";
+                                });
+                              } else if (!isValidPhoneNumber(
+                                _phoneController.text,
+                              )) {
+                                setState(() {
+                                  _hasError = true;
+                                  _msg = "Số điện thoại không hợp lệ";
+                                });
+                              } else {
+                                setState(() {
+                                  _hasError = false;
+                                  _isLoading = true;
+                                });
+                                final result = await checkPhoneExist(
+                                  _phoneController.text,
+                                );
 
-                        else{
-                          _hasError = false;
-                          Navigator.push(context, MaterialPageRoute(builder: (context)=>LoginPasswordScreen(phoneNumber: _phoneController.text)));
-                        }
+                                if (!context.mounted) return;
 
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.pink,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadiusGeometry.circular(10),
+                                setState(() {
+                                  _isLoading = false;
+                                  _isPhoneExists =
+                                      result['data']['is_phone_exists'];
+                                });
+
+                                setState(() {
+                                  _isLoading = false;
+                                });
+
+                                if (!_isPhoneExists) {
+                                  setState(() {
+                                    _hasError = true;
+                                    _msg = "Số điện thoại chưa được đăng ký";
+                                  });
+                                } else {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => LoginPasswordScreen(
+                                        phoneNumber: _phoneController.text,
+                                      ),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                      style: ElevatedButton.styleFrom(
+                        disabledBackgroundColor: const Color.fromARGB(
+                          255,
+                          238,
+                          222,
+                          222,
+                        ),
+                        backgroundColor: Colors.pink,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadiusGeometry.circular(10),
+                        ),
                       ),
-                    ),
-                    child: Text(
-                      "Tiếp tục",
-                      style: GoogleFonts.roboto(
-                        color: Colors.white,
-                        fontSize: 25
-
-                      )
+                      child: _isLoading
+                          ? SizedBox(
+                              height: 25,
+                              width: 25,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : Text(
+                              "Tiếp tục",
+                              style: GoogleFonts.roboto(
+                                color: Colors.white,
+                                fontSize: 25,
+                              ),
+                            ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }
 }
 
-bool isValidPhoneNumber(String phone){
-  if(phone.isEmpty){
+Future<Map<String, dynamic>> checkPhoneExist(String phone) async {
+  try {
+    final api = ApiClient().dio;
+    final result = await api.post(
+      ApiConfig.checkPhoneExists,
+      data: {'phone': phone},
+    );
+    return result.data;
+  } catch (e) {
+    return {};
+  }
+}
+
+bool isValidPhoneNumber(String phone) {
+  if (phone.isEmpty) {
     return false;
   }
   final RegExp phoneRegex = RegExp(r'^(0|)[3|5|7|8|9][0-9]{8}$');
