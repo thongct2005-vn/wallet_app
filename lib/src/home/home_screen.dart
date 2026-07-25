@@ -1,19 +1,543 @@
+import 'package:app/core/network/api_client.dart';
+import 'package:app/core/network/api_config.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
 class HomeScreen extends StatefulWidget {
-  final String? token;
-  const HomeScreen({super.key, this.token});
-
+  final String? phone;
+  final String? fullName;
+  const HomeScreen({super.key, this.phone, this.fullName});
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  bool _isHidenWalletBalance = false;
+  String? _balance;
+  int _selectedIndex = 0;
+  @override
+  void initState(){
+    super.initState();
+    _getWalletBalance().then((result) {
+      if (mounted && result['is_success'] == true) {
+        setState(() {
+          _balance = result['balance'];
+        });
+      }
+    });
+  }
   @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      child: Scaffold(body: Center(child: Text("Welcome Home"))),
+      child: Scaffold(
+        backgroundColor: Colors.pink.shade50,
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(80),
+          child: AppBar(
+            backgroundColor: Colors.pink.shade50,
+            title: _buildAvatar(context),
+            automaticallyImplyLeading: false,
+            toolbarHeight: 200,
+          ),
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: EdgeInsetsGeometry.fromLTRB(5, 0, 5, 0),
+            child: Column(
+              children: [
+                _buildWalletBalanceContainer(context),
+                Padding(
+                  padding: EdgeInsetsGeometry.fromLTRB(20, 45, 20, 0),
+                  child: Row(
+                    children: [
+                      Text(
+                        "Tiện ích",
+                        style: GoogleFonts.roboto(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Spacer(),
+                      Padding(
+                        padding: EdgeInsetsGeometry.only(right: 10),
+                        child: Text(
+                          "Xem tất cả",
+                          style: GoogleFonts.roboto(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.pink,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _buildUtilList(context),
+                Padding(
+                  padding: EdgeInsetsGeometry.only(left: 15, right: 15),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 150,
+
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Image.asset('assets/u.jpg', fit: BoxFit.cover),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () {},
+          backgroundColor: Colors.pink.shade400,
+          shape: const CircleBorder(),
+          child: const Icon(
+            Icons.qr_code_scanner,
+            color: Colors.white,
+            size: 30,
+          ),
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+
+        bottomNavigationBar: BottomAppBar(
+          color: Colors.white,
+          shape: const CircularNotchedRectangle(),
+          notchMargin: 8.0,
+          child: SizedBox(
+            height: 60,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildNavItem(Icons.home_outlined, "Trang chủ", 0),
+                    _buildNavItem(Icons.local_offer_outlined, "Ưu đãi", 1),
+                  ],
+                ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildNavItem(Icons.receipt_long_outlined, "Giao dịch", 2),
+                    _buildNavItem(Icons.person_outline, "Ưu đãi", 3),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
+  }
+
+  Widget _buildAvatar(BuildContext context) {
+    return Padding(
+      padding: EdgeInsetsGeometry.fromLTRB(5, 10, 5, 5),
+      child: Row(
+        children: [
+          ClipOval(
+            child: Image.network(
+              'https://api.dicebear.com/7.x/micah/png?seed=${widget.fullName ?? widget.phone}&backgroundColor=ffb6c1&borderRadius=50',
+              width: 50,
+              height: 50,
+              fit: BoxFit.cover,
+            ),
+          ),
+          SizedBox(width: 8),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(height: 10),
+              Text(
+                "Xin chào,",
+                style: GoogleFonts.roboto(color: Colors.grey, fontSize: 15),
+              ),
+              Text(
+                "${widget.fullName}",
+                style: GoogleFonts.roboto(
+                  color: Colors.black,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          Padding(
+            padding: EdgeInsetsGeometry.only(top: 20),
+            child: IconButton(
+              onPressed: () {},
+              icon: Icon(
+                Icons.notifications_outlined,
+                color: Colors.grey,
+                size: 30,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWalletBalanceContainer(BuildContext context) {
+    return Padding(
+      padding: EdgeInsetsGeometry.fromLTRB(15, 5, 15, 5),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            height: 200,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topRight,
+                end: Alignment.bottomLeft,
+                colors: [Colors.pink.shade300, Colors.pink.shade400],
+              ),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Stack(
+              children: [
+                Positioned(
+                  right: 15,
+                  top: -85,
+                  bottom: 0,
+                  child: Icon(
+                    Icons.wallet,
+                    color: Colors.white.withOpacity(0.2),
+                    size: 120,
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: EdgeInsetsGeometry.fromLTRB(15, 10, 0, 0),
+                      child: Row(
+                        children: [
+                          Text(
+                            "Số dư ví",
+                            style: GoogleFonts.roboto(
+                              color: Colors.white,
+                              fontSize: 20,
+                            ),
+                          ),
+                          SizedBox(width: 10),
+                          IconButton(
+                            onPressed: () {
+                              setState(() {
+                                _isHidenWalletBalance = !_isHidenWalletBalance;
+                              });
+                            },
+                            icon: Icon(
+                              _isHidenWalletBalance
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                            ),
+                            color: Colors.white,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsetsGeometry.fromLTRB(15, 0, 0, 10),
+                      child: Text(
+                        _isHidenWalletBalance ? "* * * * * * * *" : _balance?? '0 đ',
+                        style: GoogleFonts.roboto(
+                          color: Colors.white,
+                          fontSize: 25,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            bottom: -35,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: 120,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Padding(
+                padding: EdgeInsetsGeometry.fromLTRB(40, 18, 40, 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    GestureDetector(
+                      onTap: () {},
+                      child: Column(
+                        children: [
+                          Container(
+                            height: 60,
+                            width: 60,
+                            decoration: BoxDecoration(
+                              color: Colors.pink.shade100.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            child: Padding(
+                              padding: EdgeInsetsGeometry.all(10),
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Colors.pink.shade400,
+                                  borderRadius: BorderRadius.circular(15),
+                                ),
+                                child: Icon(
+                                  Icons.add,
+                                  color: Colors.white,
+                                  size: 30,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: 5),
+                          Text(
+                            "Nạp tiền",
+                            style: GoogleFonts.roboto(fontSize: 15),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    GestureDetector(
+                      onTap: () {},
+                      child: Column(
+                        children: [
+                          Container(
+                            height: 60,
+                            width: 60,
+                            decoration: BoxDecoration(
+                              color: Colors.pink.shade100.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            child: Padding(
+                              padding: EdgeInsetsGeometry.all(10),
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Colors.pink.shade400,
+                                  borderRadius: BorderRadius.circular(15),
+                                ),
+                                child: Icon(
+                                  Icons.remove,
+                                  color: Colors.white,
+                                  size: 30,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: 5),
+                          Text(
+                            "Rút tiền",
+                            style: GoogleFonts.roboto(fontSize: 15),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    GestureDetector(
+                      onTap: () {},
+                      child: Column(
+                        children: [
+                          Container(
+                            height: 60,
+                            width: 60,
+                            decoration: BoxDecoration(
+                              color: Colors.pink.shade100.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            child: Padding(
+                              padding: EdgeInsetsGeometry.all(10),
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Colors.pink.shade400,
+                                  borderRadius: BorderRadius.circular(15),
+                                ),
+                                child: Icon(
+                                  Icons.swap_horiz,
+                                  color: Colors.white,
+                                  size: 30,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: 5),
+                          Text(
+                            "Chuyển tiền",
+                            style: GoogleFonts.roboto(fontSize: 15),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUtilList(BuildContext context) {
+    return Padding(
+      padding: EdgeInsetsGeometry.fromLTRB(15, 10, 20, 15),
+      child: Container(
+        height: 250,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Padding(
+          padding: EdgeInsetsGeometry.fromLTRB(10, 10, 10, 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildUtilIcon(context, Icons.phone, "Điện thoại"),
+                    _buildUtilIcon(context, Icons.qr_code, "Thanh toán QR"),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildUtilIcon(context, Icons.electric_bolt, "Điện"),
+                    _buildUtilIcon(context, Icons.sim_card, "Thẻ cào"),
+                  ],
+                ),
+              ),
+
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildUtilIcon(context, Icons.water_drop, "Nước"),
+                    _buildUtilIcon(
+                      context,
+                      Icons.airplane_ticket_outlined,
+                      "Vé máy bay",
+                    ),
+                  ],
+                ),
+              ),
+
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildUtilIcon(context, Icons.wifi, "Internet"),
+                    _buildUtilIcon(
+                      context,
+                      Icons.more_horiz_outlined,
+                      "Xem thêm",
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUtilIcon(BuildContext context, IconData icon, String text) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          height: 60,
+          width: 60,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(30),
+            color: Colors.pink.shade100.withOpacity(0.3),
+          ),
+          child: Icon(icon, color: Colors.pink, size: 30),
+        ),
+        SizedBox(height: 5),
+        Text(
+          text,
+          style: GoogleFonts.roboto(fontSize: 13),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNavItem(IconData icon, String lable, int index) {
+    bool isSelected = _selectedIndex == index;
+    return MaterialButton(
+      minWidth: 80,
+      onPressed: () {
+        setState(() {
+          _selectedIndex = index;
+        });
+      },
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: isSelected ? Colors.pink.shade400 : Colors.grey),
+          const SizedBox(height: 5),
+          Text(
+            lable,
+            style: GoogleFonts.roboto(
+              color: isSelected ? Colors.pink.shade400 : Colors.grey,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<Map<String, dynamic>> _getWalletBalance() async {
+    try {
+      final api = ApiClient().dio;
+      final result = await api.get(ApiConfig.getWalletBalance);
+      final balance = result.data['data']['balance'];
+      final formattedBalance = _formattedBalance(balance);
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'balance': formattedBalance,
+      };
+    } catch (e) {
+      print(e);
+      return {
+         'is_success': false,
+      };
+    }
+  }
+
+  String _formattedBalance(dynamic balance) {
+    if (balance == null) return '0 đ';
+    num number = balance is num ? balance : (num.tryParse(balance.toString()) ?? 0);
+    final formatted = NumberFormat.currency(locale: 'vi_VN', symbol: 'đ');
+    return formatted.format(number);
   }
 }

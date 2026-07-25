@@ -8,42 +8,50 @@ import 'package:google_fonts/google_fonts.dart';
 
 final _storage = FlutterSecureStorage();
 
-class LoginPasswordScreen extends StatefulWidget {
+class CreatePasswordScreen extends StatefulWidget {
   final String? phoneNumber;
-  const LoginPasswordScreen({super.key, this.phoneNumber});
+  const CreatePasswordScreen({super.key, this.phoneNumber});
 
   @override
-  State<LoginPasswordScreen> createState() => _LoginPasswordScreenState();
+  State<CreatePasswordScreen> createState() => _CreatePasswordScreenState();
 }
 
-class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
+class _CreatePasswordScreenState extends State<CreatePasswordScreen> {
   final TextEditingController _passwordController = TextEditingController();
-  final FocusNode _focusNode = FocusNode();
+  final TextEditingController _passwordConfirmController = TextEditingController();
+  final FocusNode _focusPassword = FocusNode();
+  final FocusNode _focusConfirm = FocusNode();
   bool _hasError = false;
   bool _isHidePassword = true;
+  bool _isHidePasswordConfirm = true;
   bool _isloginSuccess = false;
   bool _isLoading = false;
   String _msg = "";
-  String? _fullName = "";
 
   @override
   void initState() {
     super.initState();
-    _passwordController.addListener(() {
+    _passwordController.addListener(_clearError);
+    _passwordConfirmController.addListener(_clearError);
+    _focusPassword.addListener(() => setState(() {}));
+    _focusConfirm.addListener(() => setState(() {}));
+  }
+
+  void _clearError() {
+    if (_hasError) {
       setState(() {
-        if (_hasError) {
-          _hasError = false;
-        }
+        _hasError = false;
+        _msg = "";
       });
-    });
-    _focusNode.addListener(() {
-      setState(() {});
-    });
+    }
   }
 
   @override
   void dispose() {
     _passwordController.dispose();
+    _passwordConfirmController.dispose();
+    _focusPassword.dispose();
+    _focusConfirm.dispose();
     super.dispose();
   }
 
@@ -58,7 +66,7 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
         child: Scaffold(
           backgroundColor: Colors.white,
           appBar: AppBar(
-            title: Text("Nhập mật khẩu", style: TextStyle(fontSize: 20)),
+            title: const Text("Tạo mật khẩu", style: TextStyle(fontSize: 20)),
             backgroundColor: Colors.white,
           ),
           body: SafeArea(
@@ -74,14 +82,14 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
                           text: TextSpan(
                             children: [
                               TextSpan(
-                                text: "Mật khẩu",
+                                text: "Tạo mật khẩu",
                                 style: GoogleFonts.dancingScript(
                                   color: Colors.pink,
                                   fontSize: 35,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              TextSpan(
+                              const TextSpan(
                                 text: " của bạn",
                                 style: TextStyle(
                                   color: Colors.black,
@@ -96,83 +104,56 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
                       const SizedBox(height: 25),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                        child: Container(
-                          height: 65,
-                          width: 500,
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: _hasError
-                                  ? const Color.fromARGB(255, 253, 51, 36)
-                                  : _focusNode.hasFocus
-                                  ? Colors.pink
-                                  : Colors.grey,
-                              width: _hasError
-                                  ? 2
-                                  : _focusNode.hasFocus
-                                  ? 2
-                                  : 1,
+                        child: Column(
+                          children: [
+                            _buildPasswordField(
+                              hint: "Tạo mật khẩu",
+                              controller: _passwordController,
+                              focusNode: _focusPassword,
+                              isHidden: _isHidePassword,
+                              onToggleVisibility: () {
+                                setState(() {
+                                  _isHidePassword = !_isHidePassword;
+                                });
+                              },
                             ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  focusNode: _focusNode,
-                                  controller: _passwordController,
-                                  maxLength: 6,
-                                  keyboardType: TextInputType.number,
-                                  style: TextStyle(fontSize: 20),
-                                  decoration: InputDecoration(
-                                    border: InputBorder.none,
-                                    counterText: "",
-                                    contentPadding: EdgeInsets.only(left: 10, top: 8),
-                                    suffixIcon: IconButton(
-                                      onPressed: () {
-                                        setState(() {
-                                          _isHidePassword = !_isHidePassword;
-                                        });
-                                      },
-                                      icon: Icon(
-                                        _isHidePassword
-                                            ? Icons.visibility_off
-                                            : Icons.visibility,
-                                      ),
-                                    ),
+                            const SizedBox(height: 20),
+                            _buildPasswordField(
+                              hint: "Xác nhận lại mật khẩu",
+                              controller: _passwordConfirmController,
+                              focusNode: _focusConfirm,
+                              isHidden: _isHidePasswordConfirm,
+                              onToggleVisibility: () {
+                                setState(() {
+                                  _isHidePasswordConfirm = !_isHidePasswordConfirm;
+                                });
+                              },
+                            ),
+                            if (_hasError) ...[
+                              const SizedBox(height: 5),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.error_outline_rounded,
+                                    color: Colors.red,
+                                    size: 15,
                                   ),
-                                  obscureText: _isHidePassword,
-                                  cursorColor: Colors.pink,
-                                ),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    _msg,
+                                    style: GoogleFonts.roboto(color: Colors.red),
+                                  ),
+                                ],
                               ),
                             ],
-                          ),
+                          ],
                         ),
                       ),
-                      if (_hasError) ...[
-                        const SizedBox(height: 5),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.error_outline_rounded,
-                                color: Colors.red,
-                                size: 15,
-                              ),
-                              SizedBox(width: 3),
-                              Text(
-                                _msg,
-                                style: GoogleFonts.roboto(color: Colors.red),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
                 Padding(
-                  padding: EdgeInsets.fromLTRB(15, 10, 15, 10),
+                  padding: const EdgeInsets.fromLTRB(15, 10, 15, 10),
                   child: SizedBox(
                     width: double.infinity,
                     height: 55,
@@ -185,12 +166,20 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
                                   _hasError = true;
                                   _msg = "Vui lòng nhập mật khẩu";
                                 });
-                              } else if (!isValidPassword(
-                                _passwordController.text,
-                              )) {
+                              } else if (_passwordConfirmController.text.isEmpty) {
+                                setState(() {
+                                  _hasError = true;
+                                  _msg = "Vui lòng nhập xác nhận mật khẩu";
+                                });
+                              } else if (!isValidPassword(_passwordController.text)) {
                                 setState(() {
                                   _hasError = true;
                                   _msg = "Mật khẩu phải có đúng 6 số";
+                                });
+                              } else if (_passwordConfirmController.text != _passwordController.text) {
+                                setState(() {
+                                  _hasError = true;
+                                  _msg = "Mật khẩu và mật khẩu xác nhận không khớp";
                                 });
                               } else {
                                 setState(() {
@@ -210,36 +199,27 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
                                   _msg = result['message'];
                                   _isLoading = false;
                                   _hasError = !_isloginSuccess;
-                                  _fullName = result['full_name'];
                                 });
-                              }
-                              setState(() {
-                                _isLoading = false;
-                              });
-                              if (_isloginSuccess) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => HomeScreen( phone: widget.phoneNumber, fullName: _fullName),
-                                  ),
-                                );
+
+                                // if (_isloginSuccess) {
+                                //   Navigator.push(
+                                //     context,
+                                //     MaterialPageRoute(
+                                //       builder: (context) => const HomeScreen(phone: ,),
+                                //     ),
+                                //   );
+                                // }
                               }
                             },
-
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.pink,
-                        disabledBackgroundColor: const Color.fromARGB(
-                          255,
-                          177,
-                          174,
-                          174,
-                        ),
+                        disabledBackgroundColor: const Color.fromARGB(255, 177, 174, 174),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadiusGeometry.circular(10),
+                          borderRadius: BorderRadius.circular(10),
                         ),
                       ),
                       child: _isLoading
-                          ? SizedBox(
+                          ? const SizedBox(
                               width: 25,
                               height: 25,
                               child: CircularProgressIndicator(
@@ -264,14 +244,61 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
       ),
     );
   }
+
+  Widget _buildPasswordField({
+    required String hint,
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    required bool isHidden,
+    required VoidCallback onToggleVisibility,
+  }) {
+    return Container(
+      height: 65,
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: _hasError
+              ? Colors.red
+              : focusNode.hasFocus
+                  ? Colors.pink
+                  : Colors.grey,
+          width: focusNode.hasFocus || _hasError ? 2 : 1,
+        ),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: TextField(
+        textAlign: TextAlign.left,
+        focusNode: focusNode,
+        controller: controller,
+        maxLength: 6,
+        keyboardType: TextInputType.number,
+        obscureText: isHidden,
+        style: const TextStyle(fontSize: 25),
+        cursorColor: Colors.pink,
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: GoogleFonts.roboto(fontSize: 10),
+          border: InputBorder.none,
+          counterText: "",
+          contentPadding: const EdgeInsets.only(left: 15, top: 15),
+          suffixIcon: IconButton(
+            icon: Icon(
+              isHidden ? Icons.visibility_off : Icons.visibility,
+              color: Colors.grey,
+            ),
+            onPressed: onToggleVisibility,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-bool isValidPassword(String psssword) {
-  if (psssword.isEmpty) {
+bool isValidPassword(String password) {
+  if (password.isEmpty) {
     return false;
   }
   final RegExp phoneRegex = RegExp(r'^\d{6}$');
-  return phoneRegex.hasMatch(psssword);
+  return phoneRegex.hasMatch(password);
 }
 
 Future<Map<String, dynamic>> _loginWithPhoneAndPassword(
@@ -288,11 +315,11 @@ Future<Map<String, dynamic>> _loginWithPhoneAndPassword(
     final data = result.data;
     final accessToken = data['data']['token']['access_token'];
     final refreshToken = data['data']['token']['refresh_token'];
-    final fullName = data['data']['user_info']['full_name'];
+
     await _storage.write(key: 'access_token', value: accessToken);
     await _storage.write(key: 'refresh_token', value: refreshToken);
 
-    return {'is_success': true, 'message': data['message'], 'full_name': fullName};
+    return {'is_success': true, 'message': data['message']};
   } on DioException catch (e) {
     if (e.response != null && e.response?.data['message'] != null) {
       return {

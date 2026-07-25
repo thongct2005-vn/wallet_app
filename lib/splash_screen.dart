@@ -15,6 +15,8 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   final _storage = FlutterSecureStorage();
+  String? _phone = "";
+  String? _fullName; 
   @override
   void initState() {
     super.initState();
@@ -55,7 +57,7 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _checkLoginStatus() async {
-    await Future.delayed(Duration(milliseconds: 10000));
+    await Future.delayed(Duration(milliseconds: 1000));
     String? accessToken = await _storage.read(key: 'access_token');
     String? refreshToken = await _storage.read(key: 'refresh_token');
 
@@ -70,12 +72,15 @@ class _SplashScreenState extends State<SplashScreen> {
 
     try {
       final api = ApiClient().dio;
-      await api.get(ApiConfig.getMe);
-
+      final reuslt = await api.get(ApiConfig.getMe);
+      setState(() {
+        _fullName = reuslt.data['data']['user_info']['full_name'];
+        _phone = reuslt.data['data']['user_info']['phone'];
+      });
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => HomeScreen()),
+        MaterialPageRoute(builder: (context) => HomeScreen(phone: _phone, fullName: _fullName,)),
       );
     } catch (e) {
       await _storage.deleteAll();

@@ -59,7 +59,9 @@ class ApiClient {
 
                 final retryResponse = await dio.fetch(e.requestOptions);
                 return handler.resolve(retryResponse);
-              } catch (e) {}
+              } catch (e) {
+                print(e);
+              }
             } else {
               await storage.deleteAll();
             }

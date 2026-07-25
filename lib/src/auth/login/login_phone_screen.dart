@@ -1,11 +1,11 @@
 import 'package:app/core/network/api_client.dart';
 import 'package:app/core/network/api_config.dart';
+import 'package:app/src/auth/register/otp_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:country_flags/country_flags.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'login_password_screen.dart';
-
 
 class LoginPhoneScreen extends StatefulWidget {
   final String? initialPhoneNumber;
@@ -42,6 +42,7 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
   @override
   void dispose() {
     _phoneController.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -203,7 +204,7 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
                                   _hasError = true;
                                   _msg = "Vui lòng nhập số điện thoại";
                                 });
-                              } else if (!isValidPhoneNumber(
+                              } else if (!_isValidPhoneNumber(
                                 _phoneController.text,
                               )) {
                                 setState(() {
@@ -215,7 +216,7 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
                                   _hasError = false;
                                   _isLoading = true;
                                 });
-                                final result = await checkPhoneExist(
+                                final result = await _checkPhoneExist(
                                   _phoneController.text,
                                 );
 
@@ -232,10 +233,10 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
                                 });
 
                                 if (!_isPhoneExists) {
-                                  setState(() {
-                                    _hasError = true;
-                                    _msg = "Số điện thoại chưa được đăng ký";
-                                  });
+                                  _showConfirmPhone(
+                                    context,
+                                    _phoneController.text,
+                                  );
                                 } else {
                                   Navigator.push(
                                     context,
@@ -288,7 +289,54 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
   }
 }
 
-Future<Map<String, dynamic>> checkPhoneExist(String phone) async {
+void _showConfirmPhone(BuildContext context, String phone) {
+  showDialog(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        backgroundColor: Colors.white,
+        title: Text("Thông báo"),
+        content: Text(
+          "Bạn có muốn dùng số điện thoại $phone để đăng ký tài khoản.",
+        ),
+        actions: [
+          OutlinedButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            style: OutlinedButton.styleFrom(
+              backgroundColor: Colors.white,
+              side: BorderSide.none,
+            ),
+            child: Text(
+              "Đổi số điện thoại",
+              style: GoogleFonts.roboto(color: Colors.pink),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _sendOtp(phone);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => OtpScreen(phoneNumber: phone),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.pink),
+            child: Text(
+              "Xác nhận",
+              style: GoogleFonts.roboto(color: Colors.white),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+Future<Map<String, dynamic>> _checkPhoneExist(String phone) async {
   try {
     final api = ApiClient().dio;
     final result = await api.post(
@@ -301,7 +349,19 @@ Future<Map<String, dynamic>> checkPhoneExist(String phone) async {
   }
 }
 
-bool isValidPhoneNumber(String phone) {
+Future<Map<String, dynamic>> _sendOtp(String phone) async {
+  try{
+    final api = ApiClient().dio;
+    final result = await api.post(ApiConfig.sendOtp,
+    data: {'phone': phone});
+    return result.data;
+  }
+  catch(e){
+    return {};
+  }
+}
+
+bool _isValidPhoneNumber(String phone) {
   if (phone.isEmpty) {
     return false;
   }
