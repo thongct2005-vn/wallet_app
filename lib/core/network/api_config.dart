@@ -11,4 +11,6 @@ static const String getMe = '$baseUrl/auth/me';
 static const String sendOtp = '$baseUrl/auth/send-otp';
 static const String verifyOtp = '$baseUrl/auth/verify-otp';
 static const String getWalletBalance = '$baseUrl/wallet/balance';
+static const String findUser = '$baseUrl/user/find-user';
+static const String checkContact = '$baseUrl/user/check-contact';
 }

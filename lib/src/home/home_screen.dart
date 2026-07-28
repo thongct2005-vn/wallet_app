@@ -1,5 +1,6 @@
 import 'package:app/core/network/api_client.dart';
 import 'package:app/core/network/api_config.dart';
+import 'package:app/src/transfer/contact_list_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -32,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return PopScope(
       canPop: false,
       child: Scaffold(
+        resizeToAvoidBottomInset: false,
         backgroundColor: Colors.pink.shade50,
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(80),
@@ -39,7 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
             backgroundColor: Colors.pink.shade50,
             title: _buildAvatar(context),
             automaticallyImplyLeading: false,
-            toolbarHeight: 200,
+            toolbarHeight: 80,
           ),
         ),
         body: SafeArea(
@@ -175,7 +177,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: () {},
               icon: Icon(
                 Icons.notifications_outlined,
-                color: Colors.grey,
+                color: Colors.black.withValues(alpha: 0.8),
                 size: 30,
                 fontWeight: FontWeight.w400,
               ),
@@ -211,7 +213,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   bottom: 0,
                   child: Icon(
                     Icons.wallet,
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                     size: 120,
                   ),
                 ),
@@ -284,7 +286,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             height: 60,
                             width: 60,
                             decoration: BoxDecoration(
-                              color: Colors.pink.shade100.withOpacity(0.5),
+                              color: Colors.pink.shade100.withValues(alpha: 0.5),
                               borderRadius: BorderRadius.circular(15),
                             ),
                             child: Padding(
@@ -322,7 +324,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             height: 60,
                             width: 60,
                             decoration: BoxDecoration(
-                              color: Colors.pink.shade100.withOpacity(0.5),
+                              color: Colors.pink.shade100.withValues(alpha: 0.5),
                               borderRadius: BorderRadius.circular(15),
                             ),
                             child: Padding(
@@ -353,14 +355,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
 
                     GestureDetector(
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (context)=>ContactListScreen()));
+                      },
                       child: Column(
                         children: [
                           Container(
                             height: 60,
                             width: 60,
                             decoration: BoxDecoration(
-                              color: Colors.pink.shade100.withOpacity(0.5),
+                              color: Colors.pink.shade100.withValues(alpha: 0.5),
                               borderRadius: BorderRadius.circular(15),
                             ),
                             child: Padding(
@@ -475,7 +479,7 @@ class _HomeScreenState extends State<HomeScreen> {
           width: 60,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(30),
-            color: Colors.pink.shade100.withOpacity(0.3),
+            color: Colors.pink.shade100.withValues(alpha: 0.3),
           ),
           child: Icon(icon, color: Colors.pink, size: 30),
         ),
