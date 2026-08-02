@@ -85,7 +85,7 @@ class _ContactListScreenState extends State<ContactListScreen> {
                       controller: _phoneController,
                       maxLength: 50,
                       cursorColor: Colors.pink,
-                      
+
                       decoration: InputDecoration(
                         hintText: 'Tìm tên, SĐT',
                         counterText: '',
@@ -108,7 +108,7 @@ class _ContactListScreenState extends State<ContactListScreen> {
     return Stack(
       children: [
         Container(
-          height: 250,
+          height: 500,
           width: double.infinity,
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -123,9 +123,7 @@ class _ContactListScreenState extends State<ContactListScreen> {
         ),
         SafeArea(
           child: _isLoading
-              ? Center(child: CircularProgressIndicator(
-                color: Colors.pink,
-              ))
+              ? Center(child: CircularProgressIndicator(color: Colors.pink))
               : _errMsg.isNotEmpty
               ? Center(
                   child: Padding(
@@ -207,12 +205,13 @@ class _ContactListScreenState extends State<ContactListScreen> {
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => AmountInputScreen(
-                                        phone: user['phone'],
-                                        fullName:
+                                        receiverPhone: user['phone'],
+                                        receiverFullName:
                                             user['full_name'] ?? 'Không rõ tên',
-                                        avatarName: _formatAvatar(
+                                        receiverAvatarName: _formatAvatar(
                                           user['full_name'] ?? '',
                                         ),
+                                        receiverId: user['id'],
                                       ),
                                     ),
                                   );
@@ -245,10 +244,15 @@ class _ContactListScreenState extends State<ContactListScreen> {
     if (fullName.trim().isEmpty) return '?';
     List<String> words = fullName.trim().split(RegExp(r'\s+'));
     if (words.length == 1) return words[0][0].toUpperCase();
-    return '${words[words.length - 2][0]}${words[words.length - 1][0]}'.toUpperCase();
+    return '${words[words.length - 2][0]}${words[words.length - 1][0]}'
+        .toUpperCase();
   }
 
   Future<void> _fetchContactAndCheckAppUser() async {
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
       if (await Permission.contacts.request().isGranted) {
         List<Contact> contacts = await FlutterContacts.getAll(
@@ -270,25 +274,42 @@ class _ContactListScreenState extends State<ContactListScreen> {
             }
           }
         }
-        _isLoading = true;
-        final api = ApiClient().dio;
-        final response = await api.post(
-          ApiConfig.checkContact,
-          data: {'phones': phoneNumbers},
-        );
 
-        final responseData = response.data;
-        if (responseData != null && responseData['data'] != null) {
-          setState(() {
-            _users = responseData['data'];
-            _filteredUsers = _users;
-            _isLoading = false;
-            _errMsg = '';
-          });
-        } else {
-          _isLoading = false;
-          _errMsg = 'Hệ thống đang bảo trì';
+        List<String> uniquePhones = phoneNumbers.toSet().toList();
+
+        List<dynamic> allFoundUsers = [];
+        final api = ApiClient().dio;
+
+        int chunkSize = 500;
+
+        for (int i = 0; i < uniquePhones.length; i += chunkSize) {
+          int end = (i + chunkSize < uniquePhones.length)
+              ? i + chunkSize
+              : uniquePhones.length;
+
+          List<String> chunk = uniquePhones.sublist(i, end);
+
+          try {
+            final response = await api.post(
+              ApiConfig.checkContact,
+              data: {'phones': chunk},
+            );
+
+            final responseData = response.data;
+            if (responseData != null && responseData['data'] != null) {
+              allFoundUsers.addAll(responseData['data']);
+            }
+          } catch (apiError) {
+            print('Lỗi khi gọi API chunk $i: $apiError');
+          }
         }
+
+        setState(() {
+          _users = allFoundUsers;
+          _filteredUsers = _users;
+          _isLoading = false;
+          _errMsg = '';
+        });
       } else {
         setState(() {
           _errMsg = 'Vui lòng cấp quyền danh bạ để dùng tính năng này';
@@ -296,8 +317,10 @@ class _ContactListScreenState extends State<ContactListScreen> {
         });
       }
     } catch (e) {
-      _errMsg = 'Hệ thống đang bảo trì';
-      _isLoading = false;
+      setState(() {
+        _errMsg = 'Có lỗi xảy ra khi đọc danh bạ';
+        _isLoading = false;
+      });
       print(e);
     }
   }

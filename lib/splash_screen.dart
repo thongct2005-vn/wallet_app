@@ -33,7 +33,7 @@ class _SplashScreenState extends State<SplashScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text("TEMO", style:
+              Text("Mio", style:
                  GoogleFonts.baloo2(
                   fontSize: 70,
                   fontWeight: FontWeight.w800,

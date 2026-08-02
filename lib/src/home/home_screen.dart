@@ -1,9 +1,10 @@
-import 'package:app/core/network/api_client.dart';
-import 'package:app/core/network/api_config.dart';
+import 'package:app/core/widgets/pin_bottomsheet/create_pin_bottom_sheet.dart';
+import 'package:app/src/services/wallet_service.dart';
 import 'package:app/src/transfer/contact_list_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
+import 'package:app/src/services/user_service.dart';
+
 
 class HomeScreen extends StatefulWidget {
   final String? phone;
@@ -14,20 +15,18 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final WalletService _walletService = WalletService();
+  final UserService _userService = UserService();
   bool _isHidenWalletBalance = false;
   String? _balance;
   int _selectedIndex = 0;
+  bool _hasPin = false;
   @override
-  void initState(){
+  void initState() {
     super.initState();
-    _getWalletBalance().then((result) {
-      if (mounted && result['is_success'] == true) {
-        setState(() {
-          _balance = result['balance'];
-        });
-      }
-    });
+    _fetchData();
   }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -251,7 +250,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     Padding(
                       padding: EdgeInsetsGeometry.fromLTRB(15, 0, 0, 10),
                       child: Text(
-                        _isHidenWalletBalance ? "* * * * * * * *" : _balance?? '0 đ',
+                        _isHidenWalletBalance
+                            ? "* * * * * * * *"
+                            : _balance ?? '0 đ',
                         style: GoogleFonts.roboto(
                           color: Colors.white,
                           fontSize: 25,
@@ -279,14 +280,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     GestureDetector(
-                      onTap: () {},
+                      onTap: () async {
+                        if (!_hasPin) {
+                          _showCreatePinDialog(context);
+                          return;
+                        }
+                      },
                       child: Column(
                         children: [
                           Container(
                             height: 60,
                             width: 60,
                             decoration: BoxDecoration(
-                              color: Colors.pink.shade100.withValues(alpha: 0.5),
+                              color: Colors.pink.shade100.withValues(
+                                alpha: 0.5,
+                              ),
                               borderRadius: BorderRadius.circular(15),
                             ),
                             child: Padding(
@@ -317,14 +325,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
 
                     GestureDetector(
-                      onTap: () {},
+                      onTap: () {
+                        if(!_hasPin){
+                          _showCreatePinDialog(context);
+                          return;
+                        }
+                      },
                       child: Column(
                         children: [
                           Container(
                             height: 60,
                             width: 60,
                             decoration: BoxDecoration(
-                              color: Colors.pink.shade100.withValues(alpha: 0.5),
+                              color: Colors.pink.shade100.withValues(
+                                alpha: 0.5,
+                              ),
                               borderRadius: BorderRadius.circular(15),
                             ),
                             child: Padding(
@@ -356,7 +371,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     GestureDetector(
                       onTap: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (context)=>ContactListScreen()));
+                        if(!_hasPin){
+                       _showCreatePinDialog(context);
+                       return;
+                        }
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ContactListScreen(),
+                          ),
+                        );
                       },
                       child: Column(
                         children: [
@@ -364,7 +388,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             height: 60,
                             width: 60,
                             decoration: BoxDecoration(
-                              color: Colors.pink.shade100.withValues(alpha: 0.5),
+                              color: Colors.pink.shade100.withValues(
+                                alpha: 0.5,
+                              ),
                               borderRadius: BorderRadius.circular(15),
                             ),
                             child: Padding(
@@ -519,29 +545,50 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<Map<String, dynamic>> _getWalletBalance() async {
-    try {
-      final api = ApiClient().dio;
-      final result = await api.get(ApiConfig.getWalletBalance);
-      final balance = result.data['data']['balance'];
-      final formattedBalance = _formattedBalance(balance);
-      return {
-        'is_success': true,
-        'message': result.data['message'],
-        'balance': formattedBalance,
-      };
-    } catch (e) {
-      print(e);
-      return {
-         'is_success': false,
-      };
+
+  Future<void> _fetchData() async {
+    final balanceResult = await _walletService.getWalletBalance();
+    if (mounted && balanceResult['is_success'] == true) {
+      setState(() {
+        _balance = balanceResult['balance'];
+      });
+    }
+    
+    final hasPin = await _userService.checkPinStatus();
+    if (mounted && hasPin) {
+      setState(() {
+        _hasPin = true;
+      });
     }
   }
 
-  String _formattedBalance(dynamic balance) {
-    if (balance == null) return '0 đ';
-    num number = balance is num ? balance : (num.tryParse(balance.toString()) ?? 0);
-    final formatted = NumberFormat.currency(locale: 'vi_VN', symbol: 'đ');
-    return formatted.format(number);
+  void _showCreatePinDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return CreatePinBottomSheet(
+          onCreatePin: (pin) async {
+       
+            return await _userService.createPin(pin);
+            
+           
+          },
+          onSuccess: () {
+            setState(() {
+              _hasPin = true;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Tạo mã PIN thành công!'),
+                backgroundColor: Colors.green,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }

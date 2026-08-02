@@ -1,16 +1,21 @@
+import 'package:app/core/utils/currency_formatter.dart';
+import 'package:app/core/utils/format_utils.dart';
+import 'package:app/src/transfer/confirm_tranfer_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter/services.dart';
+import 'package:app/src/services/wallet_service.dart';
 
 class AmountInputScreen extends StatefulWidget {
-  final String? phone;
-  final String? fullName;
-  final String? avatarName;
+  final String? receiverPhone;
+  final String? receiverFullName;
+  final String? receiverAvatarName;
+  final String? receiverId;
   const AmountInputScreen({
     super.key,
-    this.phone,
-    this.fullName,
-    this.avatarName,
+    this.receiverPhone,
+    this.receiverFullName,
+    this.receiverAvatarName,
+    this.receiverId,
   });
   @override
   State<AmountInputScreen> createState() => _AmountInputScreenState();
@@ -19,14 +24,17 @@ class AmountInputScreen extends StatefulWidget {
 class _AmountInputScreenState extends State<AmountInputScreen> {
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
+  final FocusNode _amountFocusNode = FocusNode();
+  final WalletService _walletService = WalletService();
   bool _isSelectedFirstDesHint = false;
   bool _isSelectedSecondDesHint = false;
   String? _msg = '';
   String? _amountHintOne = '';
   String? _amountHintTwo = '';
   String? _amountHintThree = '';
-  final FocusNode _amountFocusNode = FocusNode();
   bool _isAmountFocus = false;
+  String _walletBalance = '0';
+  bool _isLoading = false;
   @override
   void initState() {
     super.initState();
@@ -87,7 +95,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
         body: Stack(
           children: [
             Container(
-              height: 250,
+              height: 500,
               width: double.infinity,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -112,7 +120,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                     child: _buildContainerAmountInputAndDescription(context),
                   ),
                   const Spacer(),
-                  _buildContainerAmountHintButtonAndTranferButton(context)
+                  _buildContainerAmountHintButtonAndTranferButton(context),
                 ],
               ),
             ),
@@ -140,7 +148,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
             CircleAvatar(
               backgroundColor: Colors.pink.shade50.withValues(alpha: 0.6),
               child: Text(
-                widget.avatarName ?? "?",
+                widget.receiverAvatarName ?? "?",
                 style: GoogleFonts.roboto(
                   color: Colors.pink,
                   fontWeight: FontWeight.bold,
@@ -154,7 +162,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  widget.fullName ?? "Không rõ tên",
+                  widget.receiverFullName ?? "Không rõ tên",
                   style: GoogleFonts.roboto(
                     color: Colors.black,
                     fontWeight: FontWeight.w600,
@@ -163,7 +171,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                 ),
                 SizedBox(height: 5),
                 Text(
-                  widget.phone ?? "***",
+                  widget.receiverPhone ?? "***",
                   style: GoogleFonts.roboto(color: Colors.grey, fontSize: 16),
                 ),
               ],
@@ -450,6 +458,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
   }
 
   Widget _buildContainerAmountHintButtonAndTranferButton(BuildContext context) {
+    final bool _isEnable = _amountController.text.isNotEmpty && _msg == '';
     return Container(
       width: double.infinity,
       color: Colors.white,
@@ -507,9 +516,9 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                     child: _amountHintTwo != 'NAN'
                         ? GestureDetector(
                             onTap: () {
-                              String newText = _amountHintThree!.isEmpty
+                              String newText = _amountHintTwo!.isEmpty
                                   ? '100.000'
-                                  : _amountHintThree!.replaceAll('đ', '');
+                                  : _amountHintTwo!.replaceAll('đ', '');
                               _amountController.value = TextEditingValue(
                                 text: newText,
                                 selection: TextSelection.collapsed(
@@ -584,23 +593,71 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
               ),
             const SizedBox(height: 10),
             GestureDetector(
-              onTap: () {},
+              onTap: _isEnable
+                  ? () async {
+                      setState(() {
+                        _isLoading = true;
+                      });
+                      final result = await _walletService
+                          .checkTransferEligibility(_amountController.text);
+                      setState(() {
+                        _isLoading = false;
+                      });
+                      if (!result['has_error']) {
+                        if (!result['is_eligible']) {
+                          setState(() {
+                            _msg = 'Số dư trong ví không đủ';
+                          });
+                        } else {
+                          setState(() {
+                            _walletBalance = result['wallet_balance'];
+                          });
+                        }
+                      } else {
+                        _msg = 'Hệ thống đang bảo trì. Vui lòng thử lại sau';
+                      }
+                      if (!context.mounted) return;
+                      if (_msg!.isEmpty) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ConfirmTranferScreen(
+                              receiverId: widget.receiverId,
+                              receiverName: widget.receiverFullName,
+                              receiverPhone: widget.receiverPhone,
+                              amount: _amountController.text,
+                              description: _descriptionController.text,
+                              walletBalance: _walletBalance,
+                            ),
+                          ),
+                        );
+                      }
+                    }
+                  : null,
               child: Container(
                 alignment: Alignment.center,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: Colors.pinkAccent,
+                  color: _isEnable
+                      ? _isLoading
+                            ? Colors.grey.withValues(alpha: 0.15)
+                            : Colors.pinkAccent
+                      : Colors.grey.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Padding(
                   padding: EdgeInsetsDirectional.only(top: 8, bottom: 8),
-                  child: Text(
-                    "Chuyển tiền",
-                    style: GoogleFonts.roboto(
-                      color: Colors.white,
-                      fontSize: 22,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? CircularProgressIndicator(color: Colors.white)
+                      : Text(
+                          "Chuyển tiền",
+                          style: GoogleFonts.roboto(
+                            color: _isEnable
+                                ? Colors.white
+                                : Colors.grey.withValues(alpha: 0.5),
+                            fontSize: 22,
+                          ),
+                        ),
                 ),
               ),
             ),
@@ -610,15 +667,8 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
     );
   }
 
-  num _formatAmountToNum(String amount) {
-    if (amount.isEmpty) return 0;
-    final newAmount = amount.replaceAll('.', '');
-    num amountNum = num.tryParse(newAmount) ?? 0;
-    return amountNum;
-  }
-
   void _handleAmountChanged(String value) {
-    num amountNum = _formatAmountToNum(value);
+    num amountNum = FormatUtils.formatAmountToNum(value);
     if (amountNum == 0) {
       setState(() {
         _amountHintOne = '';
@@ -627,7 +677,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
         _msg = 'Vui lòng nhập số tiền';
       });
     } else {
-      if (amountNum < 1001) {
+      if (amountNum < 1000) {
         setState(() => _msg = 'Số tiền tối thiểu là 1000đ');
       } else if (amountNum > 50000000) {
         setState(() => _msg = 'Số tiền tối đa là 50.000.000đ');
@@ -644,22 +694,6 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
   }
 }
 
-String _formatDisplayNumber(num amount) {
-  if (amount == 0) return '0';
-
-  String numberString = amount.toStringAsFixed(0);
-  final buffer = StringBuffer();
-
-  for (int i = 0; i < numberString.length; i++) {
-    buffer.write(numberString[i]);
-    int nonZeroIndex = numberString.length - 1 - i;
-    if (nonZeroIndex % 3 == 0 && nonZeroIndex != 0) {
-      buffer.write('.');
-    }
-  }
-  return buffer.toString();
-}
-
 String _calculateHint(
   num baseAmount,
   num multiplyIfSmall,
@@ -671,40 +705,8 @@ String _calculateHint(
       ? baseAmount * multiplyIfSmall
       : baseAmount * multiplyIfLarge;
   if (calculatedAmount <= 50000000) {
-    return '${_formatDisplayNumber(calculatedAmount)}đ';
+    return '${FormatUtils.formatDisplayNumber(calculatedAmount)}đ';
   }
 
   return 'NAN';
-}
-
-class CurrencyFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    if (newValue.text.isEmpty) return newValue.copyWith(text: '');
-
-    String numbericOnly = newValue.text
-        .replaceAll(RegExp(r'[^0-9]'), '')
-        .replaceFirst(RegExp(r'^0+'), '');
-    if (numbericOnly.isEmpty) {
-      return const TextEditingValue(
-        text: '',
-        selection: TextSelection.collapsed(offset: 0),
-      );
-    }
-    final buffer = StringBuffer();
-    for (int i = 0; i < numbericOnly.length; i++) {
-      buffer.write(numbericOnly[i]);
-      int nonZeroIndex = numbericOnly.length - 1 - i;
-      if (nonZeroIndex % 3 == 0 && nonZeroIndex != 0) {
-        buffer.write('.');
-      }
-    }
-    return TextEditingValue(
-      text: buffer.toString(),
-      selection: TextSelection.collapsed(offset: buffer.toString().length),
-    );
-  }
 }
