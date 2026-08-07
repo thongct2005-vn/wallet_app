@@ -1,30 +1,39 @@
+import 'package:app/core/controller/user_controller.dart';
+import 'package:app/core/utils/format_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/create_pin_bottom_sheet.dart';
-import 'package:app/src/services/wallet_service.dart';
+import 'package:app/src/services/app_data_service.dart';
 import 'package:app/src/transfer/contact_list_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:app/src/services/user_service.dart';
-
+import 'package:get/get.dart';
 
 class HomeScreen extends StatefulWidget {
-  final String? phone;
-  final String? fullName;
-  const HomeScreen({super.key, this.phone, this.fullName});
+  const HomeScreen({super.key});
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final WalletService _walletService = WalletService();
   final UserService _userService = UserService();
+  final AppDataService _appDataService = AppDataService();
+  final UserController _userController = Get.find<UserController>();
+  String _phone = '';
+  String _fullName = '';
   bool _isHidenWalletBalance = false;
-  String? _balance;
-  int _selectedIndex = 0;
+  String _balance = '0';
   bool _hasPin = false;
+  int _selectedIndex = 0;
   @override
   void initState() {
     super.initState();
-    _fetchData();
+    setState(() {
+      _phone = _userController.phone.value;
+      _fullName = _userController.fullName.value;
+      _balance =
+          '${FormatUtils.formatDisplayNumber(num.tryParse(_userController.balance.value) ?? 0)}đ';
+      _hasPin = _userController.hasPin.value;
+    });
   }
 
   @override
@@ -32,65 +41,86 @@ class _HomeScreenState extends State<HomeScreen> {
     return PopScope(
       canPop: false,
       child: Scaffold(
+        extendBodyBehindAppBar: true,
         resizeToAvoidBottomInset: false,
-        backgroundColor: Colors.pink.shade50,
+        backgroundColor: Colors.white.withValues(alpha: 0.95),
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(80),
           child: AppBar(
-            backgroundColor: Colors.pink.shade50,
+            elevation: 0,
+            backgroundColor: Colors.transparent,
             title: _buildAvatar(context),
             automaticallyImplyLeading: false,
             toolbarHeight: 80,
           ),
         ),
-        body: SafeArea(
-          child: Padding(
-            padding: EdgeInsetsGeometry.fromLTRB(5, 0, 5, 0),
-            child: Column(
-              children: [
-                _buildWalletBalanceContainer(context),
-                Padding(
-                  padding: EdgeInsetsGeometry.fromLTRB(20, 45, 20, 0),
-                  child: Row(
-                    children: [
-                      Text(
-                        "Tiện ích",
-                        style: GoogleFonts.roboto(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Spacer(),
-                      Padding(
-                        padding: EdgeInsetsGeometry.only(right: 10),
-                        child: Text(
-                          "Xem tất cả",
-                          style: GoogleFonts.roboto(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.pink,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+        body: Stack(
+          children: [
+            Container(
+              width: double.infinity,
+              height: 500,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.pink.withValues(alpha: 0.25),
+                    Colors.white.withValues(alpha: 0),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                 ),
-                _buildUtilList(context),
-                Padding(
-                  padding: EdgeInsetsGeometry.only(left: 15, right: 15),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 150,
-
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: Image.asset('assets/u.jpg', fit: BoxFit.cover),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+            SafeArea(
+              child: RefreshIndicator(
+                color: Colors.pink,
+                onRefresh: _onRefresh,
+                child: ListView(
+                  padding: EdgeInsetsGeometry.fromLTRB(5, 0, 5, 0),
+                  children: [
+                    _buildWalletBalanceContainer(context),
+                    Padding(
+                      padding: EdgeInsetsGeometry.fromLTRB(20, 45, 20, 0),
+                      child: Row(
+                        children: [
+                          Text(
+                            "Tiện ích",
+                            style: GoogleFonts.roboto(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const Spacer(),
+                          Padding(
+                            padding: EdgeInsetsGeometry.only(right: 10),
+                            child: Text(
+                              "Xem tất cả",
+                              style: GoogleFonts.roboto(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.pink,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _buildUtilList(context),
+                    Padding(
+                      padding: EdgeInsetsGeometry.only(left: 15, right: 15),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 150,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: Image.asset('assets/u.jpg', fit: BoxFit.cover),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
         floatingActionButton: FloatingActionButton(
           onPressed: () {},
@@ -124,7 +154,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildNavItem(Icons.receipt_long_outlined, "Giao dịch", 2),
-                    _buildNavItem(Icons.person_outline, "Ưu đãi", 3),
+                    _buildNavItem(Icons.person_outline, "Tôi", 3),
                   ],
                 ),
               ],
@@ -142,7 +172,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           ClipOval(
             child: Image.network(
-              'https://api.dicebear.com/7.x/micah/png?seed=${widget.fullName ?? widget.phone}&backgroundColor=ffb6c1&borderRadius=50',
+              'https://api.dicebear.com/7.x/micah/png?seed=$_phone&backgroundColor=ffb6c1&borderRadius=50',
               width: 50,
               height: 50,
               fit: BoxFit.cover,
@@ -160,7 +190,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: GoogleFonts.roboto(color: Colors.grey, fontSize: 15),
               ),
               Text(
-                "${widget.fullName}",
+                _fullName,
                 style: GoogleFonts.roboto(
                   color: Colors.black,
                   fontSize: 20,
@@ -235,6 +265,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             onPressed: () {
                               setState(() {
                                 _isHidenWalletBalance = !_isHidenWalletBalance;
+                                _balance =
+                                    '${FormatUtils.formatDisplayNumber(num.tryParse(_userController.balance.value) ?? 0)}đ';
                               });
                             },
                             icon: Icon(
@@ -250,9 +282,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Padding(
                       padding: EdgeInsetsGeometry.fromLTRB(15, 0, 0, 10),
                       child: Text(
-                        _isHidenWalletBalance
-                            ? "* * * * * * * *"
-                            : _balance ?? '0 đ',
+                        _isHidenWalletBalance ? "* * * * * * * *" : _balance,
                         style: GoogleFonts.roboto(
                           color: Colors.white,
                           fontSize: 25,
@@ -326,7 +356,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     GestureDetector(
                       onTap: () {
-                        if(!_hasPin){
+                        if (!_hasPin) {
                           _showCreatePinDialog(context);
                           return;
                         }
@@ -371,9 +401,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     GestureDetector(
                       onTap: () {
-                        if(!_hasPin){
-                       _showCreatePinDialog(context);
-                       return;
+                        if (!_hasPin) {
+                          _showCreatePinDialog(context);
+                          return;
                         }
                         Navigator.push(
                           context,
@@ -545,23 +575,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-
-  Future<void> _fetchData() async {
-    final balanceResult = await _walletService.getWalletBalance();
-    if (mounted && balanceResult['is_success'] == true) {
-      setState(() {
-        _balance = balanceResult['balance'];
-      });
-    }
-    
-    final hasPin = await _userService.checkPinStatus();
-    if (mounted && hasPin) {
-      setState(() {
-        _hasPin = true;
-      });
-    }
-  }
-
   void _showCreatePinDialog(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -570,10 +583,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) {
         return CreatePinBottomSheet(
           onCreatePin: (pin) async {
-       
             return await _userService.createPin(pin);
-            
-           
           },
           onSuccess: () {
             setState(() {
@@ -590,5 +600,35 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
+  }
+
+  Future<void> _onRefresh() async {
+    try {
+      final result = await _userService.getMe();
+      final homeData = await _appDataService.fetchHomeData();
+
+      _userController.setUserData(
+        newPhone: result['phone'],
+        newFullName: result['full_name'],
+        newBalance: homeData['balance'],
+        newHasPin: homeData['has_pin'],
+      );
+
+      setState(() {
+        _phone = _userController.phone.value;
+        _fullName = _userController.fullName.value;
+        _balance =
+            '${FormatUtils.formatDisplayNumber(num.tryParse(_userController.balance.value) ?? 0)}đ';
+        _hasPin = _userController.hasPin.value;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Không thể tải lại dữ liệu, thử lại sau'),
+          ),
+        );
+      }
+    }
   }
 }

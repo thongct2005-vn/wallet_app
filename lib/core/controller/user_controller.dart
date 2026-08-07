@@ -1,0 +1,29 @@
+import 'package:get/get.dart';
+
+class UserController extends GetxController {
+  var phone = ''.obs;
+  var fullName = ''.obs;
+  var balance = ''.obs; 
+  var hasPin = false.obs;
+
+
+  void setUserData({
+    required String newPhone,
+    required String newFullName,
+    required String newBalance,
+    required bool newHasPin,
+  }) {
+    phone.value = newPhone;
+    fullName.value = newFullName;
+    balance.value = newBalance;
+    hasPin.value = newHasPin;
+    
+  }
+
+  void clearData() {
+    phone.value = '';
+    fullName.value = '';
+    balance.value = '';
+    hasPin.value = false;
+  }
+}

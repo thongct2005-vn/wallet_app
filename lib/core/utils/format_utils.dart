@@ -1,3 +1,5 @@
+import 'package:intl/intl.dart';
+
 class FormatUtils {
   static String formatDisplayNumber(num amount) {
     if (amount == 0) return '0';
@@ -20,5 +22,22 @@ class FormatUtils {
     final newAmount = amount.replaceAll('.', '').replaceAll('đ', '');
     num amountNum = num.tryParse(newAmount) ?? 0;
     return amountNum;
+  }
+
+  static String formatCustomDateTime(String timeString) {
+    DateTime parsedDate = DateTime.parse(timeString);
+
+    DateTime date = parsedDate.toUtc().add(const Duration(hours: 7));
+    String formattedDate = DateFormat('HH:mm - dd/MM/yyyy').format(date);
+
+    return formattedDate;
+  }
+
+  static String formatAvatar(String fullName) {
+    if (fullName.trim().isEmpty) return '?';
+    List<String> words = fullName.trim().split(RegExp(r'\s+'));
+    if (words.length == 1) return words[0][0].toUpperCase();
+    return '${words[words.length - 2][0]}${words[words.length - 1][0]}'
+        .toUpperCase();
   }
 }

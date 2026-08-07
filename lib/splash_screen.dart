@@ -1,10 +1,14 @@
-import 'package:app/core/network/api_client.dart';
-import 'package:app/core/network/api_config.dart';
+import 'package:app/core/controller/user_controller.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
 import 'package:app/src/home/home_screen.dart';
+import 'package:app/src/services/app_data_service.dart';
+import 'package:app/src/services/notification_service.dart';
+import 'package:app/src/services/socket_service.dart';
+import 'package:app/src/services/user_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:get/get.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -14,13 +18,17 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  final _storage = FlutterSecureStorage();
-  String? _phone = "";
-  String? _fullName; 
+  final _storage = const FlutterSecureStorage();
+  final UserService _userService = UserService();
+  final AppDataService _appDataService = AppDataService();
+  final UserController _userController = Get.put(
+    UserController(),
+    permanent: true,
+  );
   @override
   void initState() {
     super.initState();
-    _checkLoginStatus();
+    _initializeApp();
   }
 
   @override
@@ -33,22 +41,24 @@ class _SplashScreenState extends State<SplashScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text("Mio", style:
-                 GoogleFonts.baloo2(
+              Text(
+                "Mio",
+                style: GoogleFonts.baloo2(
                   fontSize: 70,
                   fontWeight: FontWeight.w800,
                   color: Colors.white,
-                  letterSpacing: 1
-                 )
-              ,),
-              Text("Moblie Money",
-              style: GoogleFonts.baloo2(
+                  letterSpacing: 1,
+                ),
+              ),
+              Text(
+                "Mobile Money",
+                style: GoogleFonts.baloo2(
                   fontSize: 20,
                   fontWeight: FontWeight.w500,
                   color: Colors.white,
-                  letterSpacing: 3
-                 ),
-              )
+                  letterSpacing: 3,
+                ),
+              ),
             ],
           ),
         ),
@@ -56,41 +66,48 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 
-  Future<void> _checkLoginStatus() async {
-    await Future.delayed(Duration(milliseconds: 1000));
+  Future<void> _initializeApp() async {
+    await Future.delayed(const Duration(milliseconds: 1000));
+
     String? accessToken = await _storage.read(key: 'access_token');
     String? refreshToken = await _storage.read(key: 'refresh_token');
 
     if (accessToken == null || refreshToken == null) {
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => LoginPhoneScreen()),
-      );
+      _navigateToLogin();
       return;
     }
 
     try {
-      final api = ApiClient().dio;
-      final reuslt = await api.get(ApiConfig.getMe);
-      setState(() {
-        _fullName = reuslt.data['data']['user_info']['full_name'];
-        _phone = reuslt.data['data']['user_info']['phone'];
-      });
+      final result = await _userService.getMe();
+      final homeData = await _appDataService.fetchHomeData();
+      _userController.setUserData(
+        newPhone: result['phone'],
+        newFullName: result['full_name'],
+        newBalance: homeData['balance'],
+        newHasPin: homeData['has_pin'],
+      );
+      await SocketService().connect();
+      final fcmToken = await NotificationService().init();
+      
+      if (fcmToken != null) {
+        await _userService.updateFcmToken(fcmToken);
+      }
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => HomeScreen(phone: _phone, fullName: _fullName,)),
+        MaterialPageRoute(builder: (context) => HomeScreen()),
       );
     } catch (e) {
       await _storage.deleteAll();
-      if (!mounted) return;
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => LoginPhoneScreen()),
-      );
-      return;
+      _navigateToLogin();
     }
+  }
+
+  void _navigateToLogin() {
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginPhoneScreen()),
+    );
   }
 }

@@ -62,6 +62,11 @@ class _CreatePinBottomSheetState extends State<CreatePinBottomSheet> {
       ),
     );
 
+    final isPinComplete = _pinController.text.length == 6;
+    final effectiveFocusedPinTheme = isPinComplete
+    ? (_isShowPin ? visiblePinTheme : submittedPinTheme)
+    : defaultPinTheme;
+
     return PopScope(
       canPop: !_isLoading,
       child: Padding(
@@ -161,7 +166,7 @@ class _CreatePinBottomSheetState extends State<CreatePinBottomSheet> {
                               controller: _pinController,
                               length: 6,
                               defaultPinTheme: defaultPinTheme,
-                              focusedPinTheme: defaultPinTheme,
+                              focusedPinTheme: effectiveFocusedPinTheme,
                               submittedPinTheme: _isShowPin
                                   ? visiblePinTheme
                                   : submittedPinTheme,

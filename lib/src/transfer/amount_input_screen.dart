@@ -8,13 +8,11 @@ import 'package:app/src/services/wallet_service.dart';
 class AmountInputScreen extends StatefulWidget {
   final String? receiverPhone;
   final String? receiverFullName;
-  final String? receiverAvatarName;
   final String? receiverId;
   const AmountInputScreen({
     super.key,
     this.receiverPhone,
     this.receiverFullName,
-    this.receiverAvatarName,
     this.receiverId,
   });
   @override
@@ -148,7 +146,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
             CircleAvatar(
               backgroundColor: Colors.pink.shade50.withValues(alpha: 0.6),
               child: Text(
-                widget.receiverAvatarName ?? "?",
+                FormatUtils.formatAvatar(widget.receiverFullName??"?"),
                 style: GoogleFonts.roboto(
                   color: Colors.pink,
                   fontWeight: FontWeight.bold,
@@ -517,7 +515,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                         ? GestureDetector(
                             onTap: () {
                               String newText = _amountHintTwo!.isEmpty
-                                  ? '100.000'
+                                  ? '10.000'
                                   : _amountHintTwo!.replaceAll('đ', '');
                               _amountController.value = TextEditingValue(
                                 text: newText,
@@ -640,15 +638,15 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                 decoration: BoxDecoration(
                   color: _isEnable
                       ? _isLoading
-                            ? Colors.grey.withValues(alpha: 0.15)
+                            ? Colors.black.withValues(alpha: 0.1)
                             : Colors.pinkAccent
-                      : Colors.grey.withValues(alpha: 0.15),
+                      : Colors.black.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Padding(
                   padding: EdgeInsetsDirectional.only(top: 8, bottom: 8),
                   child: _isLoading
-                      ? CircularProgressIndicator(color: Colors.white)
+                      ? SizedBox(width: 25, height: 25, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),)
                       : Text(
                           "Chuyển tiền",
                           style: GoogleFonts.roboto(

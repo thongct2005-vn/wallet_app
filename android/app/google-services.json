@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "685293846978",
+    "project_id": "mio-wallet-330f1",
+    "storage_bucket": "mio-wallet-330f1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:685293846978:android:172a8cdf5dcc2ea08dd65b",
+        "android_client_info": {
+          "package_name": "com.example.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA_G5YnW7CnGH8ozrpxMtUj0FUg9LOCJRE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -60,6 +60,12 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
       ),
     );
 
+
+    final isPinComplete = _pinController.text.length == 6;
+    final effectiveFocusedPinTheme = isPinComplete
+        ? (_isShowPin ? visiblePinTheme : submittedPinTheme)
+        : defaultPinTheme;
+
     return PopScope(
       canPop: !_isLoading,
       child: Padding(
@@ -148,7 +154,7 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
                               controller: _pinController,
                               length: 6,
                               defaultPinTheme: defaultPinTheme,
-                              focusedPinTheme: defaultPinTheme,
+                              focusedPinTheme: effectiveFocusedPinTheme,
                               submittedPinTheme: _isShowPin
                                   ? visiblePinTheme
                                   : submittedPinTheme,
@@ -160,7 +166,7 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
                                 setState(() {});
                               },
                               onCompleted: (pin) async {
-                                FocusManager.instance.primaryFocus?.unfocus();
+                                //FocusManager.instance.primaryFocus?.unfocus();
                                 setState(() {
                                   _errorMsg = '';
                                   _isLoading = true;

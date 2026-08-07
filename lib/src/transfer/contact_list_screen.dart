@@ -1,10 +1,9 @@
-import 'package:app/core/network/api_client.dart';
-import 'package:app/core/network/api_config.dart';
+import 'package:app/core/utils/format_utils.dart';
+import 'package:app/src/services/user_service.dart';
 import 'package:app/src/transfer/amount_input_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:flutter_contacts/flutter_contacts.dart';
 
 class ContactListScreen extends StatefulWidget {
   const ContactListScreen({super.key});
@@ -14,15 +13,17 @@ class ContactListScreen extends StatefulWidget {
 
 class _ContactListScreenState extends State<ContactListScreen> {
   final TextEditingController _phoneController = TextEditingController();
+  final UserService _userService = UserService();
   bool _isLoading = true;
   String _errMsg = '';
   List<dynamic> _users = [];
   List<dynamic> _filteredUsers = [];
+  bool _permanentlyDenied = false;
 
   @override
   void initState() {
     super.initState();
-    _fetchContactAndCheckAppUser();
+    _loadContact();
     _phoneController.addListener(_filterUsers);
   }
 
@@ -128,13 +129,25 @@ class _ContactListScreenState extends State<ContactListScreen> {
               ? Center(
                   child: Padding(
                     padding: EdgeInsets.all(20.0),
-                    child: Text(
-                      _errMsg,
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.roboto(
-                        color: Colors.red,
-                        fontSize: 20,
-                      ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _errMsg,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.roboto(
+                            color: Colors.red,
+                            fontSize: 18,
+                          ),
+                        ),
+                        if (_permanentlyDenied) ...[
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: () => openAppSettings(),
+                            child: const Text("Mở Cài đặt"),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 )
@@ -185,7 +198,9 @@ class _ContactListScreenState extends State<ContactListScreen> {
                                   backgroundColor: Colors.pink.shade50
                                       .withValues(alpha: 0.6),
                                   child: Text(
-                                    _formatAvatar(user['full_name'] ?? ''),
+                                    FormatUtils.formatAvatar(
+                                      user['full_name'] ?? '',
+                                    ),
                                     style: GoogleFonts.roboto(
                                       color: Colors.pink,
                                       fontWeight: FontWeight.bold,
@@ -208,9 +223,6 @@ class _ContactListScreenState extends State<ContactListScreen> {
                                         receiverPhone: user['phone'],
                                         receiverFullName:
                                             user['full_name'] ?? 'Không rõ tên',
-                                        receiverAvatarName: _formatAvatar(
-                                          user['full_name'] ?? '',
-                                        ),
                                         receiverId: user['id'],
                                       ),
                                     ),
@@ -240,88 +252,24 @@ class _ContactListScreenState extends State<ContactListScreen> {
     });
   }
 
-  String _formatAvatar(String fullName) {
-    if (fullName.trim().isEmpty) return '?';
-    List<String> words = fullName.trim().split(RegExp(r'\s+'));
-    if (words.length == 1) return words[0][0].toUpperCase();
-    return '${words[words.length - 2][0]}${words[words.length - 1][0]}'
-        .toUpperCase();
-  }
-
-  Future<void> _fetchContactAndCheckAppUser() async {
+  Future<void> _loadContact() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
-
-    try {
-      if (await Permission.contacts.request().isGranted) {
-        List<Contact> contacts = await FlutterContacts.getAll(
-          properties: {ContactProperty.phone},
-        );
-
-        List<String> phoneNumbers = [];
-        for (var contact in contacts) {
-          if (contact.phones.isNotEmpty) {
-            String rawPhone = contact.phones.first.number.replaceAll(
-              RegExp(r'\D'),
-              '',
-            );
-            if (rawPhone.startsWith('84')) {
-              rawPhone = '0${rawPhone.substring(2)}';
-            }
-            if (rawPhone.length == 10) {
-              phoneNumbers.add(rawPhone);
-            }
-          }
-        }
-
-        List<String> uniquePhones = phoneNumbers.toSet().toList();
-
-        List<dynamic> allFoundUsers = [];
-        final api = ApiClient().dio;
-
-        int chunkSize = 500;
-
-        for (int i = 0; i < uniquePhones.length; i += chunkSize) {
-          int end = (i + chunkSize < uniquePhones.length)
-              ? i + chunkSize
-              : uniquePhones.length;
-
-          List<String> chunk = uniquePhones.sublist(i, end);
-
-          try {
-            final response = await api.post(
-              ApiConfig.checkContact,
-              data: {'phones': chunk},
-            );
-
-            final responseData = response.data;
-            if (responseData != null && responseData['data'] != null) {
-              allFoundUsers.addAll(responseData['data']);
-            }
-          } catch (apiError) {
-            print('Lỗi khi gọi API chunk $i: $apiError');
-          }
-        }
-
-        setState(() {
-          _users = allFoundUsers;
-          _filteredUsers = _users;
-          _isLoading = false;
-          _errMsg = '';
-        });
+    final result = await _userService.fetchContactAndCheckAppUser();
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+      if (result['success']) {
+        _users = result['data'];
+        _filteredUsers = _users;
+        _errMsg = '';
+        _permanentlyDenied = false;
       } else {
-        setState(() {
-          _errMsg = 'Vui lòng cấp quyền danh bạ để dùng tính năng này';
-          _isLoading = false;
-        });
+        _errMsg = result['message'];
+        _permanentlyDenied = result['permanently_denied'] == true;
       }
-    } catch (e) {
-      setState(() {
-        _errMsg = 'Có lỗi xảy ra khi đọc danh bạ';
-        _isLoading = false;
-      });
-      print(e);
-    }
+    });
   }
 }

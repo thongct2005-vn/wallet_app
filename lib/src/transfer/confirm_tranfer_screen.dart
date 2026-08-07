@@ -1,8 +1,11 @@
 import 'package:app/core/utils/format_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/verify_pin_bottom_sheet.dart';
+import 'package:app/src/services/transaction_service.dart';
+import 'package:app/src/transfer/result_tranfer_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:app/src/services/wallet_service.dart';
+import 'package:uuid/uuid.dart';
 
 class ConfirmTranferScreen extends StatefulWidget {
   final String? receiverId;
@@ -28,7 +31,22 @@ class ConfirmTranferScreen extends StatefulWidget {
 
 class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
   final WalletService _walletService = WalletService();
+  final TransactionService _transactionService = TransactionService();
   bool _isProcessingTransfer = false;
+  final Uuid _uuid = const Uuid();
+  late final String idempotencyKey;
+
+  @override
+  void initState() {
+    super.initState();
+    idempotencyKey = _uuid.v7();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -96,6 +114,27 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
                 ],
               ),
             ),
+            if (_isProcessingTransfer)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.transparent,
+                  child: Center(
+                    child: Container(
+                      width: 50,
+                      height: 50,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade400,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 3,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -117,7 +156,7 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
           Text(
             label,
             style: GoogleFonts.roboto(
-              color: Colors.grey.shade600,
+              color: Colors.black.withValues(alpha: 0.5),
               fontSize: 20,
             ),
           ),
@@ -237,7 +276,7 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
                       style: GoogleFonts.roboto(
                         fontWeight: FontWeight.w400,
                         fontSize: 16,
-                        color: Colors.grey.shade600,
+                        color: Colors.black.withValues(alpha: 0.5),
                       ),
                     ),
                     Icon(Icons.chevron_right),
@@ -408,7 +447,7 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
                 width: double.infinity,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(10),
-                  color: Colors.pinkAccent,
+                  color: _isProcessingTransfer?Colors.black.withValues(alpha: 0.1):Colors.pinkAccent,
                 ),
                 child: Padding(
                   padding: EdgeInsets.only(top: 10, bottom: 10),
@@ -416,7 +455,20 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.lock_outline, color: Colors.white, size: 20),
+                      _isProcessingTransfer
+                          ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : Icon(
+                              Icons.lock_outline,
+                              color: Colors.white,
+                              size: 20,
+                            ),
                       const SizedBox(width: 10),
                       Text(
                         "Xác nhận",
@@ -453,38 +505,59 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
             }
           },
           onSuccess: () async {
-  
-            // await _handleTransfer();
+            await _handleTransfer();
           },
         );
       },
     );
   }
 
-  // Future<void> _handleTransfer() async {
-  //   if (!mounted) return;
-  //   setState(() => _isProcessingTransfer = true);
+  Future<void> _handleTransfer() async {
+    if (!mounted) return;
+    setState(() => _isProcessingTransfer = true);
+    final numAmount = FormatUtils.formatAmountToNum(
+      widget.amount ?? '0',
+    ).toString();
+    try {
+      final result = await _transactionService.transferMoney(
+        widget.receiverId ?? "",
+        numAmount,
+        widget.description ?? "",
+        idempotencyKey,
+      );
+      setState(() {
+        _isProcessingTransfer = false;
+      });
+      if (!mounted) return;
+      if (result['is_success']) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ResultTranferScreen(result: result),
+          ),
+          (Route<dynamic> route) => false,
+        );
+      } else {
+        _showSnackBar(context, result['message']);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showSnackBar(context, "Có lỗi xảy ra. Vui lòng thử lại");
+    } finally {
+      if (mounted) setState(() => _isProcessingTransfer = false);
+    }
+  }
+}
 
-  //   try {
-  //     await _walletService.transfer(
-  //       receiverId: widget.receiverId,
-  //       amount: widget.amount,
-  //       description: widget.description,
-  //     );
-
-  //     if (!mounted) return;
-  //     Navigator.of(context).pushReplacementNamed('/transfer-success');
-  //   } catch (e) {
-  //     if (!mounted) return;
-  //     ScaffoldMessenger.of(context).showSnackBar(
-  //       const SnackBar(
-  //         content: Text('Chuyển tiền thất bại. Vui lòng thử lại.'),
-  //         backgroundColor: Colors.red,
-  //         behavior: SnackBarBehavior.floating,
-  //       ),
-  //     );
-  //   } finally {
-  //     if (mounted) setState(() => _isProcessingTransfer = false);
-  //   }
-  // }
+void _showSnackBar(BuildContext context, String msg) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        msg,
+        style: GoogleFonts.roboto(color: Colors.white, fontSize: 20),
+      ),
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: Colors.red,
+    ),
+  );
 }
