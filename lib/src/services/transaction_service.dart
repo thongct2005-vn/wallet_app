@@ -1,5 +1,6 @@
 import 'package:app/core/network/api_client.dart';
 import 'package:app/core/network/api_config.dart';
+import 'package:app/core/network/api_error_handler.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
@@ -21,26 +22,14 @@ class TransactionService {
         },
         options: Options(headers: {'idempotency-key': idempotencyKey}),
       );
-
-      if (result.statusCode == 200) {
-        return {
-          'is_success': true,
-          'message': result.data['message'],
-          'data': result.data['data'],
-        };
-      }
       return {
-        'is_success': false,
-        'message': result.data['message'] ?? "Hệ thống đang bảo trì",
-        'data': {},
+        'is_success': true,
+        'message': result.data['message'],
+        'data': result.data['data'],
       };
     } catch (e) {
       debugPrint('$e');
-      return {
-        'is_success': false,
-        'message': "Hệ thống đang bảo trì",
-        'data': {},
-      };
+      return ApiErrorHandler.handleError(e);
     }
   }
 }

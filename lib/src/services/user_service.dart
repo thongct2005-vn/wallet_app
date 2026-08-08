@@ -113,7 +113,7 @@ class UserService {
           } catch (apiError) {
             debugPrint('Lỗi khi gọi API chunk $i: $apiError');
             return {
-              'success': false,
+              'is_success': false,
               'data': [],
               'message': "Có lỗi khi lấy danh sách",
             };
@@ -121,13 +121,13 @@ class UserService {
         }
 
         return {
-          'success': true,
+          'is_success': true,
           'data': allFoundUsers,
           'message': "Lấy danh sách thành công",
         };
       } else {
         return {
-          'success': false,
+          'is_success': false,
           'data': [],
           'message': "Vui lòng cấp quyền đọc danh bạ",
         };

@@ -261,7 +261,7 @@ class _ContactListScreenState extends State<ContactListScreen> {
     if (!mounted) return;
     setState(() {
       _isLoading = false;
-      if (result['success']) {
+      if (result['is_success']) {
         _users = result['data'];
         _filteredUsers = _users;
         _errMsg = '';

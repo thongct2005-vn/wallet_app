@@ -1,5 +1,6 @@
 import 'package:app/core/network/api_client.dart';
 import 'package:app/core/network/api_config.dart';
+import 'package:app/core/network/api_error_handler.dart';
 import 'package:app/core/utils/format_utils.dart';
 import 'package:flutter/cupertino.dart';
 
@@ -19,7 +20,7 @@ class WalletService {
       };
     } catch (e) {
       debugPrint('Lỗi lấy số dư ví: $e');
-      return {'is_success': false};
+      return ApiErrorHandler.handleError(e);
     }
   }
 
@@ -36,11 +37,11 @@ class WalletService {
       return {
         'is_eligible': data['is_eligible'],
         'wallet_balance': data['wallet_balance'],
-        'has_error': false,
+        'is_success': true,
       };
     } catch (e) {
       debugPrint('Lỗi kiểm tra số dư: $e');
-      return {'has_error': true};
+       return ApiErrorHandler.handleError(e);
     }
   }
 
@@ -48,10 +49,10 @@ class WalletService {
     try {
       final result = await api.post(ApiConfig.checkPin, data: {'pin': pin});
       final data = result.data['data'];
-      return {'is_correct': data['is_correct'], 'has_error': false};
+      return {'is_correct': data['is_correct'], 'is_success': false};
     } catch (e) {
       debugPrint('Lỗi kiểm tra PIN: $e');
-      return {'has_error': true};
+      return ApiErrorHandler.handleError(e);
     }
   }
 }

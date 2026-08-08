@@ -601,7 +601,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                       setState(() {
                         _isLoading = false;
                       });
-                      if (!result['has_error']) {
+                      if (!result['is_success']) {
                         if (!result['is_eligible']) {
                           setState(() {
                             _msg = 'Số dư trong ví không đủ';

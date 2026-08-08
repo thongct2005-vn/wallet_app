@@ -1,6 +1,8 @@
+// home_screen.dart
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/format_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/create_pin_bottom_sheet.dart';
+import 'package:app/src/profile/profile_screen.dart';
 import 'package:app/src/services/app_data_service.dart';
 import 'package:app/src/transfer/contact_list_screen.dart';
 import 'package:flutter/material.dart';
@@ -24,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _balance = '0';
   bool _hasPin = false;
   int _selectedIndex = 0;
+
   @override
   void initState() {
     super.initState();
@@ -38,88 +41,49 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final List<Widget> pages = [
+      _buildHomeContent(context),
+      const Center(child: Text("Ưu đãi")),
+      const Center(child: Text("Giao dịch")),
+      const ProfileScreen(),
+    ];
+
     return PopScope(
       canPop: false,
       child: Scaffold(
         extendBodyBehindAppBar: true,
         resizeToAvoidBottomInset: false,
-        backgroundColor: Colors.white.withValues(alpha: 0.95),
-        appBar: PreferredSize(
-          preferredSize: const Size.fromHeight(80),
-          child: AppBar(
-            elevation: 0,
-            backgroundColor: Colors.transparent,
-            title: _buildAvatar(context),
-            automaticallyImplyLeading: false,
-            toolbarHeight: 80,
-          ),
-        ),
+        appBar: _selectedIndex == 0
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(80),
+                child: AppBar(
+                  title: _buildAvatar(context),
+                  automaticallyImplyLeading: false,
+                  toolbarHeight: 80,
+                ),
+              )
+            : PreferredSize(
+                preferredSize: const Size.fromHeight(0),
+                child: AppBar(automaticallyImplyLeading: false),
+              ),
         body: Stack(
           children: [
-            Container(
-              width: double.infinity,
-              height: 500,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.pink.withValues(alpha: 0.25),
-                    Colors.white.withValues(alpha: 0),
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+            if (_selectedIndex == 0)
+              Container(
+                width: double.infinity,
+                height: 500,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.pink.withValues(alpha: 0.25),
+                      Colors.white.withValues(alpha: 0),
+                    ],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
                 ),
               ),
-            ),
-            SafeArea(
-              child: RefreshIndicator(
-                color: Colors.pink,
-                onRefresh: _onRefresh,
-                child: ListView(
-                  padding: EdgeInsetsGeometry.fromLTRB(5, 0, 5, 0),
-                  children: [
-                    _buildWalletBalanceContainer(context),
-                    Padding(
-                      padding: EdgeInsetsGeometry.fromLTRB(20, 45, 20, 0),
-                      child: Row(
-                        children: [
-                          Text(
-                            "Tiện ích",
-                            style: GoogleFonts.roboto(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const Spacer(),
-                          Padding(
-                            padding: EdgeInsetsGeometry.only(right: 10),
-                            child: Text(
-                              "Xem tất cả",
-                              style: GoogleFonts.roboto(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.pink,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    _buildUtilList(context),
-                    Padding(
-                      padding: EdgeInsetsGeometry.only(left: 15, right: 15),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 150,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: Image.asset('assets/u.jpg', fit: BoxFit.cover),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            IndexedStack(index: _selectedIndex, children: pages),
           ],
         ),
         floatingActionButton: FloatingActionButton(
@@ -133,7 +97,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-
         bottomNavigationBar: BottomAppBar(
           color: Colors.white,
           shape: const CircularNotchedRectangle(),
@@ -160,6 +123,59 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHomeContent(BuildContext context) {
+    return SafeArea(
+      child: RefreshIndicator(
+        color: Colors.pink,
+        onRefresh: _onRefresh,
+        child: ListView(
+          padding: EdgeInsetsGeometry.fromLTRB(5, 0, 5, 0),
+          children: [
+            _buildWalletBalanceContainer(context),
+            Padding(
+              padding: EdgeInsetsGeometry.fromLTRB(20, 45, 20, 0),
+              child: Row(
+                children: [
+                  Text(
+                    "Tiện ích",
+                    style: GoogleFonts.roboto(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  Padding(
+                    padding: EdgeInsetsGeometry.only(right: 10),
+                    child: Text(
+                      "Xem tất cả",
+                      style: GoogleFonts.roboto(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.pink,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _buildUtilList(context),
+            Padding(
+              padding: EdgeInsetsGeometry.only(left: 15, right: 15),
+              child: SizedBox(
+                width: double.infinity,
+                height: 150,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.asset('assets/u.jpg', fit: BoxFit.cover),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -353,7 +369,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
-
                     GestureDetector(
                       onTap: () {
                         if (!_hasPin) {
@@ -398,7 +413,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
-
                     GestureDetector(
                       onTap: () {
                         if (!_hasPin) {
@@ -491,7 +505,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -505,7 +518,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,

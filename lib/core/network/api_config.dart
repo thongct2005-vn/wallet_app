@@ -11,6 +11,7 @@ class ApiConfig {
 
   static const String checkPhoneExists = '$baseUrl/auth/checkPhoneExists';
   static const String login = '$baseUrl/auth/login';
+  static const String logout = '$baseUrl/auth/logout';
   static const String refreshToken = '$baseUrl/auth/refresh-token';
   static const String getMe = '$baseUrl/auth/me';
   static const String sendOtp = '$baseUrl/auth/send-otp';

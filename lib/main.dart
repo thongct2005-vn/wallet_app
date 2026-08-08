@@ -3,14 +3,15 @@ import 'package:app/splash_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
-
+import 'package:flutter/services.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-Future<void> _fireBaseMessagingBackgroundHandler(RemoteMessage msg) async{
+Future<void> _fireBaseMessagingBackgroundHandler(RemoteMessage msg) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 }
-void main() async{
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   FirebaseMessaging.onBackgroundMessage(_fireBaseMessagingBackgroundHandler);
@@ -25,6 +26,15 @@ class MainApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey,
+      theme: ThemeData(
+        scaffoldBackgroundColor: Colors.white.withValues(alpha: 0.95),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          scrolledUnderElevation: 0,
+          elevation: 0,
+        ),
+      ),
       home: SplashScreen(),
     );
   }

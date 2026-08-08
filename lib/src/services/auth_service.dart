@@ -67,5 +67,18 @@ class AuthService {
     }
   }
 
+  Future<Map<String, dynamic>> logout() async{
+    try {
+      final result = await api.post(
+        ApiConfig.logout
+      );
+      return {
+        'is_success': true,
+        'message':result.data['message'], 
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
   
 }
