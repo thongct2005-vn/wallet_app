@@ -19,8 +19,8 @@ class _ResultTranferScreenState extends State<ResultTranferScreen> {
   void initState() {
     super.initState();
     setState(() {
-      data = widget.result?['data'];
-      amount = FormatUtils.formatDisplayNumber(data['amount']);
+      data = (widget.result?['data'] as Map<String, dynamic>?) ?? {};
+      amount = FormatUtils.formatDisplayNumber(num.tryParse(data['amount']!.toString())!);
       createdAt = FormatUtils.formatCustomDateTime(data['createdAt']);
     });
   }

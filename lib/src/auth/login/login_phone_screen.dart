@@ -1,4 +1,4 @@
-
+import 'package:app/core/utils/dialog_utils.dart';
 import 'package:app/src/auth/register/otp_screen.dart';
 import 'package:app/src/services/auth_service.dart';
 import 'package:flutter/material.dart';
@@ -59,12 +59,18 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
           backgroundColor: Colors.white.withValues(alpha: 0.95),
           extendBodyBehindAppBar: true,
           appBar: AppBar(
-            title: Text("Nhập SĐT", style: GoogleFonts.roboto(fontSize: 20, fontWeight: FontWeight.w600)),
+            title: Text(
+              "Nhập SĐT",
+              style: GoogleFonts.roboto(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             backgroundColor: Colors.transparent,
           ),
           body: Stack(
             children: [
-               Container(
+              Container(
                 width: double.infinity,
                 height: 500,
                 decoration: BoxDecoration(
@@ -260,9 +266,28 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
                                     });
 
                                     if (!_isPhoneExists) {
-                                      _showConfirmPhone(
+                                      DialogUtils.showConfirmation(
                                         context,
-                                        _phoneController.text,
+                                        title: "Thông báo",
+                                        message:
+                                            "Bạn có muốn dùng số điện thoại ${_phoneController.text} để đăng ký tài khoản.",
+                                        cancelText: "Đổi SĐT",
+                                        confirmText: "Xác nhận",
+                                        onConfirm: () {
+                                          Navigator.pop(context);
+                                          _authService.sendOtp(
+                                            _phoneController.text,
+                                          );
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) => OtpScreen(
+                                                phoneNumber:
+                                                    _phoneController.text,
+                                              ),
+                                            ),
+                                          );
+                                        },
                                       );
                                     } else {
                                       Navigator.push(
@@ -279,7 +304,9 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
                                   }
                                 },
                           style: ElevatedButton.styleFrom(
-                            disabledBackgroundColor: Colors.black.withValues(alpha: 0.1),
+                            disabledBackgroundColor: Colors.black.withValues(
+                              alpha: 0.1,
+                            ),
                             backgroundColor: Colors.pink,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadiusGeometry.circular(10),
@@ -311,53 +338,6 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  void _showConfirmPhone(BuildContext context, String phone) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          title: Text("Thông báo"),
-          content: Text(
-            "Bạn có muốn dùng số điện thoại $phone để đăng ký tài khoản.",
-          ),
-          actions: [
-            OutlinedButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              style: OutlinedButton.styleFrom(
-                backgroundColor: Colors.white,
-                side: BorderSide.none,
-              ),
-              child: Text(
-                "Đổi số điện thoại",
-                style: GoogleFonts.roboto(color: Colors.pink),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _authService.sendOtp(phone);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => OtpScreen(phoneNumber: phone),
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.pink),
-              child: Text(
-                "Xác nhận",
-                style: GoogleFonts.roboto(color: Colors.white),
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 

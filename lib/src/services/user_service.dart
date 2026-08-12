@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:app/core/controller/user_controller.dart';
+import 'package:app/core/network/api_error_handler.dart';
 import 'package:crypto/crypto.dart';
 import 'package:app/core/network/api_client.dart';
 import 'package:app/core/network/api_config.dart';
@@ -18,21 +19,16 @@ class UserService {
   Future<Map<String, dynamic>> getMe() async {
     try {
       final result = await api.get(ApiConfig.getMe);
-      if (result.statusCode == 200) {
-        return {
-          'is_success': true,
-          'message': result.data['message'],
-          'phone': result.data['data']['user_info']['phone'],
-          'full_name': result.data['data']['user_info']['full_name'],
-        };
-      }
-      return {'is_success': false, 'message': result.data['message']};
-    } catch (e) {
-      debugPrint('$e');
+
       return {
-        'is_success': false,
-        'message': "Lỗi xác thực danh tính. Vui lòng thử lại",
+        'is_success': true,
+        'message': result.data['message'],
+        'user_id': result.data['data']['user_info']['user_id'],
+        'phone': result.data['data']['user_info']['phone'],
+        'full_name': result.data['data']['user_info']['full_name'],
       };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
     }
   }
 
@@ -111,12 +107,7 @@ class UserService {
               allFoundUsers.addAll(responseData['data']);
             }
           } catch (apiError) {
-            debugPrint('Lỗi khi gọi API chunk $i: $apiError');
-            return {
-              'is_success': false,
-              'data': [],
-              'message': "Có lỗi khi lấy danh sách",
-            };
+            return ApiErrorHandler.handleError(apiError);
           }
         }
 
@@ -133,12 +124,7 @@ class UserService {
         };
       }
     } catch (e) {
-      debugPrint('Lỗi lấy danh sách người dùng từ danh bạ: $e');
-      return {
-        'success': false,
-        'data': [],
-        'message': "Có lỗi khi lấy danh sách",
-      };
+      return ApiErrorHandler.handleError(e);
     }
   }
 
@@ -146,7 +132,7 @@ class UserService {
     try {
       api.patch(ApiConfig.updateFcmToken, data: {'fcm_token': token});
     } catch (e) {
-      debugPrint('Lỗi cập nhật FCM token: $e');
+      ApiErrorHandler.handleError(e);
     }
   }
 }

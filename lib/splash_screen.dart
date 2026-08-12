@@ -81,6 +81,7 @@ class _SplashScreenState extends State<SplashScreen> {
       final result = await _userService.getMe();
       final homeData = await _appDataService.fetchHomeData();
       _userController.setUserData(
+        newId: result['user_id'],
         newPhone: result['phone'],
         newFullName: result['full_name'],
         newBalance: homeData['balance'],

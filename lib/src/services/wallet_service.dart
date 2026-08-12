@@ -33,7 +33,6 @@ class WalletService {
         data: {'amount': numAmount},
       );
       final data = result.data['data'];
-
       return {
         'is_eligible': data['is_eligible'],
         'wallet_balance': data['wallet_balance'],
@@ -49,7 +48,7 @@ class WalletService {
     try {
       final result = await api.post(ApiConfig.checkPin, data: {'pin': pin});
       final data = result.data['data'];
-      return {'is_correct': data['is_correct'], 'is_success': false};
+      return {'is_correct': data['is_correct'], 'is_success': true};
     } catch (e) {
       debugPrint('Lỗi kiểm tra PIN: $e');
       return ApiErrorHandler.handleError(e);

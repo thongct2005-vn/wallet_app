@@ -9,11 +9,17 @@ class AmountInputScreen extends StatefulWidget {
   final String? receiverPhone;
   final String? receiverFullName;
   final String? receiverId;
+  final String? amount;
+  final String? description;
+  final String? referenceCode;
   const AmountInputScreen({
     super.key,
     this.receiverPhone,
     this.receiverFullName,
     this.receiverId,
+    this.amount,
+    this.description,
+    this.referenceCode,
   });
   @override
   State<AmountInputScreen> createState() => _AmountInputScreenState();
@@ -24,6 +30,11 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
   final TextEditingController _descriptionController = TextEditingController();
   final FocusNode _amountFocusNode = FocusNode();
   final WalletService _walletService = WalletService();
+  bool get _isFixedAmount => widget.amount != null && widget.amount!.isNotEmpty;
+  bool get _isFixedDescription =>
+      widget.description != null && widget.description!.isNotEmpty;
+
+
   bool _isSelectedFirstDesHint = false;
   bool _isSelectedSecondDesHint = false;
   String? _msg = '';
@@ -41,6 +52,13 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
         _isAmountFocus = _amountFocusNode.hasFocus;
       });
     });
+    if (_isFixedAmount) {
+      _amountController.text = widget.amount!;
+      _handleAmountChanged(widget.amount!);
+    }
+    if (_isFixedDescription) {
+      _descriptionController.text = widget.description!;
+    }
   }
 
   @override
@@ -146,7 +164,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
             CircleAvatar(
               backgroundColor: Colors.pink.shade50.withValues(alpha: 0.6),
               child: Text(
-                FormatUtils.formatAvatar(widget.receiverFullName??"?"),
+                FormatUtils.formatAvatar(widget.receiverFullName ?? "?"),
                 style: GoogleFonts.roboto(
                   color: Colors.pink,
                   fontWeight: FontWeight.bold,
@@ -213,6 +231,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                         ),
                         Positioned.fill(
                           child: TextField(
+                            readOnly: _isFixedAmount,
                             focusNode: _amountFocusNode,
                             inputFormatters: [CurrencyFormatter()],
                             maxLength: 10,
@@ -290,6 +309,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                 alignment: Alignment.centerRight,
                 children: [
                   TextField(
+                    readOnly: _isFixedDescription,
                     maxLength: 100,
                     controller: _descriptionController,
                     textAlign: TextAlign.center,
@@ -314,7 +334,8 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                       border: UnderlineInputBorder(borderSide: BorderSide.none),
                     ),
                   ),
-                  if (_descriptionController.text.isNotEmpty)
+                  if (_descriptionController.text.isNotEmpty &&
+                      !_isFixedDescription)
                     Positioned(
                       right: -6,
                       child: IconButton(
@@ -331,124 +352,127 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 10),
-            Divider(height: 0.5, color: Colors.grey.withValues(alpha: 0.1)),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _isSelectedFirstDesHint = !_isSelectedFirstDesHint;
-                      _isSelectedSecondDesHint = false;
-                      if (_isSelectedFirstDesHint) {
-                        if (_descriptionController.text.contains(
-                          'Cảm ơn nha 👍🫰',
-                        )) {
-                          _descriptionController.text = _descriptionController
-                              .text
-                              .replaceAll(
-                                'Cảm ơn nha 👍🫰',
-                                'Mình chuyển tiền nhé 💵',
-                              );
+
+            if (!_isFixedDescription) ...[
+              const SizedBox(height: 10),
+              Divider(height: 0.5, color: Colors.grey.withValues(alpha: 0.1)),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _isSelectedFirstDesHint = !_isSelectedFirstDesHint;
+                        _isSelectedSecondDesHint = false;
+                        if (_isSelectedFirstDesHint) {
+                          if (_descriptionController.text.contains(
+                            'Cảm ơn nha 👍🫰',
+                          )) {
+                            _descriptionController.text = _descriptionController
+                                .text
+                                .replaceAll(
+                                  'Cảm ơn nha 👍🫰',
+                                  'Mình chuyển tiền nhé 💵',
+                                );
+                          } else {
+                            _descriptionController.text =
+                                _descriptionController.text +
+                                ' Mình chuyển tiền nhé 💵'.toString();
+                          }
                         } else {
-                          _descriptionController.text =
-                              _descriptionController.text +
-                              ' Mình chuyển tiền nhé 💵'.toString();
+                          if (_descriptionController.text.contains(
+                            ' Mình chuyển tiền nhé 💵',
+                          )) {
+                            _descriptionController.text = _descriptionController
+                                .text
+                                .replaceAll(' Mình chuyển tiền nhé 💵', '');
+                          }
                         }
-                      } else {
-                        if (_descriptionController.text.contains(
-                          ' Mình chuyển tiền nhé 💵',
-                        )) {
-                          _descriptionController.text = _descriptionController
-                              .text
-                              .replaceAll(' Mình chuyển tiền nhé 💵', '');
-                        }
-                      }
-                    });
-                  },
-                  child: Container(
-                    alignment: Alignment.center,
-                    height: 35,
-                    decoration: BoxDecoration(
-                      color: _isSelectedFirstDesHint
-                          ? Colors.pink.shade100.withValues(alpha: 0.5)
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        width: 1,
+                      });
+                    },
+                    child: Container(
+                      alignment: Alignment.center,
+                      height: 35,
+                      decoration: BoxDecoration(
                         color: _isSelectedFirstDesHint
-                            ? Colors.pink
-                            : Colors.grey.withValues(alpha: 0.3),
+                            ? Colors.pink.shade100.withValues(alpha: 0.5)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          width: 1,
+                          color: _isSelectedFirstDesHint
+                              ? Colors.pink
+                              : Colors.grey.withValues(alpha: 0.3),
+                        ),
                       ),
-                    ),
-                    child: Padding(
-                      padding: EdgeInsets.only(left: 5, right: 5),
-                      child: Text(
-                        'Mình chuyển tiền nhé 💵',
-                        style: GoogleFonts.roboto(fontSize: 16),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 5),
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _isSelectedSecondDesHint = !_isSelectedSecondDesHint;
-                      _isSelectedFirstDesHint = false;
-                      if (_isSelectedSecondDesHint) {
-                        if (_descriptionController.text.contains(
+                      child: Padding(
+                        padding: EdgeInsets.only(left: 5, right: 5),
+                        child: Text(
                           'Mình chuyển tiền nhé 💵',
-                        )) {
-                          _descriptionController.text = _descriptionController
-                              .text
-                              .replaceAll(
-                                'Mình chuyển tiền nhé 💵',
-                                'Cảm ơn nha 👍🫰',
-                              );
-                        } else {
-                          _descriptionController.text =
-                              _descriptionController.text +
-                              ' Cảm ơn nha 👍🫰'.toString();
-                        }
-                      } else {
-                        if (_descriptionController.text.contains(
-                          ' Cảm ơn nha 👍🫰',
-                        )) {
-                          _descriptionController.text = _descriptionController
-                              .text
-                              .replaceAll(' Cảm ơn nha 👍🫰', '');
-                        }
-                      }
-                    });
-                  },
-                  child: Container(
-                    alignment: Alignment.center,
-                    height: 35,
-                    decoration: BoxDecoration(
-                      color: _isSelectedSecondDesHint
-                          ? Colors.pink.shade100.withValues(alpha: 0.5)
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        width: 1,
-                        color: _isSelectedSecondDesHint
-                            ? Colors.pink
-                            : Colors.grey.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Padding(
-                      padding: EdgeInsets.only(left: 5, right: 5),
-                      child: Text(
-                        'Cảm ơn nha 👍🫰',
-                        style: GoogleFonts.roboto(fontSize: 16),
+                          style: GoogleFonts.roboto(fontSize: 16),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 5),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _isSelectedSecondDesHint = !_isSelectedSecondDesHint;
+                        _isSelectedFirstDesHint = false;
+                        if (_isSelectedSecondDesHint) {
+                          if (_descriptionController.text.contains(
+                            'Mình chuyển tiền nhé 💵',
+                          )) {
+                            _descriptionController.text = _descriptionController
+                                .text
+                                .replaceAll(
+                                  'Mình chuyển tiền nhé 💵',
+                                  'Cảm ơn nha 👍🫰',
+                                );
+                          } else {
+                            _descriptionController.text =
+                                _descriptionController.text +
+                                ' Cảm ơn nha 👍🫰'.toString();
+                          }
+                        } else {
+                          if (_descriptionController.text.contains(
+                            ' Cảm ơn nha 👍🫰',
+                          )) {
+                            _descriptionController.text = _descriptionController
+                                .text
+                                .replaceAll(' Cảm ơn nha 👍🫰', '');
+                          }
+                        }
+                      });
+                    },
+                    child: Container(
+                      alignment: Alignment.center,
+                      height: 35,
+                      decoration: BoxDecoration(
+                        color: _isSelectedSecondDesHint
+                            ? Colors.pink.shade100.withValues(alpha: 0.5)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          width: 1,
+                          color: _isSelectedSecondDesHint
+                              ? Colors.pink
+                              : Colors.grey.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.only(left: 5, right: 5),
+                        child: Text(
+                          'Cảm ơn nha 👍🫰',
+                          style: GoogleFonts.roboto(fontSize: 16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -456,7 +480,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
   }
 
   Widget _buildContainerAmountHintButtonAndTranferButton(BuildContext context) {
-    final bool _isEnable = _amountController.text.isNotEmpty && _msg == '';
+    final bool isEnable = _amountController.text.isNotEmpty && _msg == '';
     return Container(
       width: double.infinity,
       color: Colors.white,
@@ -464,134 +488,136 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
         padding: EdgeInsets.all(10),
         child: Column(
           children: [
-            if (_isAmountFocus)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: _amountHintOne != 'NAN'
-                        ? GestureDetector(
-                            onTap: () {
-                              String newText = _amountHintOne!.isEmpty
-                                  ? '1.000'
-                                  : _amountHintOne!.replaceAll('đ', '');
+            if (!_isFixedAmount) ...[
+              if (_isAmountFocus)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: _amountHintOne != 'NAN'
+                          ? GestureDetector(
+                              onTap: () {
+                                String newText = _amountHintOne!.isEmpty
+                                    ? '1.000'
+                                    : _amountHintOne!.replaceAll('đ', '');
 
-                              _amountController.value = TextEditingValue(
-                                text: newText,
-                                selection: TextSelection.collapsed(
-                                  offset: newText.length,
+                                _amountController.value = TextEditingValue(
+                                  text: newText,
+                                  selection: TextSelection.collapsed(
+                                    offset: newText.length,
+                                  ),
+                                );
+
+                                _handleAmountChanged(newText);
+                              },
+                              child: Container(
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(20),
+                                  color: Colors.grey.withValues(alpha: 0.2),
                                 ),
-                              );
-
-                              _handleAmountChanged(newText);
-                            },
-                            child: Container(
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(20),
-                                color: Colors.grey.withValues(alpha: 0.2),
-                              ),
-                              child: Padding(
-                                padding: EdgeInsets.all(5),
-                                child: Text(
-                                  _amountController.text.isEmpty
-                                      ? '1.000đ'
-                                      : _amountHintOne!,
-                                  style: GoogleFonts.roboto(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 16,
+                                child: Padding(
+                                  padding: EdgeInsets.all(5),
+                                  child: Text(
+                                    _amountController.text.isEmpty
+                                        ? '1.000đ'
+                                        : _amountHintOne!,
+                                    style: GoogleFonts.roboto(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
 
-                  SizedBox(width: 5),
+                    SizedBox(width: 5),
 
-                  Expanded(
-                    child: _amountHintTwo != 'NAN'
-                        ? GestureDetector(
-                            onTap: () {
-                              String newText = _amountHintTwo!.isEmpty
-                                  ? '10.000'
-                                  : _amountHintTwo!.replaceAll('đ', '');
-                              _amountController.value = TextEditingValue(
-                                text: newText,
-                                selection: TextSelection.collapsed(
-                                  offset: newText.length,
+                    Expanded(
+                      child: _amountHintTwo != 'NAN'
+                          ? GestureDetector(
+                              onTap: () {
+                                String newText = _amountHintTwo!.isEmpty
+                                    ? '10.000'
+                                    : _amountHintTwo!.replaceAll('đ', '');
+                                _amountController.value = TextEditingValue(
+                                  text: newText,
+                                  selection: TextSelection.collapsed(
+                                    offset: newText.length,
+                                  ),
+                                );
+                                _handleAmountChanged(newText);
+                              },
+                              child: Container(
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(20),
+                                  color: Colors.grey.withValues(alpha: 0.2),
                                 ),
-                              );
-                              _handleAmountChanged(newText);
-                            },
-                            child: Container(
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(20),
-                                color: Colors.grey.withValues(alpha: 0.2),
-                              ),
-                              child: Padding(
-                                padding: EdgeInsets.all(5),
-                                child: Text(
-                                  _amountController.text.isEmpty
-                                      ? '10.000đ'
-                                      : _amountHintTwo!,
-                                  style: GoogleFonts.roboto(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 16,
+                                child: Padding(
+                                  padding: EdgeInsets.all(5),
+                                  child: Text(
+                                    _amountController.text.isEmpty
+                                        ? '10.000đ'
+                                        : _amountHintTwo!,
+                                    style: GoogleFonts.roboto(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
 
-                  SizedBox(width: 5),
+                    SizedBox(width: 5),
 
-                  Expanded(
-                    child: _amountHintThree != 'NAN'
-                        ? GestureDetector(
-                            onTap: () {
-                              String newText = _amountHintThree!.isEmpty
-                                  ? '100.000'
-                                  : _amountHintThree!.replaceAll('đ', '');
-                              _amountController.value = TextEditingValue(
-                                text: newText,
-                                selection: TextSelection.collapsed(
-                                  offset: newText.length,
+                    Expanded(
+                      child: _amountHintThree != 'NAN'
+                          ? GestureDetector(
+                              onTap: () {
+                                String newText = _amountHintThree!.isEmpty
+                                    ? '100.000'
+                                    : _amountHintThree!.replaceAll('đ', '');
+                                _amountController.value = TextEditingValue(
+                                  text: newText,
+                                  selection: TextSelection.collapsed(
+                                    offset: newText.length,
+                                  ),
+                                );
+                                _handleAmountChanged(newText);
+                              },
+                              child: Container(
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(20),
+                                  color: Colors.grey.withValues(alpha: 0.2),
                                 ),
-                              );
-                              _handleAmountChanged(newText);
-                            },
-                            child: Container(
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(20),
-                                color: Colors.grey.withValues(alpha: 0.2),
-                              ),
-                              child: Padding(
-                                padding: EdgeInsets.all(5),
-                                child: Text(
-                                  _amountController.text.isEmpty
-                                      ? '100.000đ'
-                                      : _amountHintThree!,
-                                  style: GoogleFonts.roboto(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 16,
+                                child: Padding(
+                                  padding: EdgeInsets.all(5),
+                                  child: Text(
+                                    _amountController.text.isEmpty
+                                        ? '100.000đ'
+                                        : _amountHintThree!,
+                                    style: GoogleFonts.roboto(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                ],
-              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
+            ],
             const SizedBox(height: 10),
             GestureDetector(
-              onTap: _isEnable
+              onTap: isEnable
                   ? () async {
                       setState(() {
                         _isLoading = true;
@@ -601,7 +627,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                       setState(() {
                         _isLoading = false;
                       });
-                      if (!result['is_success']) {
+                      if (result['is_success']) {
                         if (!result['is_eligible']) {
                           setState(() {
                             _msg = 'Số dư trong ví không đủ';
@@ -626,6 +652,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                               amount: _amountController.text,
                               description: _descriptionController.text,
                               walletBalance: _walletBalance,
+                              referenceCode: widget.referenceCode,
                             ),
                           ),
                         );
@@ -636,7 +663,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                 alignment: Alignment.center,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: _isEnable
+                  color: isEnable
                       ? _isLoading
                             ? Colors.black.withValues(alpha: 0.1)
                             : Colors.pinkAccent
@@ -646,11 +673,18 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                 child: Padding(
                   padding: EdgeInsetsDirectional.only(top: 8, bottom: 8),
                   child: _isLoading
-                      ? SizedBox(width: 25, height: 25, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),)
+                      ? SizedBox(
+                          width: 25,
+                          height: 25,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
                       : Text(
                           "Chuyển tiền",
                           style: GoogleFonts.roboto(
-                            color: _isEnable
+                            color: isEnable
                                 ? Colors.white
                                 : Colors.grey.withValues(alpha: 0.5),
                             fontSize: 22,

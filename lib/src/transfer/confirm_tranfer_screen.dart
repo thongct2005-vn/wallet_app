@@ -1,4 +1,5 @@
 import 'package:app/core/utils/format_utils.dart';
+import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/verify_pin_bottom_sheet.dart';
 import 'package:app/src/services/transaction_service.dart';
 import 'package:app/src/transfer/result_tranfer_screen.dart';
@@ -14,6 +15,7 @@ class ConfirmTranferScreen extends StatefulWidget {
   final String? amount;
   final String? description;
   final String? walletBalance;
+  final String? referenceCode;
 
   const ConfirmTranferScreen({
     super.key,
@@ -23,6 +25,7 @@ class ConfirmTranferScreen extends StatefulWidget {
     this.amount,
     this.description,
     this.walletBalance,
+    this.referenceCode,
   });
 
   @override
@@ -447,7 +450,9 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
                 width: double.infinity,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(10),
-                  color: _isProcessingTransfer?Colors.black.withValues(alpha: 0.1):Colors.pinkAccent,
+                  color: _isProcessingTransfer
+                      ? Colors.black.withValues(alpha: 0.1)
+                      : Colors.pinkAccent,
                 ),
                 child: Padding(
                   padding: EdgeInsets.only(top: 10, bottom: 10),
@@ -519,12 +524,17 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
       widget.amount ?? '0',
     ).toString();
     try {
-      final result = await _transactionService.transferMoney(
-        widget.receiverId ?? "",
-        numAmount,
-        widget.description ?? "",
-        idempotencyKey,
-      );
+      final result = widget.referenceCode == null
+          ? await _transactionService.transferMoney(
+              widget.receiverId ?? "",
+              numAmount,
+              widget.description ?? "",
+              idempotencyKey,
+            )
+          : await _transactionService.processQRPayment(
+              widget.referenceCode!,
+              idempotencyKey,
+            );
       setState(() {
         _isProcessingTransfer = false;
       });
@@ -538,26 +548,13 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
           (Route<dynamic> route) => false,
         );
       } else {
-        _showSnackBar(context, result['message']);
+        SnackbarUtils.failure(context, result['message']);
       }
     } catch (e) {
       if (!mounted) return;
-      _showSnackBar(context, "Có lỗi xảy ra. Vui lòng thử lại");
+      SnackbarUtils.failure(context, "Có lỗi xảy ra. Vui lòng thử lại");
     } finally {
       if (mounted) setState(() => _isProcessingTransfer = false);
     }
   }
-}
-
-void _showSnackBar(BuildContext context, String msg) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(
-        msg,
-        style: GoogleFonts.roboto(color: Colors.white, fontSize: 20),
-      ),
-      behavior: SnackBarBehavior.floating,
-      backgroundColor: Colors.red,
-    ),
-  );
 }

@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 
 class UserController extends GetxController {
+  var userId = ''.obs;
   var phone = ''.obs;
   var fullName = ''.obs;
   var balance = ''.obs; 
@@ -8,11 +9,13 @@ class UserController extends GetxController {
 
 
   void setUserData({
+    required String newId,
     required String newPhone,
     required String newFullName,
     required String newBalance,
     required bool newHasPin,
   }) {
+    userId.value = newId;
     phone.value = newPhone;
     fullName.value = newFullName;
     balance.value = newBalance;

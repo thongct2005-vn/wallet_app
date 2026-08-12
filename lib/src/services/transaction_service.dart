@@ -2,7 +2,6 @@ import 'package:app/core/network/api_client.dart';
 import 'package:app/core/network/api_config.dart';
 import 'package:app/core/network/api_error_handler.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/material.dart';
 
 class TransactionService {
   final api = ApiClient().dio;
@@ -28,7 +27,28 @@ class TransactionService {
         'data': result.data['data'],
       };
     } catch (e) {
-      debugPrint('$e');
+      return ApiErrorHandler.handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> processQRPayment(
+    String referenceCode,
+    String idempotencyKey
+  ) async {
+    try {
+      final result = await api.post(
+        ApiConfig.payment,
+        data: {
+          'reference_code':referenceCode
+        },
+        options: Options(headers: {'idempotency-key': idempotencyKey}),
+      );
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'data': result.data['data'],
+      };
+    } catch (e) {
       return ApiErrorHandler.handleError(e);
     }
   }

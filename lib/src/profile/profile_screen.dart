@@ -1,6 +1,8 @@
+import 'package:app/core/utils/dialog_utils.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
 import 'package:app/src/services/auth_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -12,6 +14,8 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final AuthService _authService = AuthService();
+  final FlutterSecureStorage _storage = FlutterSecureStorage();
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -277,27 +281,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.roboto(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.roboto(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
-                Text(
-                  description,
-                  style: GoogleFonts.roboto(
-                    fontSize: 14,
-                    color: Colors.black.withValues(alpha: 0.5),
-                    fontWeight: FontWeight.w400,
+                  Text(
+                    description,
+                    style: GoogleFonts.roboto(
+                      fontSize: 14,
+                      color: Colors.black.withValues(alpha: 0.5),
+                      fontWeight: FontWeight.w400,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-            const Spacer(),
             Icon(Icons.arrow_right, color: Colors.black.withValues(alpha: 0.5)),
           ],
         ),
@@ -305,69 +310,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _showConfirmLogout(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          title: Text("Xác nhận"),
-          content: Text("Bạn có chắc chắn muốn đăng xuất"),
-          actions: [
-            OutlinedButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              style: OutlinedButton.styleFrom(
-                backgroundColor: Colors.white,
-                side: BorderSide.none,
-              ),
-              child: Text(
-                "Không",
-                style: GoogleFonts.roboto(color: Colors.pink),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                bool isSuccess = await _logout();
-                if (!context.mounted) return;
-                if (isSuccess) {
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (context) => LoginPhoneScreen()),
-                    (routes) => false,
-                  );
-                  return;
-                }
-                _showSnackBar(
-                  context,
-                  "Có lỗi khi đăng xuất. Vui lòng thử lại",
-                );
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.pink),
-              child: Text("Có", style: GoogleFonts.roboto(color: Colors.white)),
-            ),
-          ],
-        );
-      },
+  Future<void> _showConfirmLogout(BuildContext context) async {
+    final isSuccess = await DialogUtils.showConfirmationAsync(
+      context,
+      title: "Xác nhận",
+      message: "Bạn có chắc chắn muốn đăng xuất",
+      cancelText: "Đóng",
+      confirmText: "Đồng ý",
+      errorMessage: "Có lỗi khi đăng xuất. Vui lòng thử lại",
+      onConfirm: () => _logout(),
     );
-  }
 
-  void _showSnackBar(BuildContext context, String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          msg,
-          style: GoogleFonts.roboto(color: Colors.white, fontSize: 20),
-        ),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: Colors.red,
-      ),
-    );
+    if (isSuccess == true && context.mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => LoginPhoneScreen()),
+        (routes) => false,
+      );
+    }
   }
 
   Future<bool> _logout() async {
     final result = await _authService.logout();
+    await _storage.deleteAll();
     if (result['is_success']) return true;
     return false;
   }

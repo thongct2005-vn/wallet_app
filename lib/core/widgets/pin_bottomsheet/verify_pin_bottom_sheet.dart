@@ -60,7 +60,6 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
       ),
     );
 
-
     final isPinComplete = _pinController.text.length == 6;
     final effectiveFocusedPinTheme = isPinComplete
         ? (_isShowPin ? visiblePinTheme : submittedPinTheme)
@@ -166,7 +165,6 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
                                 setState(() {});
                               },
                               onCompleted: (pin) async {
-                                //FocusManager.instance.primaryFocus?.unfocus();
                                 setState(() {
                                   _errorMsg = '';
                                   _isLoading = true;
@@ -174,12 +172,11 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
                                 final result = await widget.onCheckPin(
                                   _pinController.text,
                                 );
-                                print(result);
                                 if (!context.mounted) return;
                                 setState(() {
                                   _isLoading = false;
                                 });
-                                if (!result['has_error']) {
+                                if (result['is_success']) {
                                   if (result['is_correct']) {
                                     Navigator.pop(context);
                                     widget.onSuccess();

@@ -1,14 +1,16 @@
-// home_screen.dart
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/format_utils.dart';
+import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/create_pin_bottom_sheet.dart';
 import 'package:app/src/profile/profile_screen.dart';
+import 'package:app/src/qr/qr_main_screen.dart';
 import 'package:app/src/services/app_data_service.dart';
 import 'package:app/src/transfer/contact_list_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:app/src/services/user_service.dart';
 import 'package:get/get.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -87,7 +89,21 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         floatingActionButton: FloatingActionButton(
-          onPressed: () {},
+          onPressed: () async {
+            final status = await Permission.camera.request();
+            if (status.isGranted) {
+              if (context.mounted) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const QrMainScreen()),
+                );
+              }
+            } else {
+              if (context.mounted) {
+                SnackbarUtils.info(context, "Cần quyền camara để sử dụng chức năng này");
+              }
+            }
+          },
           backgroundColor: Colors.pink.shade400,
           shape: const CircleBorder(),
           child: const Icon(
@@ -601,13 +617,7 @@ class _HomeScreenState extends State<HomeScreen> {
             setState(() {
               _hasPin = true;
             });
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Tạo mã PIN thành công!'),
-                backgroundColor: Colors.green,
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
+            SnackbarUtils.success(context, "Tạo mã pin thành công");
           },
         );
       },
@@ -620,6 +630,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final homeData = await _appDataService.fetchHomeData();
 
       _userController.setUserData(
+        newId: result['user_id'],
         newPhone: result['phone'],
         newFullName: result['full_name'],
         newBalance: homeData['balance'],
@@ -635,11 +646,7 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Không thể tải lại dữ liệu, thử lại sau'),
-          ),
-        );
+        SnackbarUtils.failure(context, "Không thể tải dữ liệu. Vui lòng thử lại");
       }
     }
   }

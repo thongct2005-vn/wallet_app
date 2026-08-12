@@ -281,6 +281,7 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
                                           .fetchHomeData();
 
                                       _userController.setUserData(
+                                        newId: result['user_id'],
                                         newPhone: result['phone'],
                                         newFullName: result['full_name'],
                                         newBalance: homeData['balance'],

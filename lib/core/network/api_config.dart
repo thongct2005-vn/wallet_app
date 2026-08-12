@@ -28,6 +28,12 @@ class ApiConfig {
   static const String updateFcmToken = '$baseUrl/user/fcm-token';
 
   static const String transfer = '$baseUrl/transaction/transfer';
+  static const String payment = '$baseUrl/transaction/qr-payment';
 
+  static const String getStaticQRToken = '$baseUrl/payment/qr/static';
+  static const String getUserInfoByStaticQR = '$baseUrl/payment/qr/static/resolve';
+
+   static const String createDynamicQRToken = '$baseUrl/payment/qr/dynamic';
+  static const String getDynamicQRToken = '$baseUrl/payment/qr/dynamic/resolve';
 
 }
