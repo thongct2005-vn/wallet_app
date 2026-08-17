@@ -29,11 +29,14 @@ class ApiConfig {
 
   static const String transfer = '$baseUrl/transaction/transfer';
   static const String payment = '$baseUrl/transaction/qr-payment';
+  static const String history = '$baseUrl/transaction/history';
 
-  static const String getStaticQRToken = '$baseUrl/payment/qr/static';
+  static const String createStaticQRToken = '$baseUrl/payment/qr/static';
   static const String getUserInfoByStaticQR = '$baseUrl/payment/qr/static/resolve';
 
-   static const String createDynamicQRToken = '$baseUrl/payment/qr/dynamic';
+  static const String createDynamicQRToken = '$baseUrl/payment/qr/dynamic';
   static const String getDynamicQRToken = '$baseUrl/payment/qr/dynamic/resolve';
 
+  static const String getBankLinkStatus = '$baseUrl/bank/status';
+  static const String linkBankAccount = '$baseUrl/bank/link';
 }

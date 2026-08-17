@@ -33,15 +33,32 @@ class TransactionService {
 
   Future<Map<String, dynamic>> processQRPayment(
     String referenceCode,
-    String idempotencyKey
+    String idempotencyKey,
   ) async {
     try {
       final result = await api.post(
         ApiConfig.payment,
-        data: {
-          'reference_code':referenceCode
-        },
+        data: {'reference_code': referenceCode},
         options: Options(headers: {'idempotency-key': idempotencyKey}),
+      );
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'data': result.data['data'],
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> getTransferHistory(
+    String? cursorId,
+    int? limit,
+  ) async {
+    try {
+      final result = await api.get(
+        ApiConfig.history,
+        queryParameters: {'cursor_id': cursorId, 'limit': limit},
       );
       return {
         'is_success': true,

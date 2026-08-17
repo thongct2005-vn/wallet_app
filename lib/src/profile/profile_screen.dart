@@ -4,6 +4,7 @@ import 'package:app/src/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -79,7 +80,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.phone_outlined, color: Colors.pink, size: 20),
+              Icon(Iconsax.call, color: Colors.pink, size: 20),
               const SizedBox(width: 5),
               Text(
                 "0855313437",
@@ -104,7 +105,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      Icons.edit_outlined,
+                      Iconsax.edit_2,
                       color: Colors.pinkAccent,
                       size: 20,
                     ),
@@ -142,7 +143,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   _buildItem(
                     context,
-                    Icons.person,
+                    Iconsax.user,
                     Colors.pink.withValues(alpha: 0.15),
                     Colors.pinkAccent,
                     "Thông tin cá nhân",
@@ -158,7 +159,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   _buildItem(
                     context,
-                    Icons.security,
+                    Iconsax.shield_tick,
                     Colors.purple.withValues(alpha: 0.15),
                     Colors.purple,
                     "Bảo mật",
@@ -174,7 +175,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   _buildItem(
                     context,
-                    Icons.account_balance,
+                    Iconsax.bank,
                     Colors.blue.withValues(alpha: 0.15),
                     Colors.blue,
                     "Ngân hàng liên kết",
@@ -190,7 +191,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   _buildItem(
                     context,
-                    Icons.wallet,
+                    Iconsax.chart_2,
                     Colors.green.withValues(alpha: 0.15),
                     Colors.green,
                     "Hạn mức",
@@ -206,7 +207,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   _buildItem(
                     context,
-                    Icons.notifications,
+                    Iconsax.notification,
                     Colors.yellow.withValues(alpha: 0.15),
                     Colors.yellow,
                     "Thông báo",
@@ -222,7 +223,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   _buildItem(
                     context,
-                    Icons.help,
+                    Iconsax.message_question,
                     Colors.grey.withValues(alpha: 0.15),
                     Colors.grey,
                     "Hỗ trợ",
@@ -238,7 +239,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   _buildItem(
                     context,
-                    Icons.logout,
+                    Iconsax.logout,
                     Colors.red.withValues(alpha: 0.15),
                     Colors.red,
                     "Đăng xuất",

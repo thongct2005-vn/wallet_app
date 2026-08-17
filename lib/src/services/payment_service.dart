@@ -6,7 +6,7 @@ class PaymentService {
   final api = ApiClient().dio;
   Future<Map<String, dynamic>> getStaticQRToken() async {
     try {
-      final result = await api.get(ApiConfig.getStaticQRToken);
+      final result = await api.get(ApiConfig.createStaticQRToken);
 
       return {
         'is_success': true,
@@ -20,9 +20,9 @@ class PaymentService {
 
   Future<Map<String, dynamic>> getUserInfoByStaticQR(String token) async {
     try {
-      final result = await api.post(
+      final result = await api.get(
         ApiConfig.getUserInfoByStaticQR,
-        data: {'static_qr_token': token},
+        queryParameters: {'static_qr_token': token},
       );
 
       return {
@@ -56,9 +56,9 @@ class PaymentService {
 
   Future<Map<String, dynamic>> getUserInfoByDynamicQR(String token) async {
     try {
-      final result = await api.post(
+      final result = await api.get(
         ApiConfig.getDynamicQRToken,
-        data: {'reference_code': token},
+        queryParameters: {'reference_code': token},
       );
 
       return {

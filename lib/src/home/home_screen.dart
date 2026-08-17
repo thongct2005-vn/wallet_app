@@ -2,14 +2,19 @@ import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/format_utils.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/create_pin_bottom_sheet.dart';
+import 'package:app/src/history/history_screen.dart';
+import 'package:app/src/link_bank/link_bank_screen.dart';
 import 'package:app/src/profile/profile_screen.dart';
 import 'package:app/src/qr/qr_main_screen.dart';
 import 'package:app/src/services/app_data_service.dart';
+import 'package:app/src/services/bank_service.dart';
+import 'package:app/src/topup_withdraw/topup_withdraw_screen.dart';
 import 'package:app/src/transfer/contact_list_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:app/src/services/user_service.dart';
 import 'package:get/get.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -22,6 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final UserService _userService = UserService();
   final AppDataService _appDataService = AppDataService();
   final UserController _userController = Get.find<UserController>();
+  final BankService _bankService = BankService();
   String _phone = '';
   String _fullName = '';
   bool _isHidenWalletBalance = false;
@@ -46,7 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final List<Widget> pages = [
       _buildHomeContent(context),
       const Center(child: Text("Ưu đãi")),
-      const Center(child: Text("Giao dịch")),
+      const HistoryScreen(),
       const ProfileScreen(),
     ];
 
@@ -100,7 +106,10 @@ class _HomeScreenState extends State<HomeScreen> {
               }
             } else {
               if (context.mounted) {
-                SnackbarUtils.info(context, "Cần quyền camara để sử dụng chức năng này");
+                SnackbarUtils.info(
+                  context,
+                  "Cần quyền camara để sử dụng chức năng này",
+                );
               }
             }
           },
@@ -125,15 +134,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildNavItem(Icons.home_outlined, "Trang chủ", 0),
-                    _buildNavItem(Icons.local_offer_outlined, "Ưu đãi", 1),
+                    _buildNavItem(Iconsax.home_2, "Trang chủ", 0),
+                    _buildNavItem(Iconsax.discount_shape, "Ưu đãi", 1),
                   ],
                 ),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildNavItem(Icons.receipt_long_outlined, "Giao dịch", 2),
-                    _buildNavItem(Icons.person_outline, "Tôi", 3),
+                    _buildNavItem(Iconsax.receipt, "Giao dịch", 2),
+                    _buildNavItem(Iconsax.profile_circle, "Tôi", 3),
                   ],
                 ),
               ],
@@ -237,7 +246,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: IconButton(
               onPressed: () {},
               icon: Icon(
-                Icons.notifications_outlined,
+                Iconsax.notification,
                 color: Colors.black.withValues(alpha: 0.8),
                 size: 30,
                 fontWeight: FontWeight.w400,
@@ -347,6 +356,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           _showCreatePinDialog(context);
                           return;
                         }
+                        _getBankLinkStatus(true);
                       },
                       child: Column(
                         children: [
@@ -369,7 +379,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   borderRadius: BorderRadius.circular(15),
                                 ),
                                 child: Icon(
-                                  Icons.add,
+                                  Iconsax.wallet_add,
                                   color: Colors.white,
                                   size: 30,
                                   fontWeight: FontWeight.bold,
@@ -391,6 +401,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           _showCreatePinDialog(context);
                           return;
                         }
+                        _getBankLinkStatus(false);
                       },
                       child: Column(
                         children: [
@@ -413,7 +424,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   borderRadius: BorderRadius.circular(15),
                                 ),
                                 child: Icon(
-                                  Icons.remove,
+                                  Iconsax.wallet_minus,
                                   color: Colors.white,
                                   size: 30,
                                   fontWeight: FontWeight.bold,
@@ -463,7 +474,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   borderRadius: BorderRadius.circular(15),
                                 ),
                                 child: Icon(
-                                  Icons.swap_horiz,
+                                  Iconsax.money_send,
                                   color: Colors.white,
                                   size: 30,
                                   fontWeight: FontWeight.bold,
@@ -507,29 +518,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildUtilIcon(context, Icons.phone, "Điện thoại"),
-                    _buildUtilIcon(context, Icons.qr_code, "Thanh toán QR"),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildUtilIcon(context, Icons.electric_bolt, "Điện"),
-                    _buildUtilIcon(context, Icons.sim_card, "Thẻ cào"),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildUtilIcon(context, Icons.water_drop, "Nước"),
+                    _buildUtilIcon(context, Iconsax.mobile, "Điện thoại"),
                     _buildUtilIcon(
                       context,
-                      Icons.airplane_ticket_outlined,
-                      "Vé máy bay",
+                      Iconsax.scan_barcode,
+                      "Thanh toán QR",
                     ),
                   ],
                 ),
@@ -538,12 +531,26 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildUtilIcon(context, Icons.wifi, "Internet"),
-                    _buildUtilIcon(
-                      context,
-                      Icons.more_horiz_outlined,
-                      "Xem thêm",
-                    ),
+                    _buildUtilIcon(context, Iconsax.flash, "Điện"),
+                    _buildUtilIcon(context, Iconsax.card, "Thẻ cào"),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildUtilIcon(context, Icons.water_drop_outlined, "Nước"),
+                    _buildUtilIcon(context, Iconsax.airplane, "Vé máy bay"),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildUtilIcon(context, Iconsax.wifi, "Internet"),
+                    _buildUtilIcon(context, Iconsax.more_square, "Xem thêm"),
                   ],
                 ),
               ),
@@ -646,7 +653,39 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     } catch (e) {
       if (mounted) {
-        SnackbarUtils.failure(context, "Không thể tải dữ liệu. Vui lòng thử lại");
+        SnackbarUtils.failure(
+          context,
+          "Không thể tải dữ liệu. Vui lòng thử lại",
+        );
+      }
+    }
+  }
+
+  Future<void> _getBankLinkStatus(bool isTopUpTab) async {
+    try {
+      final result = await _bankService.getBankLinkStatus();
+      if (!mounted) return;
+      if (result['data']['has_linked_account']) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TopUpWithdrawScreen(
+              walletBalance: _balance,
+              isTopUpTab: isTopUpTab,
+              bankLinkedList: result['data']['linked_accounts'],
+            ),
+          ),
+        );
+      }
+      else{
+        Navigator.push(context, MaterialPageRoute(builder: (context)=>LinkBankScreen(bankList: result['data']['available_banks'],)));
+      }
+    } catch (e) {
+      if (mounted) {
+        SnackbarUtils.failure(
+          context,
+          "Hệ thống đang bảo trì. Vui lòng thử lại sau",
+        );
       }
     }
   }
