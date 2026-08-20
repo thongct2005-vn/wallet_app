@@ -1,19 +1,24 @@
 import 'package:app/core/utils/format_utils.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/verify_pin_bottom_sheet.dart';
+import 'package:app/src/link_bank/link_bank_screen.dart';
+import 'package:app/src/services/transaction_service.dart';
+import 'package:app/src/topup_withdraw/result_topup_withdraw_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:app/src/services/wallet_service.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:uuid/uuid.dart';
 
 class ConfirmTopUpScreen extends StatefulWidget {
   final String amount;
-  final List<Map<String, String>> linkedBanks;
-
+  final List<dynamic> linkedBanks;
+  final List<dynamic> bankList;
   const ConfirmTopUpScreen({
     super.key,
     required this.amount,
     required this.linkedBanks,
+    required this.bankList,
   });
 
   @override
@@ -22,6 +27,7 @@ class ConfirmTopUpScreen extends StatefulWidget {
 
 class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
   final WalletService _walletService = WalletService();
+  final TransactionService _transactionService = TransactionService();
   bool _isProcessing = false;
   final Uuid _uuid = const Uuid();
   late final String idempotencyKey;
@@ -40,7 +46,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
   Widget build(BuildContext context) {
     final selectedBank = widget.linkedBanks.firstWhere(
       (b) => b['id'] == _selectedBankId,
-      orElse: () => {'name': ''},
+      orElse: () => {'bank_name': ''},
     );
 
     return PopScope(
@@ -143,7 +149,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
 
   Widget _buildContainerTopUpInfo(
     BuildContext context,
-    Map<String, String> selectedBank,
+    Map<String, dynamic> selectedBank,
   ) {
     return Container(
       width: double.infinity,
@@ -178,13 +184,12 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
           ),
           _buildInfoRow(
             label: 'Nguồn tiền',
-            value: selectedBank['name'] ?? '',
+            value: selectedBank['bank_name'] ?? '',
           ),
           _buildInfoRow(
             label: 'Số tiền',
             value:
                 '${FormatUtils.formatDisplayNumber(FormatUtils.formatAmountToNum(widget.amount))}đ',
-            valueColor: Colors.blue,
           ),
           SizedBox(height: 10),
         ],
@@ -192,11 +197,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
     );
   }
 
-  Widget _buildInfoRow({
-    required String label,
-    required String value,
-    Color? valueColor,
-  }) {
+  Widget _buildInfoRow({required String label, required String value}) {
     return Padding(
       padding: EdgeInsets.fromLTRB(10, 10, 10, 0),
       child: Row(
@@ -205,8 +206,9 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
           Text(
             label,
             style: GoogleFonts.roboto(
-              color: Colors.black.withValues(alpha: 0.5),
+              color: Colors.black.withValues(alpha: 0.4),
               fontSize: 20,
+              fontWeight: FontWeight.w400,
             ),
           ),
           SizedBox(width: 100),
@@ -215,9 +217,8 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
               value,
               textAlign: TextAlign.right,
               maxLines: 1,
-              overflow: TextOverflow.visible,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.roboto(
-                color: valueColor,
                 fontWeight: FontWeight.w500,
                 fontSize: 20,
               ),
@@ -254,13 +255,54 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
               _buildBankOption(bank),
               const SizedBox(height: 10),
             ],
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        LinkBankScreen(bankList: widget.bankList),
+                  ),
+                );
+              },
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    width: 0.5,
+                    color: Colors.grey.withValues(alpha: 0.5),
+                  ),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                  child: Row(
+                    children: [
+                      Icon(Iconsax.box_add, color: Colors.pink, size: 25),
+                      const SizedBox(width: 10),
+                      Text(
+                        "Ngân hàng liên kết",
+                        style: GoogleFonts.roboto(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const Spacer(),
+                      Icon(Iconsax.arrow_right, size: 25),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildBankOption(Map<String, String> bank) {
+  Widget _buildBankOption(Map<String, dynamic> bank) {
     final bool isSelected = _selectedBankId == bank['id'];
     return GestureDetector(
       onTap: () {
@@ -274,33 +316,45 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             width: isSelected ? 2 : 1,
-            color: isSelected ? Colors.pink : Colors.grey.withValues(alpha: 0.3),
+            color: isSelected
+                ? Colors.pink
+                : Colors.grey.withValues(alpha: 0.3),
           ),
         ),
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
           child: Row(
             children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: Colors.pink.shade50,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  (bank['name'] ?? '?').substring(0, 1),
-                  style: GoogleFonts.roboto(
-                    fontWeight: FontWeight.w700,
-                    color: Colors.pink,
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: SizedBox(
+                  width: 25,
+                  height: 25,
+                  child: Image.network(
+                    bank['logo_url'],
+                    headers: const {'ngrok-skip-browser-warning': 'true'},
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, progress) {
+                      if (progress == null) return child;
+                      return Container(
+                        color: Colors.grey.shade200,
+                        child: const SizedBox(),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Colors.grey.shade200,
+                        child: const Icon(Iconsax.bank, size: 16),
+                      );
+                    },
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  bank['name'] ?? '',
+                  bank['bank_name'] ?? '',
                   style: GoogleFonts.roboto(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
@@ -450,28 +504,27 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
     setState(() => _isProcessing = true);
     final numAmount = FormatUtils.formatAmountToNum(widget.amount).toString();
     try {
-      // final result = await _walletService.topUp(
-      //   bankAccountId: _selectedBankId ?? '',
-      //   amount: numAmount,
-      //   idempotencyKey: idempotencyKey,
-      // );
-      // setState(() {
-      //   _isProcessing = false;
-      // });
-      // if (!mounted) return;
-      // if (result['is_success']) {
-      //   Navigator.pushAndRemoveUntil(
-      //     context,
-      //     MaterialPageRoute(
-      //       builder: (context) => Scaffold(
-      //         body: Center(child: Text('Nạp tiền thành công')),
-      //       ),
-      //     ),
-      //     (Route<dynamic> route) => false,
-      //   );
-      // } else {
-      //   SnackbarUtils.failure(context, result['message']);
-      // }
+      final result = await _transactionService.topupMoney(
+        numAmount,
+        _selectedBankId ?? "",
+        idempotencyKey,
+      );
+      debugPrint('$result ========================');
+      setState(() {
+        _isProcessing = false;
+      });
+      if (!mounted) return;
+      if (result['is_success']) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ResultTopupWithdrawScreen(result: result),
+          ),
+          (Route<dynamic> route) => false,
+        );
+      } else {
+        SnackbarUtils.failure(context, result['message']);
+      }
     } catch (e) {
       if (!mounted) return;
       SnackbarUtils.failure(context, "Có lỗi xảy ra. Vui lòng thử lại");

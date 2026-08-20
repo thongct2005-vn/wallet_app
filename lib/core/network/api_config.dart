@@ -28,6 +28,7 @@ class ApiConfig {
   static const String updateFcmToken = '$baseUrl/user/fcm-token';
 
   static const String transfer = '$baseUrl/transaction/transfer';
+  static const String topup = '$baseUrl/transaction/topup';
   static const String payment = '$baseUrl/transaction/qr-payment';
   static const String history = '$baseUrl/transaction/history';
 

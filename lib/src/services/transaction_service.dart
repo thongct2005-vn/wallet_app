@@ -31,6 +31,30 @@ class TransactionService {
     }
   }
 
+  Future<Map<String, dynamic>> topupMoney(
+    String amount,
+    String linkedBankAccountId,
+    String idempotencyKey,
+  ) async {
+    try {
+      final result = await api.post(
+        ApiConfig.topup,
+        data: {
+          'linked_bank_account_id': linkedBankAccountId,
+          'amount': amount,
+        },
+        options: Options(headers: {'idempotency-key': idempotencyKey}),
+      );
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'data': result.data['data'],
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
+
   Future<Map<String, dynamic>> processQRPayment(
     String referenceCode,
     String idempotencyKey,

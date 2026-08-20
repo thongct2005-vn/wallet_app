@@ -9,7 +9,8 @@ class TopUpWithdrawScreen extends StatefulWidget {
   final String walletBalance;
   final bool isTopUpTab;
   final List<dynamic> bankLinkedList;
-  const TopUpWithdrawScreen({super.key, required this.walletBalance, required this.isTopUpTab, required this.bankLinkedList});
+    final List<dynamic> bankList;
+  const TopUpWithdrawScreen({super.key, required this.walletBalance, required this.isTopUpTab, required this.bankLinkedList, required this.bankList});
 
   @override
   State<TopUpWithdrawScreen> createState() => _TopUpWithdrawScreenState();
@@ -394,7 +395,7 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
                             ? () async {
                                 setState(() => _isLoading = true);
                                 await Future.delayed(
-                                  const Duration(seconds: 3),
+                                  const Duration(seconds: 1),
                                 );
                                 setState(() => _isLoading = false);
                                 if (!context.mounted) return;
@@ -403,7 +404,8 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
                                   MaterialPageRoute(
                                     builder: (context) => ConfirmTopUpScreen(
                                       amount: _amountController.text,
-                                      linkedBanks: [],
+                                      linkedBanks: widget.bankLinkedList,
+                                      bankList:widget.bankList,
                                     ),
                                   ),
                                 );

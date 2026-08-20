@@ -59,7 +59,7 @@ class NotificationService {
   }
 
   void _handleDataUpdate(Map<String, dynamic> data) {
-    if ((data['type'] == 'RECEIVE_MONEY' || data['type'] == 'SEND_MONEY') &&
+    if ((data['type'] == 'RECEIVE_MONEY' || data['type'] == 'SEND_MONEY' || data['type'] == 'TOPUP_MONEY') &&
         data['balance'] != null) {
       final userController = Get.find<UserController>();
       userController.balance.value = data['balance'].toString();

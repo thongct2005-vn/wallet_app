@@ -661,7 +661,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _getBankLinkStatus(bool isTopUpTab) async {
+  Future<void> 
+  _getBankLinkStatus(bool isTopUpTab) async {
     try {
       final result = await _bankService.getBankLinkStatus();
       if (!mounted) return;
@@ -673,6 +674,7 @@ class _HomeScreenState extends State<HomeScreen> {
               walletBalance: _balance,
               isTopUpTab: isTopUpTab,
               bankLinkedList: result['data']['linked_accounts'],
+              bankList: result['data']['available_banks'],
             ),
           ),
         );
