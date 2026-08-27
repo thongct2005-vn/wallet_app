@@ -4,9 +4,8 @@ class UserController extends GetxController {
   var userId = ''.obs;
   var phone = ''.obs;
   var fullName = ''.obs;
-  var balance = ''.obs; 
+  var balance = ''.obs;
   var hasPin = false.obs;
-
 
   void setUserData({
     required String newId,
@@ -20,7 +19,10 @@ class UserController extends GetxController {
     fullName.value = newFullName;
     balance.value = newBalance;
     hasPin.value = newHasPin;
-    
+  }
+
+  void setUserFullName({required String newFullName}) {
+    fullName.value = newFullName;
   }
 
   void clearData() {

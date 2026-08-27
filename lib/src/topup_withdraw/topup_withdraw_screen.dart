@@ -1,4 +1,7 @@
-import 'package:app/src/topup_withdraw/confirm_topup_screen.dart';
+import 'package:app/core/utils/snackbar_utils.dart';
+import 'package:app/src/home/home_screen.dart';
+import 'package:app/src/services/bank_service.dart';
+import 'package:app/src/topup_withdraw/confirm_topup_withdrawn_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
@@ -8,9 +11,11 @@ import 'package:app/core/utils/format_utils.dart';
 class TopUpWithdrawScreen extends StatefulWidget {
   final String walletBalance;
   final bool isTopUpTab;
-  final List<dynamic> bankLinkedList;
-    final List<dynamic> bankList;
-  const TopUpWithdrawScreen({super.key, required this.walletBalance, required this.isTopUpTab, required this.bankLinkedList, required this.bankList});
+  const TopUpWithdrawScreen({
+    super.key,
+    required this.walletBalance,
+    required this.isTopUpTab,
+  });
 
   @override
   State<TopUpWithdrawScreen> createState() => _TopUpWithdrawScreenState();
@@ -18,6 +23,7 @@ class TopUpWithdrawScreen extends StatefulWidget {
 
 class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
   final TextEditingController _amountController = TextEditingController();
+  final BankService _bankService = BankService();
   bool _isTopUpTab = true;
   bool _isLoading = false;
 
@@ -109,7 +115,7 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
                             color: Colors.white.withValues(alpha: 0.8),
                           ),
                           child: IconButton(
-                            onPressed: () => Navigator.pop(context),
+                            onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_)=>HomeScreen())),
                             padding: EdgeInsets.zero,
                             icon: const Icon(Icons.arrow_back, size: 20),
                           ),
@@ -136,7 +142,13 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
                             color: Colors.white.withValues(alpha: 0.8),
                           ),
                           child: IconButton(
-                            onPressed: () {},
+                            onPressed: () {
+                              Navigator.pushAndRemoveUntil(
+                                context,
+                                MaterialPageRoute(builder: (_) => HomeScreen()),
+                                (r) => false,
+                              );
+                            },
                             padding: EdgeInsets.zero,
                             icon: const Icon(Iconsax.home_2, size: 20),
                           ),
@@ -394,21 +406,28 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
                         onTap: isEnable
                             ? () async {
                                 setState(() => _isLoading = true);
-                                await Future.delayed(
-                                  const Duration(seconds: 1),
-                                );
+                                final result = await _getLinkedBanks();
                                 setState(() => _isLoading = false);
                                 if (!context.mounted) return;
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => ConfirmTopUpScreen(
-                                      amount: _amountController.text,
-                                      linkedBanks: widget.bankLinkedList,
-                                      bankList:widget.bankList,
+                                if (result['is_success']) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          ConfirmTopUpWithdrawScreen(
+                                            amount: _amountController.text,
+                                            linkedBanks:
+                                                result['data']['linked_accounts'],
+                                            isTopUpTab: _isTopUpTab,
+                                          ),
                                     ),
-                                  ),
-                                );
+                                  );
+                                } else {
+                                  SnackbarUtils.failure(
+                                    context,
+                                    result['message'],
+                                  );
+                                }
                               }
                             : null,
                         child: Container(
@@ -505,7 +524,6 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
                 if (_amountController.text.isNotEmpty) {
                   _handleAmountChanged(_amountController.text);
                 }
-                
               });
             },
             child: Container(
@@ -540,5 +558,20 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
         ),
       ],
     );
+  }
+
+  Future<Map<String, dynamic>> _getLinkedBanks() async {
+    try {
+      final result = await _bankService.getBankLinkStatus();
+      return result;
+    } catch (e) {
+      if (mounted) {
+        SnackbarUtils.failure(
+          context,
+          "Hệ thống đang bảo trì. Vui lòng thử lại sau",
+        );
+      }
+      return {};
+    }
   }
 }

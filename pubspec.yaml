@@ -14,7 +14,7 @@ dependencies:
   pinput: ^6.0.2
   dio: ^5.10.0
   flutter_secure_storage: ^10.3.1
-  intl: ^0.20.3
+  intl: ^0.20.2
   flutter_contacts: ^2.3.0
   permission_handler: ^12.0.3
   uuid: ^4.6.0
@@ -28,6 +28,11 @@ dependencies:
   qr_flutter: ^4.1.0
   flutter_sticky_header: ^0.8.0
   iconsax: ^0.0.8
+  dotted_line: ^3.2.2
+  camera: ^0.11.0+2
+  google_mlkit_face_detection: ^0.15.1
+  flutter_localizations:
+    sdk: flutter
 dev_dependencies:
   flutter_test:
     sdk: flutter

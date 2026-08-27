@@ -1,8 +1,10 @@
 import 'package:app/core/utils/format_utils.dart';
 import 'package:app/src/home/home_screen.dart';
 import 'package:app/src/transfer/amount_input_screen.dart';
+import 'package:dotted_line/dotted_line.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 
 class ResultTranferScreen extends StatefulWidget {
   final Map<String, dynamic>? result;
@@ -20,7 +22,9 @@ class _ResultTranferScreenState extends State<ResultTranferScreen> {
     super.initState();
     setState(() {
       data = (widget.result?['data'] as Map<String, dynamic>?) ?? {};
-      amount = FormatUtils.formatDisplayNumber(num.tryParse(data['amount']!.toString())!);
+      amount = FormatUtils.formatDisplayNumber(
+        num.tryParse(data['amount']!.toString())!,
+      );
       createdAt = FormatUtils.formatCustomDateTime(data['createdAt']);
     });
   }
@@ -47,14 +51,24 @@ class _ResultTranferScreenState extends State<ResultTranferScreen> {
           actions: [
             Padding(
               padding: EdgeInsets.only(right: 20),
-              child: IconButton(
-                onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (context) => HomeScreen()),
-                  );
-                },
-                icon: Icon(Icons.home_outlined, size: 24, color: Colors.black),
+              child: Container(
+                height: 30,
+                width: 30,
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    width: 1,
+                    color: Colors.white.withValues(alpha: 0.8),
+                  ),
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.8),
+                ),
+                child: IconButton(
+                  onPressed: () {
+                    Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context)=>HomeScreen()), (r)=>false);
+                  },
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Iconsax.home_2, size: 20),
+                ),
               ),
             ),
           ],
@@ -126,9 +140,11 @@ class _ResultTranferScreenState extends State<ResultTranferScreen> {
                                     ),
                                   ),
 
-                                  Divider(
-                                    height: 0.5,
-                                    color: Colors.pink.withValues(alpha: 0.1),
+                                  DottedLine(
+                                    dashColor: Colors.grey.shade200,
+                                    dashLength: 6,
+                                    dashGapLength: 4,
+                                    lineThickness: 1,
                                   ),
                                   const SizedBox(height: 10),
 
@@ -271,11 +287,11 @@ class _ResultTranferScreenState extends State<ResultTranferScreen> {
                                             ],
                                           ),
                                           SizedBox(height: 15),
-                                          Divider(
-                                            height: 0.5,
-                                            color: Colors.pink.withValues(
-                                              alpha: 0.1,
-                                            ),
+                                          DottedLine(
+                                            dashColor: Colors.grey.shade200,
+                                            dashLength: 6,
+                                            dashGapLength: 4,
+                                            lineThickness: 1,
                                           ),
                                           SizedBox(height: 15),
                                           Row(
@@ -310,36 +326,42 @@ class _ResultTranferScreenState extends State<ResultTranferScreen> {
                                                             FontWeight.w600,
                                                       ),
                                                     ),
-                                                    Container(
-                                                      width: double.infinity,
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.grey
-                                                            .withValues(
-                                                              alpha: 0.12,
-                                                            ),
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              15,
-                                                            ),
-                                                      ),
-                                                      child: Padding(
-                                                        padding:
-                                                            EdgeInsetsGeometry.symmetric(
-                                                              horizontal: 6,
-                                                              vertical: 3,
-                                                            ),
-                                                        child: Text(
-                                                          "${data['description']}",
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow
-                                                              .ellipsis,
-                                                          style:
-                                                              GoogleFonts.roboto(
-                                                                fontSize: 13,
+                                                    if (data['description'] !=
+                                                            null &&
+                                                        data['description'] !=
+                                                            '') ...[
+                                                      Container(
+                                                        width: double.infinity,
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.grey
+                                                              .withValues(
+                                                                alpha: 0.12,
+                                                              ),
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                15,
                                                               ),
                                                         ),
+                                                        child: Padding(
+                                                          padding:
+                                                              EdgeInsetsGeometry.symmetric(
+                                                                horizontal: 6,
+                                                                vertical: 3,
+                                                              ),
+                                                          child: Text(
+                                                            "${data['description']}",
+                                                            maxLines: 1,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                            style:
+                                                                GoogleFonts.roboto(
+                                                                  fontSize: 13,
+                                                                ),
+                                                          ),
+                                                        ),
                                                       ),
-                                                    ),
+                                                    ],
                                                   ],
                                                 ),
                                               ),

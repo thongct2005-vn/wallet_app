@@ -11,11 +11,12 @@ class ApiConfig {
 
   static const String checkPhoneExists = '$baseUrl/auth/checkPhoneExists';
   static const String login = '$baseUrl/auth/login';
+  static const String register = '$baseUrl/auth/register';
   static const String logout = '$baseUrl/auth/logout';
   static const String refreshToken = '$baseUrl/auth/refresh-token';
   static const String getMe = '$baseUrl/auth/me';
-  static const String sendOtp = '$baseUrl/auth/send-otp';
-  static const String verifyOtp = '$baseUrl/auth/verify-otp';
+  static const String sendOtp = '$baseUrl/otp/send-otp';
+  static const String verifyOtp = '$baseUrl/otp/verify-otp';
 
   static const String getWalletBalance = '$baseUrl/wallet/balance';
   static const String checkTransfer = '$baseUrl/wallet/check-transfer';
@@ -29,8 +30,10 @@ class ApiConfig {
 
   static const String transfer = '$baseUrl/transaction/transfer';
   static const String topup = '$baseUrl/transaction/topup';
+  static const String withdraw = '$baseUrl/transaction/withdraw';
   static const String payment = '$baseUrl/transaction/qr-payment';
   static const String history = '$baseUrl/transaction/history';
+  static const String historySummary= '$baseUrl/transaction/summary';
 
   static const String createStaticQRToken = '$baseUrl/payment/qr/static';
   static const String getUserInfoByStaticQR = '$baseUrl/payment/qr/static/resolve';
@@ -40,4 +43,7 @@ class ApiConfig {
 
   static const String getBankLinkStatus = '$baseUrl/bank/status';
   static const String linkBankAccount = '$baseUrl/bank/link';
+
+  static const String checkUserKYC = '$baseUrl/kyc/check';
+  static const String verifyKYC = '$baseUrl/kyc/verify';
 }

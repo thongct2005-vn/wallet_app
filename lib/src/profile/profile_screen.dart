@@ -57,8 +57,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       child: ClipOval(
                         child: Image.network(
-                          'https://api.dicebear.com/7.x/micah/png?seed='
-                          '&backgroundColor=ffb6c1&borderRadius=50',
+                          'https://orectic-noctilucent-ronan.ngrok-free.dev/images/avatar/default_avatar.png',
+                          headers: const {'ngrok-skip-browser-warning': 'true'},
                           width: 90,
                           height: 90,
                           fit: BoxFit.cover,
@@ -104,11 +104,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Iconsax.edit_2,
-                      color: Colors.pinkAccent,
-                      size: 20,
-                    ),
+                    Icon(Iconsax.edit_2, color: Colors.pinkAccent, size: 20),
                     const SizedBox(width: 5),
                     Text(
                       "Chỉnh sửa",

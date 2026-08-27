@@ -38,7 +38,7 @@ class SnackbarUtils {
           borderRadius: BorderRadius.circular(14),
           side: BorderSide(color: config.accent, width: 0),
         ),
-        duration: const Duration(seconds: 3),
+        duration: const Duration(seconds: 10),
         content: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

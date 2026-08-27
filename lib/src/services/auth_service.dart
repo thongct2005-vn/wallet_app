@@ -4,8 +4,6 @@ import 'package:app/core/network/api_error_handler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-
-
 class AuthService {
   final api = ApiClient().dio;
   static const _storage = FlutterSecureStorage();
@@ -17,19 +15,8 @@ class AuthService {
       );
       return {
         'is_success': true,
-        'data': result.data['data'], 
-      };
-    } catch (e) {
-      return ApiErrorHandler.handleError(e);
-    }
-  }
-
-  Future<Map<String, dynamic>> sendOtp(String phone) async {
-    try {
-      final result = await api.post(ApiConfig.sendOtp, data: {'phone': phone});
-       return {
-        'is_success': true,
-        'data': result.data['data'], 
+        'message': result.data['message'],
+        'data': result.data['data'],
       };
     } catch (e) {
       return ApiErrorHandler.handleError(e);
@@ -45,10 +32,9 @@ class AuthService {
         ApiConfig.login,
         data: {'phone': phone, 'password': password},
       );
-     
 
       final data = result.data;
-       debugPrint('$data');
+      debugPrint('$data');
       final accessToken = data['data']['token']['access_token'];
       final refreshToken = data['data']['token']['refresh_token'];
       final fullName = data['data']['user_info']['full_name'];
@@ -60,27 +46,33 @@ class AuthService {
       return {
         'is_success': true,
         'message': data['message'],
-        'user_id':userId,
+        'user_id': userId,
         'full_name': fullName,
-        'phone':phoneResponse
+        'phone': phoneResponse,
       };
     } catch (e) {
       return ApiErrorHandler.handleError(e);
     }
   }
 
-  Future<Map<String, dynamic>> logout() async{
+  Future<Map<String, dynamic>> register(String phone, String password) async {
     try {
       final result = await api.post(
-        ApiConfig.logout
+        ApiConfig.register,
+        data: {'phone': phone, 'password': password},
       );
-      return {
-        'is_success': true,
-        'message':result.data['message'], 
-      };
+      return {'is_success': true, 'message': result.data['message']};
     } catch (e) {
       return ApiErrorHandler.handleError(e);
     }
   }
-  
+
+  Future<Map<String, dynamic>> logout() async {
+    try {
+      final result = await api.post(ApiConfig.logout);
+      return {'is_success': true, 'message': result.data['message']};
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
 }

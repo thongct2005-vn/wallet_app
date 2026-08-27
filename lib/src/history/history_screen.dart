@@ -26,11 +26,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
   bool _isLoading = false;
   bool _hasMore = true;
   String _searchKeyword = '';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  double _totalIncome = 0;
+  double _totalExpense = 0;
 
   @override
   void initState() {
     super.initState();
     _fetchMore();
+    _fetchSummary();
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >=
               _scrollController.position.maxScrollExtent - 200 &&
@@ -57,18 +62,36 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final result = await _transactionService.getTransferHistory(
       _nextCursor,
       20,
+      keyword: _searchKeyword.isEmpty ? null : _searchKeyword,
+      startDate: _startDate,
+      endDate: _endDate,
     );
-    final List<dynamic> rawList = result['data']['transaction_list'];
-    final newItems = rawList.map((e) => TransactionModel.fromJson(e)).toList();
 
-    setState(() {
-      _allTransactions.addAll(newItems);
-      _nextCursor = result['data']['next_cursor']?.toString();
-      _hasMore = result['data']['next_cursor'] != null;
-      _applyFilter();
-    });
+    if (result['is_success'] == true) {
+      final List<dynamic> rawList = result['data']['transaction_list'];
+      final newItems = rawList
+          .map((e) => TransactionModel.fromJson(e))
+          .toList();
+
+      setState(() {
+        _allTransactions.addAll(newItems);
+        _filteredTransactions = List.from(_allTransactions);
+        _nextCursor = result['data']['next_cursor']?.toString();
+        _hasMore = result['data']['next_cursor'] != null;
+      });
+    }
 
     if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _fetchSummary() async {
+    final result = await _transactionService.getCurrentMonthSummary();
+    if (result['is_success'] == true) {
+      setState(() {
+        _totalIncome = (result['data']['total_income'] as num).toDouble();
+        _totalExpense = (result['data']['total_expense'] as num).toDouble();
+      });
+    }
   }
 
   void _onSearchChanged(String value) {
@@ -82,15 +105,38 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   void _applyFilter() {
-    if (_searchKeyword.isEmpty) {
-      _filteredTransactions = List.from(_allTransactions);
-      return;
+    Iterable<TransactionModel> items = _allTransactions;
+
+    if (_searchKeyword.isNotEmpty) {
+      items = items.where((t) {
+        final desc = (t.description ?? '').toLowerCase();
+        final name = t.counterpartyName.toLowerCase();
+        return desc.contains(_searchKeyword) || name.contains(_searchKeyword);
+      });
     }
-    _filteredTransactions = _allTransactions.where((t) {
-      final desc = (t.description ?? '').toLowerCase();
-      final name = t.counterpartyName.toLowerCase();
-      return desc.contains(_searchKeyword) || name.contains(_searchKeyword);
-    }).toList();
+
+    if (_startDate != null && _endDate != null) {
+      final start = DateTime(
+        _startDate!.year,
+        _startDate!.month,
+        _startDate!.day,
+      );
+      final end = DateTime(
+        _endDate!.year,
+        _endDate!.month,
+        _endDate!.day,
+        23,
+        59,
+        59,
+      );
+      items = items.where(
+        (t) =>
+            t.createdAt.isAfter(start.subtract(const Duration(seconds: 1))) &&
+            t.createdAt.isBefore(end.add(const Duration(seconds: 1))),
+      );
+    }
+
+    _filteredTransactions = items.toList();
   }
 
   Map<String, List<TransactionModel>> _groupByMonth(
@@ -132,11 +178,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     children: [
                       const SizedBox(width: 12),
                       Icon(
-                        Icons.search,
+                        Iconsax.search_normal_1,
                         size: 20,
                         color: Colors.black.withValues(alpha: 0.5),
                       ),
                       const SizedBox(width: 12),
+
                       Expanded(
                         child: TextField(
                           controller: _searchController,
@@ -186,8 +233,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ),
                 child: IconButton(
                   padding: EdgeInsets.zero,
-                  onPressed: () {},
-                  icon: const Icon(Icons.filter_list_outlined, size: 20),
+                  onPressed: () {
+                    _showDateFilterDialog();
+                  },
+                  icon: Icon(Iconsax.filter, size: 20),
                 ),
               ),
             ),
@@ -218,7 +267,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     _nextCursor = null;
                     _hasMore = true;
                   });
-                  await _fetchMore();
+                  await Future.wait([_fetchMore(), _fetchSummary()]);
                 },
                 child: CustomScrollView(
                   controller: _scrollController,
@@ -236,6 +285,30 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         ),
                       ),
                     ),
+                    if (_startDate != null && _endDate != null)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 15,
+                            vertical: 5,
+                          ),
+                          child: Row(
+                            children: [
+                              Chip(
+                                label: Text(
+                                  '${FormatUtils.formatCustomDateTime(_startDate.toString())} - ${FormatUtils.formatCustomDateTime(_endDate.toString())}',
+                                  style: GoogleFonts.roboto(fontSize: 13),
+                                ),
+                                backgroundColor: Colors.pink.withValues(
+                                  alpha: 0.1,
+                                ),
+                                deleteIcon: const Icon(Icons.close, size: 16),
+                                onDeleted: _clearDateFilter,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     if (_filteredTransactions.isEmpty && !_isLoading)
                       SliverToBoxAdapter(
                         child: Padding(
@@ -304,14 +377,26 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 padding: const EdgeInsets.only(bottom: 5),
                 child: Text(
                   "Tổng quan tháng ${DateTime.now().month}",
-                  style: GoogleFonts.roboto(fontSize: 20),
+                  style: GoogleFonts.roboto(fontSize: 20, fontWeight: FontWeight.w500),
                 ),
               ),
               Row(
                 children: [
-                  Expanded(child: _summaryBox("Tổng chi", "500.000đ")),
+                  Expanded(
+                    child: _summaryBox(
+                      "Tổng chi",
+                      '${FormatUtils.formatDisplayNumber(_totalExpense)}đ',
+                      Colors.green
+                    ),
+                  ),
                   const SizedBox(width: 5),
-                  Expanded(child: _summaryBox("Tổng thu", "500.000đ")),
+                  Expanded(
+                    child: _summaryBox(
+                      "Tổng thu",
+                      '${FormatUtils.formatDisplayNumber(_totalIncome)}đ',
+                      Colors.red
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -321,7 +406,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  Widget _summaryBox(String label, String value) {
+  Widget _summaryBox(String label, String value, Color? textColor) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -337,11 +422,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
               label,
               style: GoogleFonts.roboto(
                 fontSize: 18,
-                color: Colors.black.withValues(alpha: 0.5),
+                color: Colors.black.withValues(alpha: 0.6),
               ),
             ),
             const SizedBox(height: 5),
-            Text(value, style: GoogleFonts.roboto(fontSize: 18)),
+            Text(value, style: GoogleFonts.roboto(fontSize: 18, color: textColor, fontWeight: FontWeight.w500)),
           ],
         ),
       ),
@@ -351,7 +436,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget _buildMonthHeader(String label) {
     return Container(
       width: double.infinity,
-      color: Colors.blue.shade50.withValues(alpha: 0.8),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       padding: const EdgeInsets.fromLTRB(15, 8, 0, 8),
       alignment: Alignment.centerLeft,
       child: Text(
@@ -361,11 +455,115 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
+  Future<void> _showDateFilterDialog() async {
+    final now = DateTime.now();
+    final oneYearAgo = DateTime(now.year - 1, now.month, now.day);
+
+    final result = await showDateRangePicker(
+      context: context,
+      firstDate: oneYearAgo,
+      lastDate: now,
+      initialDateRange: _startDate != null && _endDate != null
+          ? DateTimeRange(start: _startDate!, end: _endDate!)
+          : DateTimeRange(
+              start: now.subtract(const Duration(days: 7)),
+              end: now,
+            ),
+      locale: const Locale('vi', 'VN'),
+      helpText: 'Chọn khoảng thời gian',
+      saveText: 'Áp dụng',
+      cancelText: 'Hủy',
+      confirmText: 'Xong',
+      fieldStartLabelText: 'Từ ngày',
+      fieldEndLabelText: 'Đến ngày',
+      errorInvalidRangeText: 'Khoảng ngày không hợp lệ',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Colors.pink,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black87,
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(foregroundColor: Colors.pink),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (result != null) {
+      setState(() {
+        _startDate = result.start;
+        _endDate = result.end;
+        _applyFilter();
+      });
+    }
+  }
+
+  void _clearDateFilter() {
+    setState(() {
+      _startDate = null;
+      _endDate = null;
+      _applyFilter();
+    });
+  }
+
   Widget _buildTransactionTile(TransactionModel t, {bool isLast = false}) {
     final isOut = t.direction == 'OUT';
-    final amountColor = isOut ? Colors.red : Colors.green;
-    final amountPrefix = isOut ? '-' : '+';
+    final amountColor = !isOut || t.type == "TOPUP"
+        ? Colors.green
+        : Colors.black;
+    final iconColor = t.type == "TOPUP"
+        ? Colors.blue
+        : t.type == "WITHDRAW"
+        ? Colors.yellow
+        : t.type == "TRANSFER"
+        ? isOut
+              ? Colors.red
+              : Colors.green
+        : Colors.grey;
+    final amountPrefix = !isOut || t.type == "TOPUP" ? '+' : '-';
+    final title = t.type == "TOPUP"
+        ? "Nạp tiền vào ví từ ${t.bankName}"
+        : t.type == "WITHDRAW"
+        ? "Rút tiền từ ví về ${t.bankName}"
+        : t.type == "TRANSFER"
+        ? isOut
+              ? 'Chuyển đến ${t.counterpartyName}'
+              : 'Nhận từ ${t.counterpartyName}'
+        : "Giao dịch không xác định";
 
+    final titleDetail = t.type == "TOPUP"
+        ? "Nạp tiền vào ví"
+        : t.type == "WITHDRAW"
+        ? "Rút tiền"
+        : t.type == "TRANSFER"
+        ? isOut
+              ? 'Chuyển tiền'
+              : 'Nhận tiền'
+        : "Giao dịch không xác định";
+    final IconData icon = t.type == "TOPUP"
+        ? Iconsax.wallet_add
+        : t.type == "WITHDRAW"
+        ? Iconsax.export_1
+        : t.type == "TRANSFER"
+        ? isOut
+              ? Iconsax.money_send
+              : Iconsax.money_recive
+        : Iconsax.info_circle;
+    final textBtn = t.type == "TOPUP"
+        ? "Nạp thêm"
+        : t.type == "WITHDRAW"
+        ? "Rút thêm"
+        : t.type == "TRANSFER"
+        ? isOut
+              ? 'Chuyển thêm'
+              : 'Chuyển lại'
+        : "Giao dịch không xác định";
     return Material(
       color: Colors.white,
       child: Column(
@@ -376,7 +574,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (_) => TransactionDetailScreen(
-                    title: isOut ? 'Chuyển tiền' : 'Nhận tiền',
+                    transactionModel: t,
+                    title: titleDetail,
                     amount:
                         '$amountPrefix${FormatUtils.formatDisplayNumber(t.amount)}đ',
                     status: 'Thành công',
@@ -384,34 +583,31 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       t.createdAt.toString(),
                     ),
                     transactionCode: t.id.toString(),
-                    walletName: 'Ví Mio',
+                    walletName: t.type != 'TRANSFER' ? t.bankName : 'Ví Mio',
                     feeText: t.fee > 0
                         ? '${FormatUtils.formatDisplayNumber(t.fee)}đ'
                         : 'Miễn phí',
+                    bankName: t.bankName,
+                    icon: icon,
+                    iconColor: iconColor,
+                    textBtn: textBtn,
                   ),
                 ),
               );
             },
             leading: CircleAvatar(
-              backgroundColor: (isOut ? Colors.red : Colors.green).withValues(
-                alpha: 0.1,
-              ),
-              child: Icon(
-                isOut ? Iconsax.money_send : Iconsax.money_recive,
-                color: amountColor,
-                size: 18,
-              ),
+              backgroundColor: (iconColor).withValues(alpha: 0.1),
+              child: Icon(icon, color: iconColor, size: 20),
             ),
             title: Text(
-              isOut
-                  ? 'Chuyển đến ${t.counterpartyName}'
-                  : 'Nhận từ ${t.counterpartyName}',
+              title,
               style: GoogleFonts.roboto(
                 fontSize: 18,
                 fontWeight: FontWeight.w500,
                 color: Colors.black.withValues(alpha: 0.7),
               ),
             ),
+
             subtitle: Text(
               FormatUtils.formatCustomDateTime(t.createdAt.toString()),
               style: GoogleFonts.roboto(fontSize: 14, color: Colors.grey),
@@ -427,9 +623,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   style: GoogleFonts.roboto(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    color: isOut
-                        ? Colors.black.withValues(alpha: 0.7)
-                        : Colors.green,
+                    color: amountColor,
                   ),
                 ),
                 const SizedBox(height: 2),

@@ -1,7 +1,9 @@
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
 import 'package:app/src/home/home_screen.dart';
+import 'package:app/src/kyc/kyc_front_id_screen.dart';
 import 'package:app/src/services/app_data_service.dart';
+import 'package:app/src/services/kyc.service.dart';
 import 'package:app/src/services/notification_service.dart';
 import 'package:app/src/services/socket_service.dart';
 import 'package:app/src/services/user_service.dart';
@@ -21,6 +23,7 @@ class _SplashScreenState extends State<SplashScreen> {
   final _storage = const FlutterSecureStorage();
   final UserService _userService = UserService();
   final AppDataService _appDataService = AppDataService();
+  final KYCService _kycService = KYCService();
   final UserController _userController = Get.put(
     UserController(),
     permanent: true,
@@ -87,17 +90,26 @@ class _SplashScreenState extends State<SplashScreen> {
         newBalance: homeData['balance'],
         newHasPin: homeData['has_pin'],
       );
+      final userKYC = await _kycService.checkUserKYC();
       await SocketService().connect();
       final fcmToken = await NotificationService().init();
-      
+
       if (fcmToken != null) {
         await _userService.updateFcmToken(fcmToken);
       }
       if (!mounted) return;
-      Navigator.pushReplacement(
+      if (!userKYC['data']['is_kyc']) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => KycFrontIdScreen()),
+        );
+      }
+      else {
+        Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => HomeScreen()),
       );
+      }
     } catch (e) {
       await _storage.deleteAll();
       _navigateToLogin();

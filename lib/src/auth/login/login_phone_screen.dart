@@ -1,6 +1,8 @@
 import 'package:app/core/utils/dialog_utils.dart';
+import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/src/auth/register/otp_screen.dart';
 import 'package:app/src/services/auth_service.dart';
+import 'package:app/src/services/otp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:country_flags/country_flags.dart';
 import 'package:flutter/services.dart';
@@ -9,7 +11,14 @@ import 'login_password_screen.dart';
 
 class LoginPhoneScreen extends StatefulWidget {
   final String? initialPhoneNumber;
-  const LoginPhoneScreen({super.key, this.initialPhoneNumber});
+  final bool? isRegisterSucess;
+  final bool? isForceLogout;
+  const LoginPhoneScreen({
+    super.key,
+    this.initialPhoneNumber,
+    this.isRegisterSucess,
+    this.isForceLogout,
+  });
 
   @override
   State<LoginPhoneScreen> createState() => _LoginPhoneScreenState();
@@ -18,11 +27,13 @@ class LoginPhoneScreen extends StatefulWidget {
 class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  final OtpService _otpService = OtpService();
   final AuthService _authService = AuthService();
   bool _hasError = false;
   bool _isPhoneExists = false;
   String _msg = '';
   bool _isLoading = false;
+  bool _isSendingOtp = false;
 
   @override
   void initState() {
@@ -38,6 +49,12 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
     _focusNode.addListener(() {
       setState(() {});
     });
+
+    if (widget.isRegisterSucess != null && widget.isRegisterSucess == true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        SnackbarUtils.success(context, "Tạo ví thành công");
+      });
+    }
   }
 
   @override
@@ -62,7 +79,7 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
             title: Text(
               "Nhập SĐT",
               style: GoogleFonts.roboto(
-                fontSize: 20,
+                fontSize: 24,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -273,12 +290,19 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
                                             "Bạn có muốn dùng số điện thoại ${_phoneController.text} để đăng ký tài khoản.",
                                         cancelText: "Đổi SĐT",
                                         confirmText: "Xác nhận",
-                                        onConfirm: () {
-                                          Navigator.pop(context);
-                                          _authService.sendOtp(
-                                            _phoneController.text,
+                                        onConfirm: () async {
+                                          setState(() {
+                                            _isSendingOtp = true;
+                                          });
+                                          await _otpService.generateOtp(
+                                            phone: _phoneController.text,
+                                            email: null,
                                           );
-                                          Navigator.push(
+                                          setState(() {
+                                            _isSendingOtp = false;
+                                          });
+                                          if (!context.mounted) return;
+                                          Navigator.pushAndRemoveUntil(
                                             context,
                                             MaterialPageRoute(
                                               builder: (context) => OtpScreen(
@@ -286,6 +310,7 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
                                                     _phoneController.text,
                                               ),
                                             ),
+                                            (r) => false,
                                           );
                                         },
                                       );
@@ -334,6 +359,27 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
                   ],
                 ),
               ),
+              if (_isSendingOtp)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.transparent,
+                    child: Center(
+                      child: Container(
+                        width: 50,
+                        height: 50,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade400,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 3,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

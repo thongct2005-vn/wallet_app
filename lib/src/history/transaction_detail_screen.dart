@@ -1,10 +1,27 @@
 import 'dart:math' as math;
+import 'package:app/core/controller/user_controller.dart';
+import 'package:app/src/history/transaction_model.dart';
 import 'package:app/src/home/home_screen.dart';
+import 'package:app/src/topup_withdraw/topup_withdraw_screen.dart';
+import 'package:app/src/transfer/amount_input_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
 class TransactionDetailScreen extends StatelessWidget {
+  final TransactionModel transactionModel;
+  final String title;
+  final String amount;
+  final String status;
+  final String time;
+  final String transactionCode;
+  final String walletName;
+  final String feeText;
+  final String bankName;
+  final IconData icon;
+  final Color iconColor;
+  final String textBtn;
   const TransactionDetailScreen({
     super.key,
     required this.title,
@@ -14,18 +31,16 @@ class TransactionDetailScreen extends StatelessWidget {
     required this.transactionCode,
     required this.walletName,
     required this.feeText,
+    required this.bankName,
+    required this.icon,
+    required this.iconColor,
+    required this.textBtn,
+    required this.transactionModel,
   });
-
-  final String title;
-  final String amount;
-  final String status;
-  final String time;
-  final String transactionCode;
-  final String walletName;
-  final String feeText;
 
   @override
   Widget build(BuildContext context) {
+    final UserController _userController = Get.find<UserController>();
     return Scaffold(
       backgroundColor: Colors.white.withValues(alpha: 0.95),
       extendBodyBehindAppBar: true,
@@ -94,7 +109,13 @@ class TransactionDetailScreen extends StatelessWidget {
                         ),
                         child: IconButton(
                           onPressed: () {
-                            Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context)=>HomeScreen()), (r)=>false);
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => HomeScreen(),
+                              ),
+                              (r) => false,
+                            );
                           },
                           padding: EdgeInsets.zero,
                           icon: const Icon(Iconsax.home_2, size: 20),
@@ -138,15 +159,16 @@ class TransactionDetailScreen extends StatelessWidget {
                                         width: 44,
                                         height: 44,
                                         decoration: BoxDecoration(
-                                          color: Colors.red.withValues(
+                                          color: iconColor.withValues(
                                             alpha: 0.1,
                                           ),
-                                          borderRadius:
-                                              BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                         ),
-                                        child: const Icon(
-                                          Iconsax.money_send,
-                                          color: Colors.red,
+                                        child: Icon(
+                                          icon,
+                                          color: iconColor,
                                           size: 25,
                                         ),
                                       ),
@@ -188,8 +210,9 @@ class TransactionDetailScreen extends StatelessWidget {
                                     vertical: 5,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: Colors.lightGreenAccent
-                                        .withValues(alpha: 0.3),
+                                    color: Colors.lightGreenAccent.withValues(
+                                      alpha: 0.3,
+                                    ),
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Text(
@@ -241,9 +264,7 @@ class TransactionDetailScreen extends StatelessWidget {
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 10,
                                   ),
-                                  side: BorderSide(
-                                    color: Colors.pink.shade200,
-                                  ),
+                                  side: BorderSide(color: Colors.pink.shade200),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
                                   ),
@@ -261,7 +282,45 @@ class TransactionDetailScreen extends StatelessWidget {
                             const SizedBox(width: 10),
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: () {},
+                                onPressed: () {
+                                  if (textBtn == "Chuyển thêm" ||
+                                      textBtn == "Chuyển lại") {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => AmountInputScreen(
+                                          receiverPhone: transactionModel.counterpartyPhone,
+                                          receiverFullName: transactionModel.counterpartyName,
+                                          receiverId: transactionModel.counterpartyId,
+                                        ),
+                                      ),
+                                    );
+                                  } else if (textBtn == "Nạp thêm") {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            TopUpWithdrawScreen(
+                                              walletBalance:
+                                                  _userController.balance.value,
+                                              isTopUpTab: true,
+                                            ),
+                                      ),
+                                    );
+                                  } else if (textBtn == "Rút thêm") {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            TopUpWithdrawScreen(
+                                              walletBalance:
+                                                  _userController.balance.value,
+                                              isTopUpTab: false,
+                                            ),
+                                      ),
+                                    );
+                                  }
+                                },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.pinkAccent,
                                   padding: const EdgeInsets.symmetric(
@@ -272,7 +331,7 @@ class TransactionDetailScreen extends StatelessWidget {
                                   ),
                                 ),
                                 child: Text(
-                                  "Chuyển thêm",
+                                  textBtn,
                                   style: GoogleFonts.roboto(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w600,

@@ -28,7 +28,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final AppDataService _appDataService = AppDataService();
   final UserController _userController = Get.find<UserController>();
   final BankService _bankService = BankService();
-  String _phone = '';
   String _fullName = '';
   bool _isHidenWalletBalance = false;
   String _balance = '0';
@@ -39,7 +38,6 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     setState(() {
-      _phone = _userController.phone.value;
       _fullName = _userController.fullName.value;
       _balance =
           '${FormatUtils.formatDisplayNumber(num.tryParse(_userController.balance.value) ?? 0)}đ';
@@ -116,7 +114,7 @@ class _HomeScreenState extends State<HomeScreen> {
           backgroundColor: Colors.pink.shade400,
           shape: const CircleBorder(),
           child: const Icon(
-            Icons.qr_code_scanner,
+            Iconsax.scan_barcode,
             color: Colors.white,
             size: 30,
           ),
@@ -213,7 +211,8 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           ClipOval(
             child: Image.network(
-              'https://api.dicebear.com/7.x/micah/png?seed=$_phone&backgroundColor=ffb6c1&borderRadius=50',
+              'https://orectic-noctilucent-ronan.ngrok-free.dev/images/avatar/default_avatar.png',
+              headers: const {'ngrok-skip-browser-warning': 'true'},
               width: 50,
               height: 50,
               fit: BoxFit.cover,
@@ -645,7 +644,6 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
       setState(() {
-        _phone = _userController.phone.value;
         _fullName = _userController.fullName.value;
         _balance =
             '${FormatUtils.formatDisplayNumber(num.tryParse(_userController.balance.value) ?? 0)}đ';
@@ -661,8 +659,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> 
-  _getBankLinkStatus(bool isTopUpTab) async {
+  Future<void> _getBankLinkStatus(bool isTopUpTab) async {
     try {
       final result = await _bankService.getBankLinkStatus();
       if (!mounted) return;
@@ -673,14 +670,17 @@ class _HomeScreenState extends State<HomeScreen> {
             builder: (context) => TopUpWithdrawScreen(
               walletBalance: _balance,
               isTopUpTab: isTopUpTab,
-              bankLinkedList: result['data']['linked_accounts'],
-              bankList: result['data']['available_banks'],
             ),
           ),
         );
-      }
-      else{
-        Navigator.push(context, MaterialPageRoute(builder: (context)=>LinkBankScreen(bankList: result['data']['available_banks'],)));
+      } else {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                LinkBankScreen(bankList: result['data']['available_banks']),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {

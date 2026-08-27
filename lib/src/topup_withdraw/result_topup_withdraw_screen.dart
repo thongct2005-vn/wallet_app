@@ -1,21 +1,31 @@
+import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/format_utils.dart';
 import 'package:app/src/home/home_screen.dart';
+import 'package:app/src/topup_withdraw/topup_withdraw_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 
 class ResultTopupWithdrawScreen extends StatefulWidget {
   final Map<String, dynamic>? result;
-  const ResultTopupWithdrawScreen({super.key, this.result});
+  final bool isTopUpTab;
+  const ResultTopupWithdrawScreen({
+    super.key,
+    this.result,
+    required this.isTopUpTab,
+  });
 
   @override
-  State<ResultTopupWithdrawScreen> createState() => _ResultWithdrawScreenState();
+  State<ResultTopupWithdrawScreen> createState() =>
+      _ResultWithdrawScreenState();
 }
 
 class _ResultWithdrawScreenState extends State<ResultTopupWithdrawScreen> {
   late dynamic data;
   late dynamic amount;
   late dynamic createdAt;
-
+ final UserController _userController = Get.find<UserController>();
   @override
   void initState() {
     super.initState();
@@ -50,17 +60,26 @@ class _ResultWithdrawScreenState extends State<ResultTopupWithdrawScreen> {
           actions: [
             Padding(
               padding: const EdgeInsets.only(right: 20),
-              child: IconButton(
-                onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (context) => HomeScreen()),
-                  );
-                },
-                icon: const Icon(
-                  Icons.home_outlined,
-                  size: 24,
-                  color: Colors.black,
+              child: Container(
+                height: 30,
+                width: 30,
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    width: 1,
+                    color: Colors.white.withValues(alpha: 0.8),
+                  ),
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.8),
+                ),
+                child: IconButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => HomeScreen()),
+                    );
+                  },
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Iconsax.home_2, size: 20),
                 ),
               ),
             ),
@@ -129,7 +148,9 @@ class _ResultWithdrawScreenState extends State<ResultTopupWithdrawScreen> {
 
                             _buildInfoRow(
                               "Dịch vụ/ Cửa hàng",
-                              "Nạp tiền từ ngân hàng",
+                              widget.isTopUpTab
+                                  ? "Nạp tiền từ ngân hàng"
+                                  : "Rút tiền về ngân hàng",
                             ),
                             const SizedBox(height: 12),
                             _buildInfoRow(
@@ -156,9 +177,7 @@ class _ResultWithdrawScreenState extends State<ResultTopupWithdrawScreen> {
                                         vertical: 14,
                                       ),
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(
-                                          10,
-                                        ),
+                                        borderRadius: BorderRadius.circular(10),
                                       ),
                                     ),
                                     onPressed: () {
@@ -189,13 +208,11 @@ class _ResultWithdrawScreenState extends State<ResultTopupWithdrawScreen> {
                                       ),
                                       elevation: 0,
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(
-                                          10,
-                                        ),
+                                        borderRadius: BorderRadius.circular(10),
                                       ),
                                     ),
                                     onPressed: () {
-                                      Navigator.pop(context);
+                                      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder:(_)=> TopUpWithdrawScreen(walletBalance: _userController.balance.value, isTopUpTab: widget.isTopUpTab)), (r)=>false);
                                     },
                                     child: Text(
                                       "Tạo giao dịch mới",

@@ -1,7 +1,9 @@
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/src/home/home_screen.dart';
+import 'package:app/src/kyc/kyc_front_id_screen.dart';
 import 'package:app/src/services/app_data_service.dart';
 import 'package:app/src/services/auth_service.dart';
+import 'package:app/src/services/kyc.service.dart';
 import 'package:app/src/services/notification_service.dart';
 import 'package:app/src/services/socket_service.dart';
 import 'package:app/src/services/user_service.dart';
@@ -23,6 +25,7 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
   final UserService _userService = UserService();
   final AuthService _authService = AuthService();
   final AppDataService _appDataService = AppDataService();
+  final KYCService _kycService = KYCService();
   final UserController _userController = Get.put(
     UserController(),
     permanent: true,
@@ -69,7 +72,7 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
             title: Text(
               "Nhập mật khẩu",
               style: GoogleFonts.roboto(
-                fontSize: 20,
+                fontSize: 24,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -283,10 +286,14 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
                                       _userController.setUserData(
                                         newId: result['user_id'],
                                         newPhone: result['phone'],
-                                        newFullName: result['full_name'],
+                                        newFullName:
+                                            result['full_name'] ??
+                                            "Không rõ tên",
                                         newBalance: homeData['balance'],
                                         newHasPin: homeData['has_pin'],
                                       );
+                                      final userKYC = await _kycService
+                                          .checkUserKYC();
 
                                       await SocketService().connect();
                                       final fcmToken =
@@ -298,12 +305,23 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
                                         );
                                       }
                                       if (!context.mounted) return;
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => HomeScreen(),
-                                        ),
-                                      );
+
+                                      if (!userKYC['data']['is_kyc']) {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                KycFrontIdScreen(),
+                                          ),
+                                        );
+                                      } else {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => HomeScreen(),
+                                          ),
+                                        );
+                                      }
                                     } else {
                                       setState(() {
                                         _isLoading = false;

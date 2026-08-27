@@ -1,7 +1,9 @@
 import 'package:app/core/utils/format_utils.dart';
+import 'package:app/core/utils/loading_util.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/verify_pin_bottom_sheet.dart';
 import 'package:app/src/link_bank/link_bank_screen.dart';
+import 'package:app/src/services/bank_service.dart';
 import 'package:app/src/services/transaction_service.dart';
 import 'package:app/src/topup_withdraw/result_topup_withdraw_screen.dart';
 import 'package:flutter/material.dart';
@@ -10,28 +12,32 @@ import 'package:app/src/services/wallet_service.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:uuid/uuid.dart';
 
-class ConfirmTopUpScreen extends StatefulWidget {
+class ConfirmTopUpWithdrawScreen extends StatefulWidget {
   final String amount;
   final List<dynamic> linkedBanks;
-  final List<dynamic> bankList;
-  const ConfirmTopUpScreen({
+  final bool isTopUpTab;
+  const ConfirmTopUpWithdrawScreen({
     super.key,
     required this.amount,
     required this.linkedBanks,
-    required this.bankList,
+    required this.isTopUpTab,
   });
 
   @override
-  State<ConfirmTopUpScreen> createState() => _ConfirmTopUpScreenState();
+  State<ConfirmTopUpWithdrawScreen> createState() =>
+      _ConfirmTopUpWithdrawScreenState();
 }
 
-class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
+class _ConfirmTopUpWithdrawScreenState
+    extends State<ConfirmTopUpWithdrawScreen> {
   final WalletService _walletService = WalletService();
   final TransactionService _transactionService = TransactionService();
+  final BankService _bankService = BankService();
   bool _isProcessing = false;
   final Uuid _uuid = const Uuid();
   late final String idempotencyKey;
   String? _selectedBankId;
+  bool isLoadingLinkedBanks = false;
 
   @override
   void initState() {
@@ -85,64 +91,72 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
             ),
           ),
         ),
-        body: Stack(
-          children: [
-            Container(
-              height: 500,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.pink.shade200.withValues(alpha: 0.75),
-                    Colors.white.withValues(alpha: 0.0),
-                  ],
-                ),
-              ),
-            ),
-            SafeArea(
-              child: Column(
+        body: !isLoadingLinkedBanks
+            ? Stack(
                 children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(15, 10, 15, 15),
-                      child: Column(
-                        children: [
-                          _buildContainerTopUpInfo(context, selectedBank),
-                          const SizedBox(height: 15),
-                          _buildContainerBankList(context),
+                  Container(
+                    height: 500,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.pink.shade200.withValues(alpha: 0.75),
+                          Colors.white.withValues(alpha: 0.0),
                         ],
                       ),
                     ),
                   ),
-                  _buildContainerConfirmButton(context),
-                ],
-              ),
-            ),
-            if (_isProcessing)
-              Positioned.fill(
-                child: Container(
-                  color: Colors.transparent,
-                  child: Center(
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade400,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 3,
-                      ),
+                  SafeArea(
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.fromLTRB(15, 10, 15, 15),
+                            child: Column(
+                              children: [
+                                _buildContainerTopUpInfo(context, selectedBank),
+                                const SizedBox(height: 15),
+                                _buildContainerBankList(context),
+                              ],
+                            ),
+                          ),
+                        ),
+                        _buildContainerConfirmButton(context),
+                      ],
                     ),
                   ),
+                  if (_isProcessing)
+                    Positioned.fill(
+                      child: Container(
+                        color: Colors.transparent,
+                        child: Center(
+                          child: Container(
+                            width: 50,
+                            height: 50,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade400,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 3,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              )
+            : Center(
+                child: FireworkStarSpinner(
+                  size: 70,
+                  color: Colors.pinkAccent,
+                  starCount: 8,
                 ),
               ),
-          ],
-        ),
       ),
     );
   }
@@ -163,10 +177,12 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
             padding: EdgeInsets.all(10),
             child: Row(
               children: [
-                Icon(Icons.credit_card, color: Colors.pink),
+                Icon(Iconsax.wallet_1, color: Colors.pink, size: 24,),
                 SizedBox(width: 5),
                 Text(
-                  "Nạp tiền vào ví Mio",
+                  widget.isTopUpTab
+                      ? "Nạp tiền vào ví Mio"
+                      : "Rút tiền về ngân hàng",
                   style: GoogleFonts.roboto(
                     fontWeight: FontWeight.w600,
                     fontSize: 22,
@@ -183,7 +199,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
             ),
           ),
           _buildInfoRow(
-            label: 'Nguồn tiền',
+            label: widget.isTopUpTab ? 'Nguồn tiền' : 'Rút về NH liên kết',
             value: selectedBank['bank_name'] ?? '',
           ),
           _buildInfoRow(
@@ -191,6 +207,9 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
             value:
                 '${FormatUtils.formatDisplayNumber(FormatUtils.formatAmountToNum(widget.amount))}đ',
           ),
+          if (!widget.isTopUpTab) ...[
+            _buildInfoRow(label: 'Phí giao dịch', value: 'Miễn phí'),
+          ],
           SizedBox(height: 10),
         ],
       ),
@@ -257,14 +276,27 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
             ],
             const SizedBox(height: 10),
             GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        LinkBankScreen(bankList: widget.bankList),
-                  ),
-                );
+              onTap: () async {
+                setState(() {
+                  isLoadingLinkedBanks = true;
+                });
+                final result = await _getLinkedBanks();
+                setState(() {
+                  isLoadingLinkedBanks = false;
+                });
+                if (!context.mounted) return;
+                if (result['is_success']) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => LinkBankScreen(
+                        bankList: result['data']['available_banks'],
+                      ),
+                    ),
+                  );
+                } else {
+                  SnackbarUtils.failure(context, result['message']);
+                }
               },
               child: Container(
                 width: double.infinity,
@@ -492,24 +524,30 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
             }
           },
           onSuccess: () async {
-            await _handleTopUp();
+            await _handleTopUpWithdraw();
           },
         );
       },
     );
   }
 
-  Future<void> _handleTopUp() async {
+  Future<void> _handleTopUpWithdraw() async {
     if (!mounted) return;
     setState(() => _isProcessing = true);
     final numAmount = FormatUtils.formatAmountToNum(widget.amount).toString();
     try {
-      final result = await _transactionService.topupMoney(
-        numAmount,
-        _selectedBankId ?? "",
-        idempotencyKey,
-      );
-      debugPrint('$result ========================');
+      final result = widget.isTopUpTab
+          ? await _transactionService.topupMoney(
+              numAmount,
+              _selectedBankId ?? "",
+              idempotencyKey,
+            )
+          : await _transactionService.withdrawMoney(
+              numAmount,
+              _selectedBankId ?? "",
+              idempotencyKey,
+            );
+      ;
       setState(() {
         _isProcessing = false;
       });
@@ -518,7 +556,10 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
-            builder: (context) => ResultTopupWithdrawScreen(result: result),
+            builder: (context) => ResultTopupWithdrawScreen(
+              result: result,
+              isTopUpTab: widget.isTopUpTab,
+            ),
           ),
           (Route<dynamic> route) => false,
         );
@@ -530,6 +571,21 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
       SnackbarUtils.failure(context, "Có lỗi xảy ra. Vui lòng thử lại");
     } finally {
       if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  Future<Map<String, dynamic>> _getLinkedBanks() async {
+    try {
+      final result = await _bankService.getBankLinkStatus();
+      return result;
+    } catch (e) {
+      if (mounted) {
+        SnackbarUtils.failure(
+          context,
+          "Hệ thống đang bảo trì. Vui lòng thử lại sau",
+        );
+      }
+      return {};
     }
   }
 }

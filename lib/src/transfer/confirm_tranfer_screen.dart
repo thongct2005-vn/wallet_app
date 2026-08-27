@@ -3,9 +3,11 @@ import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/verify_pin_bottom_sheet.dart';
 import 'package:app/src/services/transaction_service.dart';
 import 'package:app/src/transfer/result_tranfer_screen.dart';
+import 'package:dotted_line/dotted_line.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:app/src/services/wallet_service.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:uuid/uuid.dart';
 
 class ConfirmTranferScreen extends StatefulWidget {
@@ -199,7 +201,7 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
               padding: EdgeInsets.all(10),
               child: Row(
                 children: [
-                  Icon(Icons.monetization_on, color: Colors.red),
+                  Icon(Iconsax.send_1, color: Colors.redAccent),
                   SizedBox(width: 5),
                   Text(
                     "Chuyển tiền",
@@ -213,20 +215,22 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
             ),
             Padding(
               padding: EdgeInsets.fromLTRB(10, 0, 10, 0),
-              child: Divider(
-                height: 1.2,
-                color: Colors.grey.withValues(alpha: 0.5),
+              child: DottedLine(
+                dashColor: Colors.grey.shade200,
+                dashLength: 6,
+                dashGapLength: 4,
+                lineThickness: 1,
               ),
             ),
             _buildInfoRow(
               label: 'Số tiền',
               value: '${widget.amount}đ',
-              valueColor: Colors.blue,
+              valueColor: Colors.lightBlueAccent,
             ),
             _buildInfoRow(
               label: 'Người nhận',
               value: widget.receiverName ?? 'Không rõ tên',
-              valueColor: Colors.blue,
+              valueColor: Colors.lightBlueAccent,
             ),
             _buildInfoRow(
               label: 'Số điện thoại',
@@ -260,7 +264,7 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
           padding: EdgeInsets.fromLTRB(10, 15, 10, 15),
           child: Row(
             children: [
-              Icon(Icons.local_offer, color: Colors.yellow),
+              Icon(Iconsax.receipt_discount, color: Colors.yellow),
               SizedBox(width: 5),
               Text(
                 "Ưu đãi",
