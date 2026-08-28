@@ -13,11 +13,13 @@ class LoginPhoneScreen extends StatefulWidget {
   final String? initialPhoneNumber;
   final bool? isRegisterSucess;
   final bool? isForceLogout;
+  final String? msg;
   const LoginPhoneScreen({
     super.key,
     this.initialPhoneNumber,
     this.isRegisterSucess,
     this.isForceLogout,
+    this.msg,
   });
 
   @override
@@ -53,6 +55,15 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
     if (widget.isRegisterSucess != null && widget.isRegisterSucess == true) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         SnackbarUtils.success(context, "Tạo ví thành công");
+      });
+    }
+    if (widget.isForceLogout != null && widget.isForceLogout == true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        DialogUtils.showNotification(
+          context,
+          title: "Thông báo",
+          message: widget.msg!,
+        );
       });
     }
   }
