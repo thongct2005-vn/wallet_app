@@ -1,8 +1,10 @@
+import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/dialog_utils.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
 import 'package:app/src/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
@@ -16,7 +18,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final AuthService _authService = AuthService();
   final FlutterSecureStorage _storage = FlutterSecureStorage();
-
+  final UserController _userController = Get.find<UserController>();
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -71,7 +73,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           Text(
-            "Phan Văn Thống",
+            _userController.fullName.value,
             style: GoogleFonts.roboto(
               fontSize: 24,
               fontWeight: FontWeight.bold,
@@ -83,7 +85,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Icon(Iconsax.call, color: Colors.pink, size: 20),
               const SizedBox(width: 5),
               Text(
-                "0855313437",
+                _userController.phone.value,
                 style: GoogleFonts.roboto(
                   fontSize: 18,
                   color: Colors.black.withValues(alpha: 0.5),

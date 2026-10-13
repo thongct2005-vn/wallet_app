@@ -1,15 +1,7 @@
-import 'package:app/core/controller/user_controller.dart';
-import 'package:app/src/home/home_screen.dart';
-import 'package:app/src/kyc/kyc_front_id_screen.dart';
-import 'package:app/src/services/app_data_service.dart';
+import 'package:app/src/auth/register/otp_screen.dart';
 import 'package:app/src/services/auth_service.dart';
-import 'package:app/src/services/kyc.service.dart';
-import 'package:app/src/services/notification_service.dart';
-import 'package:app/src/services/socket_service.dart';
-import 'package:app/src/services/user_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:get/get.dart';
 
 class LoginPasswordScreen extends StatefulWidget {
   final String? phoneNumber;
@@ -22,14 +14,7 @@ class LoginPasswordScreen extends StatefulWidget {
 class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-  final UserService _userService = UserService();
   final AuthService _authService = AuthService();
-  final AppDataService _appDataService = AppDataService();
-  final KYCService _kycService = KYCService();
-  final UserController _userController = Get.put(
-    UserController(),
-    permanent: true,
-  );
   bool _hasError = false;
   bool _isHidePassword = true;
   bool _isLoading = false;
@@ -55,6 +40,57 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
     _passwordController.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleLogin() async {
+    if (_passwordController.text.isEmpty) {
+      setState(() {
+        _hasError = true;
+        _msg = "Vui lòng nhập mật khẩu";
+      });
+      return;
+    }
+    if (!isValidPassword(_passwordController.text)) {
+      setState(() {
+        _hasError = true;
+        _msg = "Mật khẩu phải có đúng 6 số";
+      });
+      return;
+    }
+
+    setState(() {
+      _hasError = false;
+      _isLoading = true;
+    });
+
+    final result = await _authService.loginWithPhoneAndPassword(
+      widget.phoneNumber ?? "",
+      _passwordController.text,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+    });
+
+    if (result['is_success'] == true) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => OtpScreen(
+            phoneNumber: widget.phoneNumber,
+            email: result['masked_email'],
+            isLogin: true,
+            otpToken: result['otp_token'],
+          ),
+        ),
+      );
+    } else {
+      setState(() {
+        _msg = result['message'] ?? "Đăng nhập thất bại";
+        _hasError = true;
+      });
+    }
   }
 
   @override
@@ -252,86 +288,7 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
                         width: double.infinity,
                         height: 55,
                         child: ElevatedButton(
-                          onPressed: _isLoading
-                              ? null
-                              : () async {
-                                  if (_passwordController.text.isEmpty) {
-                                    setState(() {
-                                      _hasError = true;
-                                      _msg = "Vui lòng nhập mật khẩu";
-                                    });
-                                  } else if (!isValidPassword(
-                                    _passwordController.text,
-                                  )) {
-                                    setState(() {
-                                      _hasError = true;
-                                      _msg = "Mật khẩu phải có đúng 6 số";
-                                    });
-                                  } else {
-                                    setState(() {
-                                      _hasError = false;
-                                      _isLoading = true;
-                                    });
-
-                                    final result = await _authService
-                                        .loginWithPhoneAndPassword(
-                                          widget.phoneNumber ?? "",
-                                          _passwordController.text,
-                                        );
-
-                                    if (result['is_success']) {
-                                      final homeData = await _appDataService
-                                          .fetchHomeData();
-
-                                      _userController.setUserData(
-                                        newId: result['user_id'],
-                                        newPhone: result['phone'],
-                                        newFullName:
-                                            result['full_name'] ??
-                                            "Không rõ tên",
-                                        newBalance: homeData['balance'],
-                                        newHasPin: homeData['has_pin'],
-                                      );
-                                      final userKYC = await _kycService
-                                          .checkUserKYC();
-
-                                      await SocketService().connect();
-                                      final fcmToken =
-                                          await NotificationService().init();
-
-                                      if (fcmToken != null) {
-                                        await _userService.updateFcmToken(
-                                          fcmToken,
-                                        );
-                                      }
-                                      if (!context.mounted) return;
-
-                                      if (!userKYC['data']['is_kyc']) {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) =>
-                                                KycFrontIdScreen(),
-                                          ),
-                                        );
-                                      } else {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) => HomeScreen(),
-                                          ),
-                                        );
-                                      }
-                                    } else {
-                                      setState(() {
-                                        _isLoading = false;
-                                        _msg = result['message'];
-                                        _hasError = !result['is_success'];
-                                      });
-                                    }
-                                  }
-                                },
-
+                          onPressed: _isLoading ? null : _handleLogin,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.pink,
                             disabledBackgroundColor: Colors.black.withValues(

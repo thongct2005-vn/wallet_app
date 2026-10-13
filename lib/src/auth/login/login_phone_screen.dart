@@ -1,6 +1,7 @@
 import 'package:app/core/utils/dialog_utils.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/src/auth/register/otp_screen.dart';
+import 'package:app/src/auth/register/register_email.dart';
 import 'package:app/src/services/auth_service.dart';
 import 'package:app/src/services/otp_service.dart';
 import 'package:flutter/material.dart';
@@ -285,58 +286,65 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
 
                                     setState(() {
                                       _isLoading = false;
-                                      _isPhoneExists =
-                                          result['data']['is_phone_exists'];
+                                      if (result['is_success'] == true) {
+                                        _isPhoneExists =
+                                            result['data']['is_phone_exists'];
+                                        if (!_isPhoneExists) {
+                                          DialogUtils.showConfirmation(
+                                            context,
+                                            title: "Thông báo",
+                                            message:
+                                                "Bạn có muốn dùng số điện thoại ${_phoneController.text} để đăng ký tài khoản.",
+                                            cancelText: "Đổi SĐT",
+                                            confirmText: "Xác nhận",
+                                            onConfirm: () async {
+                                              setState(() {
+                                                _isSendingOtp = true;
+                                              });
+                                              await _otpService.generateOtp(
+                                                phone: _phoneController.text,
+                                                email: null,
+                                              );
+                                              setState(() {
+                                                _isSendingOtp = false;
+                                              });
+                                              if (!context.mounted) return;
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) =>
+                                                      RegisterEmailScreen(
+                                                        initialEmail: null,
+                                                        phone: _phoneController
+                                                            .text,
+                                                      ),
+                                                ),
+                                              );
+                                            },
+                                          );
+                                        } else {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  LoginPasswordScreen(
+                                                    phoneNumber:
+                                                        _phoneController.text,
+                                                  ),
+                                            ),
+                                          );
+                                        }
+                                      } else {
+                                        SnackbarUtils.failure(
+                                          context,
+                                          result['message'],
+                                        );
+                                      }
                                     });
 
                                     setState(() {
                                       _isLoading = false;
                                     });
-
-                                    if (!_isPhoneExists) {
-                                      DialogUtils.showConfirmation(
-                                        context,
-                                        title: "Thông báo",
-                                        message:
-                                            "Bạn có muốn dùng số điện thoại ${_phoneController.text} để đăng ký tài khoản.",
-                                        cancelText: "Đổi SĐT",
-                                        confirmText: "Xác nhận",
-                                        onConfirm: () async {
-                                          setState(() {
-                                            _isSendingOtp = true;
-                                          });
-                                          await _otpService.generateOtp(
-                                            phone: _phoneController.text,
-                                            email: null,
-                                          );
-                                          setState(() {
-                                            _isSendingOtp = false;
-                                          });
-                                          if (!context.mounted) return;
-                                          Navigator.pushAndRemoveUntil(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) => OtpScreen(
-                                                phoneNumber:
-                                                    _phoneController.text,
-                                              ),
-                                            ),
-                                            (r) => false,
-                                          );
-                                        },
-                                      );
-                                    } else {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              LoginPasswordScreen(
-                                                phoneNumber:
-                                                    _phoneController.text,
-                                              ),
-                                        ),
-                                      );
-                                    }
                                   }
                                 },
                           style: ElevatedButton.styleFrom(

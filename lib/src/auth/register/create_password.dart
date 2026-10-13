@@ -1,11 +1,12 @@
-import 'package:app/src/auth/login/login_phone_screen.dart';
+import 'package:app/src/auth/register/otp_screen.dart';
 import 'package:app/src/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class CreatePasswordScreen extends StatefulWidget {
   final String? phoneNumber;
-  const CreatePasswordScreen({super.key, this.phoneNumber});
+  final String? email;
+  const CreatePasswordScreen({super.key, this.phoneNumber, this.email});
 
   @override
   State<CreatePasswordScreen> createState() => _CreatePasswordScreenState();
@@ -21,7 +22,6 @@ class _CreatePasswordScreenState extends State<CreatePasswordScreen> {
   bool _hasError = false;
   bool _isHidePassword = true;
   bool _isHidePasswordConfirm = true;
-  bool _isSuccess = false;
   bool _isLoading = false;
   String _msg = "";
 
@@ -245,30 +245,34 @@ class _CreatePasswordScreenState extends State<CreatePasswordScreen> {
 
                                     final result = await _authService.register(
                                       widget.phoneNumber ?? "",
-                                      _passwordController.text,
+                                      widget.email ?? "",
                                     );
 
                                     if (!context.mounted) return;
 
                                     setState(() {
-                                      _isSuccess = result['is_success'];
-                                      _msg = result['message'];
                                       _isLoading = false;
-                                      _hasError = !_isSuccess;
                                     });
-                                    if (_isSuccess) {
-                                      Navigator.pushAndRemoveUntil(
+
+                                    if (result['is_success'] == true) {
+                                      Navigator.push(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (context) =>
-                                              LoginPhoneScreen(
-                                                isRegisterSucess: true,
-                                                initialPhoneNumber:
-                                                    widget.phoneNumber,
-                                              ),
+                                          builder: (context) => OtpScreen(
+                                            phoneNumber: widget.phoneNumber,
+                                            email: widget.email,
+                                            isLogin: false,
+                                            otpToken:
+                                                result['data']['otp_token'],
+                                            password: _passwordController.text,
+                                          ),
                                         ),
-                                        (r) => false,
                                       );
+                                    } else {
+                                      setState(() {
+                                        _hasError = true;
+                                        _msg = result['message'] ?? "";
+                                      });
                                     }
                                   }
                                 },
@@ -291,7 +295,7 @@ class _CreatePasswordScreenState extends State<CreatePasswordScreen> {
                                   ),
                                 )
                               : Text(
-                                  "Xác nhận",
+                                  "Tiếp tục",
                                   style: GoogleFonts.roboto(
                                     color: Colors.white,
                                     fontSize: 25,

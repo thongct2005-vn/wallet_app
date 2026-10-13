@@ -1,17 +1,29 @@
 import 'package:app/core/network/api_client.dart';
 import 'package:app/core/network/api_config.dart';
 import 'package:app/core/network/api_error_handler.dart';
-import 'package:flutter/widgets.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuthService {
   final api = ApiClient().dio;
   static const _storage = FlutterSecureStorage();
+
+  Options get _public => Options(extra: {'skipAuth': true});
+
+  Map<String, dynamic> _errorWithStatus(Object e) {
+    final result = <String, dynamic>{...ApiErrorHandler.handleError(e)};
+    if (e is DioException) {
+      result['status_code'] = e.response?.statusCode;
+    }
+    return result;
+  }
+
   Future<Map<String, dynamic>> checkPhoneExist(String phone) async {
     try {
       final result = await api.post(
         ApiConfig.checkPhoneExists,
         data: {'phone': phone},
+        options: _public,
       );
       return {
         'is_success': true,
@@ -31,37 +43,127 @@ class AuthService {
       final result = await api.post(
         ApiConfig.login,
         data: {'phone': phone, 'password': password},
+        options: _public,
       );
-
-      final data = result.data;
-      debugPrint('$data');
-      final accessToken = data['data']['token']['access_token'];
-      final refreshToken = data['data']['token']['refresh_token'];
-      final fullName = data['data']['user_info']['full_name'];
-      final phoneResponse = data['data']['user_info']['phone'];
-      final userId = data['data']['user_info']['user_id'];
-      await _storage.write(key: 'access_token', value: accessToken);
-      await _storage.write(key: 'refresh_token', value: refreshToken);
 
       return {
         'is_success': true,
-        'message': data['message'],
-        'user_id': userId,
-        'full_name': fullName,
-        'phone': phoneResponse,
+        'message': result.data['message'],
+        'otp_token': result.data['data']['otp_token'],
+        'masked_email': result.data['data']['masked_email'],
       };
     } catch (e) {
-      return ApiErrorHandler.handleError(e);
+      return _errorWithStatus(e);
     }
   }
 
-  Future<Map<String, dynamic>> register(String phone, String password) async {
+  Future<Map<String, dynamic>> verifyLoginOtp(
+    String otpToken,
+    String otp,
+  ) async {
+    try {
+      final result = await api.post(
+        ApiConfig.verifyLoginOtp,
+        data: {'otp_token': otpToken, 'otp': otp},
+        options: _public,
+      );
+
+      final data = result.data['data'];
+      await _storage.write(
+        key: 'access_token',
+        value: data['token']['access_token'],
+      );
+      await _storage.write(
+        key: 'refresh_token',
+        value: data['token']['refresh_token'],
+      );
+
+      final user = data['user_info'];
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'user_id': user['user_id'],
+        'full_name': user['full_name'],
+        'phone': user['phone'],
+      };
+    } catch (e) {
+      return _errorWithStatus(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> resendLoginOtp(String otpToken) async {
+    try {
+      final result = await api.post(
+        ApiConfig.resendLoginOtp,
+        data: {'otp_token': otpToken},
+        options: _public,
+      );
+      return {'is_success': true, 'message': result.data['message']};
+    } catch (e) {
+      return _errorWithStatus(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> checkEmailExist(String email) async {
+    try {
+      final result = await api.post(
+        ApiConfig.checkEmailExists,
+        data: {'email': email},
+        options: _public,
+      );
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'data': result.data['data'],
+      };
+    } catch (e) {
+      return _errorWithStatus(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> registerWithEmail({
+    required String otpToken,
+    required String otp,
+    required String password,
+  }) async {
+    try {
+      final result = await api.post(
+        ApiConfig.verifyRegister,
+        data: {'otp_token': otpToken, 'otp': otp, 'password': password},
+        options: _public,
+      );
+
+      final data = result.data['data'];
+      await _storage.write(
+        key: 'access_token',
+        value: data['token']['access_token'],
+      );
+      await _storage.write(
+        key: 'refresh_token',
+        value: data['token']['refresh_token'],
+      );
+
+      final user = data['user_info'];
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'user_id': user['user_id'],
+        'email': user['email'],
+        'phone': user['phone'],
+      };
+    } catch (e) {
+      return _errorWithStatus(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> register(String phone, String email) async {
     try {
       final result = await api.post(
         ApiConfig.register,
-        data: {'phone': phone, 'password': password},
+        data: {'phone': phone, 'email': email},
+        options: _public,
       );
-      return {'is_success': true, 'message': result.data['message']};
+      return {'is_success': true, 'message': result.data['message'], 'data':result.data['data']};
     } catch (e) {
       return ApiErrorHandler.handleError(e);
     }

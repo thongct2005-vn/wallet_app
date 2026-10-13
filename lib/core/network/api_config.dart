@@ -10,8 +10,12 @@ class ApiConfig {
   static const String socketUrl = origin;
 
   static const String checkPhoneExists = '$baseUrl/auth/checkPhoneExists';
+  static const String checkEmailExists = '$baseUrl/auth/checkEmailExists';
   static const String login = '$baseUrl/auth/login';
+  static const String verifyLoginOtp = '/auth/verify-login-otp';
+  static const String resendLoginOtp = '/auth/resend-login-otp';
   static const String register = '$baseUrl/auth/register';
+  static const String verifyRegister = '$baseUrl/auth/verify-register';
   static const String logout = '$baseUrl/auth/logout';
   static const String refreshToken = '$baseUrl/auth/refresh-token';
   static const String getMe = '$baseUrl/auth/me';
@@ -33,10 +37,11 @@ class ApiConfig {
   static const String withdraw = '$baseUrl/transaction/withdraw';
   static const String payment = '$baseUrl/transaction/qr-payment';
   static const String history = '$baseUrl/transaction/history';
-  static const String historySummary= '$baseUrl/transaction/summary';
+  static const String historySummary = '$baseUrl/transaction/summary';
 
   static const String createStaticQRToken = '$baseUrl/payment/qr/static';
-  static const String getUserInfoByStaticQR = '$baseUrl/payment/qr/static/resolve';
+  static const String getUserInfoByStaticQR =
+      '$baseUrl/payment/qr/static/resolve';
 
   static const String createDynamicQRToken = '$baseUrl/payment/qr/dynamic';
   static const String getDynamicQRToken = '$baseUrl/payment/qr/dynamic/resolve';

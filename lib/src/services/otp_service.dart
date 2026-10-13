@@ -1,10 +1,12 @@
 import 'package:app/core/network/api_client.dart';
 import 'package:app/core/network/api_config.dart';
 import 'package:app/core/network/api_error_handler.dart';
-import 'package:flutter/rendering.dart';
+import 'package:dio/dio.dart';
 
 class OtpService {
   final api = ApiClient().dio;
+
+  Options get _public => Options(extra: {'skipAuth': true});
 
   Future<Map<String, dynamic>> generateOtp({
     String? phone,
@@ -14,16 +16,15 @@ class OtpService {
       final result = await api.post(
         ApiConfig.sendOtp,
         data: {'phone': ?phone, 'email': ?email},
+        options: _public,
       );
 
-      debugPrint('${result.data}================');
       return {
         'is_success': true,
         'message': result.data['message'],
         'data': result.data['data'],
       };
     } catch (e) {
-         debugPrint('$e================');
       return ApiErrorHandler.handleError(e);
     }
   }
@@ -31,12 +32,14 @@ class OtpService {
   Future<Map<String, dynamic>> verifyOtp({
     String? phone,
     String? email,
+    String? otpToken,
     required String otp,
   }) async {
     try {
       final result = await api.post(
         ApiConfig.verifyOtp,
-        data: {'phone': ?phone, 'email': ?email, 'otp': otp},
+        data: {'phone': ?phone, 'email': ?email, 'otp': otp, 'otp_token':otpToken},
+        options: _public,
       );
       return {
         'is_success': true,

@@ -5,6 +5,10 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:app/core/utils/dialog_utils.dart';
+import 'package:app/src/auth/login/login_phone_screen.dart';
+import 'package:app/src/services/auth_service.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class KycFrontIdScreen extends StatefulWidget {
   const KycFrontIdScreen({super.key});
@@ -18,7 +22,8 @@ class _KycFrontIdScreenState extends State<KycFrontIdScreen> {
   Future<void>? _initFuture;
   File? _capturedImage;
   bool _isCapturing = false;
-
+  final AuthService _authService = AuthService();
+  final FlutterSecureStorage _storage = const FlutterSecureStorage();
   @override
   void initState() {
     super.initState();
@@ -58,6 +63,13 @@ class _KycFrontIdScreenState extends State<KycFrontIdScreen> {
           'Chụp mặt trước CCCD',
           style: GoogleFonts.roboto(color: Colors.white, fontSize: 18),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Đăng xuất',
+            onPressed: () => _showConfirmLogout(context),
+            icon: const Icon(Iconsax.logout, color: Colors.white),
+          ),
+        ],
       ),
       body: _capturedImage != null ? _buildPreview() : _buildCameraView(),
     );
@@ -247,5 +259,31 @@ class _KycFrontIdScreenState extends State<KycFrontIdScreen> {
         builder: (context) => KycBackIdScreen(frontIdImage: _capturedImage!),
       ),
     );
+  }
+
+  Future<void> _showConfirmLogout(BuildContext context) async {
+    final isSuccess = await DialogUtils.showConfirmationAsync(
+      context,
+      title: "Xác nhận",
+      message: "Bạn có chắc chắn muốn đăng xuất",
+      cancelText: "Đóng",
+      confirmText: "Đồng ý",
+      errorMessage: "Có lỗi khi đăng xuất. Vui lòng thử lại",
+      onConfirm: () => _logout(),
+    );
+
+    if (isSuccess == true && context.mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => LoginPhoneScreen()),
+        (routes) => false,
+      );
+    }
+  }
+
+  Future<bool> _logout() async {
+    final result = await _authService.logout();
+    await _storage.deleteAll();
+    return result['is_success'] == true;
   }
 }

@@ -1,28 +1,61 @@
 import 'dart:async';
-
-import 'package:app/core/widgets/circle_back_button.dart';
+import 'package:app/core/controller/user_controller.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
-import 'package:app/src/auth/register/create_password.dart';
+import 'package:app/src/home/home_screen.dart';
+import 'package:app/src/kyc/kyc_front_id_screen.dart';
+import 'package:app/src/services/app_data_service.dart';
+import 'package:app/src/services/auth_service.dart';
+import 'package:app/src/services/kyc.service.dart';
+import 'package:app/src/services/notification_service.dart';
 import 'package:app/src/services/otp_service.dart';
+import 'package:app/src/services/socket_service.dart';
+import 'package:app/src/services/user_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
+const int _otpLength = 6;
+const int _resendSeconds = 60;
+
 class OtpScreen extends StatefulWidget {
   final String? phoneNumber;
-  const OtpScreen({super.key, this.phoneNumber});
+  final String? email;
+  final bool? isLogin;
+  final String? otpToken;
+  final String? password;
+  const OtpScreen({
+    super.key,
+    this.phoneNumber,
+    this.email,
+    this.isLogin,
+    this.otpToken,
+    this.password,
+  });
 
   @override
   State<OtpScreen> createState() => _OtpScreenState();
 }
 
 class _OtpScreenState extends State<OtpScreen> {
-  final TextEditingController _numberA = TextEditingController();
-  final TextEditingController _numberB = TextEditingController();
-  final TextEditingController _numberC = TextEditingController();
-  final TextEditingController _numberD = TextEditingController();
-  final List<FocusNode> _focusNodes = List.generate(4, (_) => FocusNode());
+  final List<TextEditingController> _controllers = List.generate(
+    _otpLength,
+    (_) => TextEditingController(),
+  );
+  final List<FocusNode> _focusNodes = List.generate(
+    _otpLength,
+    (_) => FocusNode(),
+  );
   final OtpService _otpService = OtpService();
+  final AuthService _authService = AuthService();
+  final UserService _userService = UserService();
+  final AppDataService _appDataService = AppDataService();
+  final KYCService _kycService = KYCService();
+  final UserController _userController = Get.put(
+    UserController(),
+    permanent: true,
+  );
   bool _isLoading = false;
   bool _isResending = false;
   int _countdown = 0;
@@ -32,16 +65,20 @@ class _OtpScreenState extends State<OtpScreen> {
   @override
   void initState() {
     super.initState();
+    for (final node in _focusNodes) {
+      node.addListener(() {
+        if (mounted) setState(() {});
+      });
+    }
     _startCountdown();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    _numberA.dispose();
-    _numberB.dispose();
-    _numberC.dispose();
-    _numberD.dispose();
+    for (final controller in _controllers) {
+      controller.dispose();
+    }
     for (final node in _focusNodes) {
       node.dispose();
     }
@@ -141,7 +178,7 @@ class _OtpScreenState extends State<OtpScreen> {
                                       ),
                                       const SizedBox(width: 8),
                                       Text(
-                                        "Xác thực số điện thoại",
+                                        "Xác thực tài khoản",
                                         style: GoogleFonts.roboto(
                                           fontSize: 16,
                                           fontWeight: FontWeight.w600,
@@ -162,18 +199,14 @@ class _OtpScreenState extends State<OtpScreen> {
                                       children: [
                                         const TextSpan(
                                           text:
-                                              "Mã xác thực sẽ được gửi đến số điện thoại ",
+                                              "Mã xác thực sẽ được gửi đến email ",
                                         ),
                                         TextSpan(
-                                          text: widget.phoneNumber ?? "",
+                                          text: widget.email ?? "",
                                           style: GoogleFonts.roboto(
                                             fontWeight: FontWeight.w600,
                                             color: Colors.black,
                                           ),
-                                        ),
-                                        const TextSpan(
-                                          text:
-                                              ". Nếu không nhận được mã vui lòng bấm gửi lại mã.",
                                         ),
                                       ],
                                     ),
@@ -184,15 +217,13 @@ class _OtpScreenState extends State<OtpScreen> {
                             const SizedBox(height: 30),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                _buildOtpBox(context, _numberA, index: 0),
-                                const SizedBox(width: 12),
-                                _buildOtpBox(context, _numberB, index: 1),
-                                const SizedBox(width: 12),
-                                _buildOtpBox(context, _numberC, index: 2),
-                                const SizedBox(width: 12),
-                                _buildOtpBox(context, _numberD, index: 3),
-                              ],
+                              children: List.generate(
+                                _otpLength,
+                                (i) => Padding(
+                                  padding: EdgeInsets.only(left: i == 0 ? 0 : 8),
+                                  child: _buildOtpBox(context, i),
+                                ),
+                              ),
                             ),
                             const SizedBox(height: 24),
                             TextButton(
@@ -306,19 +337,15 @@ class _OtpScreenState extends State<OtpScreen> {
     );
   }
 
-  Widget _buildOtpBox(
-    BuildContext context,
-    TextEditingController controller, {
-    required int index,
-  }) {
+  Widget _buildOtpBox(BuildContext context, int index) {
     final bool isFirst = index == 0;
-    final bool isLast = index == 3;
+    final bool isLast = index == _otpLength - 1;
     return Container(
-      height: 64,
-      width: 56,
+      height: 56,
+      width: 44,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: _focusNodes[index].hasFocus
               ? Colors.pink
@@ -335,11 +362,12 @@ class _OtpScreenState extends State<OtpScreen> {
       ),
       child: Center(
         child: TextField(
-          controller: controller,
+          controller: _controllers[index],
           focusNode: _focusNodes[index],
           autofocus: isFirst,
           maxLength: 1,
           keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           textAlign: TextAlign.center,
           onTap: () {
             setState(() {
@@ -360,7 +388,7 @@ class _OtpScreenState extends State<OtpScreen> {
             border: InputBorder.none,
             counterText: "",
           ),
-          style: GoogleFonts.roboto(fontSize: 24, fontWeight: FontWeight.w600),
+          style: GoogleFonts.roboto(fontSize: 22, fontWeight: FontWeight.w600),
           cursorColor: Colors.pink,
         ),
       ),
@@ -369,7 +397,7 @@ class _OtpScreenState extends State<OtpScreen> {
 
   void _startCountdown() {
     setState(() {
-      _countdown = 30;
+      _countdown = _resendSeconds;
     });
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -378,23 +406,19 @@ class _OtpScreenState extends State<OtpScreen> {
           _countdown--;
         });
       } else {
-        _timer?.cancel();
+        timer.cancel();
       }
     });
   }
 
-  String _formattCode(String a, String b, String c, String d) {
-    return a.replaceAll(' ', '') +
-        b.replaceAll(' ', '') +
-        c.replaceAll(' ', '') +
-        d.replaceAll(' ', '');
+  String _currentCode() {
+    return _controllers.map((c) => c.text.replaceAll(' ', '')).join();
   }
 
   void _clearOtpFields() {
-    _numberA.clear();
-    _numberB.clear();
-    _numberC.clear();
-    _numberD.clear();
+    for (final controller in _controllers) {
+      controller.clear();
+    }
     FocusScope.of(context).requestFocus(_focusNodes[0]);
   }
 
@@ -404,8 +428,11 @@ class _OtpScreenState extends State<OtpScreen> {
       _msg = "";
     });
 
-    final result = await _otpService.generateOtp(phone: widget.phoneNumber);
+    final result = widget.isLogin == true
+        ? await _authService.resendLoginOtp(widget.otpToken ?? "")
+        : await _otpService.generateOtp(phone: widget.phoneNumber, email: widget.email);
 
+    if (!mounted) return;
     setState(() {
       _isResending = false;
     });
@@ -420,16 +447,11 @@ class _OtpScreenState extends State<OtpScreen> {
   }
 
   Future<void> _handleVerify() async {
-    final code = _formattCode(
-      _numberA.text,
-      _numberB.text,
-      _numberC.text,
-      _numberD.text,
-    );
+    final code = _currentCode();
 
-    if (code.length != 4) {
+    if (code.length != _otpLength) {
       setState(() {
-        _msg = "Vui lòng nhập đủ 4 số";
+        _msg = "Vui lòng nhập đủ $_otpLength số";
       });
       return;
     }
@@ -439,29 +461,113 @@ class _OtpScreenState extends State<OtpScreen> {
       _msg = "";
     });
 
-    final result = await _otpService.verifyOtp(
-      phone: widget.phoneNumber,
-      otp: code,
+    if (widget.isLogin == true) {
+      await _verifyLogin(code);
+    } else {
+      await _verifyRegister(code);
+    }
+  }
+
+  Future<void> _verifyLogin(String code) async {
+    final result = await _authService.verifyLoginOtp(
+      widget.otpToken ?? "",
+      code,
     );
+
+    if (!mounted) return;
+
+    if (result['is_success'] == true) {
+      await _completeLogin(result);
+      return;
+    }
 
     setState(() {
       _isLoading = false;
     });
 
-    if (result['is_success'] == true) {
-      if (!mounted) return;
-      Navigator.push(
+    if (result['status_code'] == 401) {
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-          builder: (context) =>
-              CreatePasswordScreen(phoneNumber: widget.phoneNumber),
+          builder: (_) => LoginPhoneScreen(
+            isForceLogout: true,
+            msg: result['message'] ?? "Phiên xác thực đã hết hạn",
+          ),
         ),
+        (r) => false,
+      );
+      return;
+    }
+
+    _clearOtpFields();
+    setState(() {
+      _msg = result['message'] ?? "OTP không chính xác";
+    });
+  }
+
+  Future<void> _verifyRegister(String code) async {
+    final result = await _authService.registerWithEmail(
+      otpToken: widget.otpToken ?? "",
+      otp: code,
+      password: widget.password ?? "",
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+    });
+
+    if (result['is_success'] == true) {
+      // Đăng ký thành công -> về trang login, hiện snackbar "Tạo ví thành công"
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => LoginPhoneScreen(
+            initialPhoneNumber: widget.phoneNumber,
+            isRegisterSucess: true,
+          ),
+        ),
+        (r) => false,
       );
     } else {
       _clearOtpFields();
       setState(() {
-        _msg = result['message'] ?? "OTP không chính xác";
+        _msg = result['message'] ?? "Xác thực đăng ký thất bại";
       });
     }
+  }
+
+  Future<void> _completeLogin(Map<String, dynamic> result) async {
+    final homeData = await _appDataService.fetchHomeData();
+
+    _userController.setUserData(
+      newId: result['user_id'],
+      newPhone: result['phone'] ?? "",
+      newFullName: result['full_name'] ?? "Không rõ tên",
+      newBalance: homeData['balance'],
+      newHasPin: homeData['has_pin'],
+    );
+    final userKYC = await _kycService.checkUserKYC();
+
+    await SocketService().connect();
+    final fcmToken = await NotificationService().init();
+
+    if (fcmToken != null) {
+      await _userService.updateFcmToken(fcmToken);
+    }
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = false;
+    });
+
+    final Widget next = userKYC['data']['is_kyc']
+        ? HomeScreen()
+        : KycFrontIdScreen();
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => next),
+      (r) => false,
+    );
   }
 }

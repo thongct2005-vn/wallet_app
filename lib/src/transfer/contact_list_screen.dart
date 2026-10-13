@@ -84,7 +84,7 @@ class _ContactListScreenState extends State<ContactListScreen> {
                   Expanded(
                     child: TextField(
                       controller: _phoneController,
-                      maxLength: 50,
+                      maxLength: 25,
                       cursorColor: Colors.pink,
 
                       decoration: InputDecoration(
