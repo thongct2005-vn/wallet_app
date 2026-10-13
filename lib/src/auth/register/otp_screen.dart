@@ -120,7 +120,7 @@ class _OtpScreenState extends State<OtpScreen> {
                   color: Colors.white.withValues(alpha: 0.8),
                 ),
                 child: IconButton(
-                  onPressed: () => Navigator.pushReplacement(
+                  onPressed: () => Navigator.pop(
                     context,
                     MaterialPageRoute(builder: (_) => LoginPhoneScreen()),
                   ),
@@ -518,7 +518,6 @@ class _OtpScreenState extends State<OtpScreen> {
     });
 
     if (result['is_success'] == true) {
-      // Đăng ký thành công -> về trang login, hiện snackbar "Tạo ví thành công"
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
