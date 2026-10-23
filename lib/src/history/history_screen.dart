@@ -183,7 +183,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         color: Colors.black.withValues(alpha: 0.5),
                       ),
                       const SizedBox(width: 12),
-
                       Expanded(
                         child: TextField(
                           controller: _searchController,
@@ -236,7 +235,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   onPressed: () {
                     _showDateFilterDialog();
                   },
-                  icon: Icon(Iconsax.filter, size: 20),
+                  icon: const Icon(Iconsax.filter, size: 20),
                 ),
               ),
             ),
@@ -377,24 +376,28 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 padding: const EdgeInsets.only(bottom: 5),
                 child: Text(
                   "Tổng quan tháng ${DateTime.now().month}",
-                  style: GoogleFonts.roboto(fontSize: 20, fontWeight: FontWeight.w500),
+                  style: GoogleFonts.roboto(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
               Row(
                 children: [
                   Expanded(
                     child: _summaryBox(
-                      "Tổng chi",
-                      '${FormatUtils.formatDisplayNumber(_totalExpense)}đ',
-                      Colors.green
-                    ),
-                  ),
-                  const SizedBox(width: 5),
-                  Expanded(
-                    child: _summaryBox(
                       "Tổng thu",
                       '${FormatUtils.formatDisplayNumber(_totalIncome)}đ',
-                      Colors.red
+                      Colors.green,
+                    ),
+                  ),
+                 
+                  const SizedBox(width: 5),
+                   Expanded(
+                    child: _summaryBox(
+                      "Tổng chi",
+                      '${FormatUtils.formatDisplayNumber(_totalExpense)}đ',
+                      Colors.red,
                     ),
                   ),
                 ],
@@ -426,7 +429,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
             ),
             const SizedBox(height: 5),
-            Text(value, style: GoogleFonts.roboto(fontSize: 18, color: textColor, fontWeight: FontWeight.w500)),
+            Text(
+              value,
+              style: GoogleFonts.roboto(
+                fontSize: 18,
+                color: textColor,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
       ),
@@ -480,7 +490,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
+            colorScheme: const ColorScheme.light(
               primary: Colors.pink,
               onPrimary: Colors.white,
               surface: Colors.white,
@@ -514,56 +524,75 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Widget _buildTransactionTile(TransactionModel t, {bool isLast = false}) {
     final isOut = t.direction == 'OUT';
+    final isMerchantPayment = t.type == "PAYMENT";
+    final isTransfer = t.type == "TRANSFER";
+
     final amountColor = !isOut || t.type == "TOPUP"
         ? Colors.green
         : Colors.black;
-    final iconColor = t.type == "TOPUP"
+
+    final iconColor = isMerchantPayment
+        ? Colors.purple
+        : t.type == "TOPUP"
         ? Colors.blue
         : t.type == "WITHDRAW"
         ? Colors.yellow
-        : t.type == "TRANSFER"
+        : isTransfer
         ? isOut
               ? Colors.red
               : Colors.green
         : Colors.grey;
+
     final amountPrefix = !isOut || t.type == "TOPUP" ? '+' : '-';
+
     final title = t.type == "TOPUP"
         ? "Nạp tiền vào ví từ ${t.bankName}"
         : t.type == "WITHDRAW"
         ? "Rút tiền từ ví về ${t.bankName}"
-        : t.type == "TRANSFER"
+        : isTransfer
         ? isOut
               ? 'Chuyển đến ${t.counterpartyName}'
               : 'Nhận từ ${t.counterpartyName}'
+        : isMerchantPayment
+        ? 'Thanh toán ${t.counterpartyName}'
         : "Giao dịch không xác định";
 
-    final titleDetail = t.type == "TOPUP"
+    final titleDetail = isMerchantPayment
+        ? 'Thanh toán ${t.counterpartyName}'
+        : t.type == "TOPUP"
         ? "Nạp tiền vào ví"
         : t.type == "WITHDRAW"
         ? "Rút tiền"
-        : t.type == "TRANSFER"
+        : isTransfer
         ? isOut
               ? 'Chuyển tiền'
               : 'Nhận tiền'
         : "Giao dịch không xác định";
-    final IconData icon = t.type == "TOPUP"
+
+    final IconData icon = isMerchantPayment
+        ? Iconsax.shop
+        : t.type == "TOPUP"
         ? Iconsax.wallet_add
         : t.type == "WITHDRAW"
         ? Iconsax.export_1
-        : t.type == "TRANSFER"
+        : isTransfer
         ? isOut
               ? Iconsax.money_send
               : Iconsax.money_recive
         : Iconsax.info_circle;
-    final textBtn = t.type == "TOPUP"
+
+    final textBtn = isMerchantPayment
+        ? "Chia tiền"
+        : t.type == "TOPUP"
         ? "Nạp thêm"
         : t.type == "WITHDRAW"
         ? "Rút thêm"
-        : t.type == "TRANSFER"
+        : isTransfer
         ? isOut
               ? 'Chuyển thêm'
               : 'Chuyển lại'
         : "Giao dịch không xác định";
+
     return Material(
       color: Colors.white,
       child: Column(
@@ -596,7 +625,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               );
             },
             leading: CircleAvatar(
-              backgroundColor: (iconColor).withValues(alpha: 0.1),
+              backgroundColor: iconColor.withValues(alpha: 0.1),
               child: Icon(icon, color: iconColor, size: 20),
             ),
             title: Text(
@@ -607,7 +636,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 color: Colors.black.withValues(alpha: 0.7),
               ),
             ),
-
             subtitle: Text(
               FormatUtils.formatCustomDateTime(t.createdAt.toString()),
               style: GoogleFonts.roboto(fontSize: 14, color: Colors.grey),
@@ -640,7 +668,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
           if (!isLast)
             Padding(
-              padding: EdgeInsets.only(right: 25),
+              padding: const EdgeInsets.only(right: 25),
               child: Divider(
                 height: 1,
                 thickness: 0.5,

@@ -1,6 +1,9 @@
 import 'package:app/core/utils/dialog_utils.dart';
+import 'package:app/core/utils/format_utils.dart';
 import 'package:app/src/services/payment_service.dart';
+import 'package:app/src/services/wallet_service.dart';
 import 'package:app/src/transfer/amount_input_screen.dart';
+import 'package:app/src/transfer/confirm_tranfer_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -13,6 +16,7 @@ class ScanQRScreen extends StatefulWidget {
 
 class _ScanQRScreenState extends State<ScanQRScreen> {
   final PaymentService _paymentService = PaymentService();
+  final WalletService _walletService = WalletService();
   final MobileScannerController _controller = MobileScannerController(
     formats: const [BarcodeFormat.qrCode],
     cameraResolution: const Size(1280, 720),
@@ -116,30 +120,90 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
                     );
                     if (!context.mounted) return;
                     if (result['is_success']) {
-                      if (result['user_info']['role'] == 'USER') {
-                        final receiverPhone =
-                            result['user_info']['destination_phone'];
-                        final receiverId =
-                            result['user_info']['destination_user_id'];
-                        final receiverFullName =
-                            result['user_info']['destination_name'];
-                        final amount = result['user_info']['amount'];
-                        final description = result['user_info']['description'];
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => AmountInputScreen(
-                              receiverId: receiverId,
-                              receiverFullName: receiverFullName,
-                              receiverPhone: receiverPhone,
-                              amount: amount,
-                              description: description,
-                              referenceCode: qrData,
+                      final info = result['user_info'];
+                      final role = info['role'];
+                      if (role == 'USER' || role == 'MERCHANT') {
+                        final receiverPhone = info['destination_phone'];
+                        final receiverId = info['destination_user_id'];
+                        final receiverFullName = info['destination_name'];
+                        final String? amount = info['amount']?.toString();
+                        final String? description = info['description']
+                            ?.toString();
+                        final bool isMerchant = role == 'MERCHANT';
+                        final String? orderId = info['order_id']?.toString();
+
+                        // QR đã có sẵn số tiền và nội dung: bỏ qua màn nhập tiền
+                        final bool hasFixedInfo =
+                            (amount ?? '').isNotEmpty &&
+                            (description ?? '').isNotEmpty;
+
+                        if (hasFixedInfo) {
+                          final check = await _walletService
+                              .checkTransferEligibility(amount!);
+                          if (!context.mounted) return;
+                          if (check['is_success'] != true) {
+                            DialogUtils.showNotification(
+                              context,
+                              title: "Thông báo",
+                              message:
+                                  "Hệ thống đang bảo trì. Vui lòng thử lại sau",
+                              onClose: () => _controller.start(),
+                            );
+                          } else if (check['is_eligible'] != true) {
+                            DialogUtils.showNotification(
+                              context,
+                              title: "Thông báo",
+                              message: "Số dư trong ví không đủ",
+                              onClose: () => _controller.start(),
+                            );
+                          } else {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ConfirmTranferScreen(
+                                  receiverId: receiverId,
+                                  receiverName: receiverFullName,
+                                  receiverPhone: receiverPhone,
+                                  amount: FormatUtils.formatDisplayNumber(
+                                    FormatUtils.formatAmountToNum(amount),
+                                  ),
+                                  description: description,
+                                  walletBalance: check['wallet_balance'],
+                                  referenceCode: qrData,
+                                  isMerchant: isMerchant,
+                                  orderId: orderId,
+                                ),
+                              ),
+                            ).then((value) {
+                              _controller.start();
+                            });
+                          }
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => AmountInputScreen(
+                                receiverId: receiverId,
+                                receiverFullName: receiverFullName,
+                                receiverPhone: receiverPhone,
+                                amount: amount,
+                                description: description,
+                                referenceCode: qrData,
+                                isMerchant: isMerchant,
+                                orderId: orderId,
+                              ),
                             ),
-                          ),
-                        ).then((value) {
-                          _controller.start();
-                        });
+                          ).then((value) {
+                            _controller.start();
+                          });
+                        }
+                      } else {
+                        DialogUtils.showNotification(
+                          context,
+                          title: "Thông báo",
+                          message: "Mã QR không hợp lệ",
+                          onClose: () => _controller.start(),
+                        );
                       }
                     } else {
                       DialogUtils.showNotification(

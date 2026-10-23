@@ -38,8 +38,13 @@ class OtpService {
     try {
       final result = await api.post(
         ApiConfig.verifyOtp,
-        data: {'phone': ?phone, 'email': ?email, 'otp': otp, 'otp_token':otpToken},
-        options: _public,
+        data: {'phone': ?phone, 'email': ?email, 'otp': otp},
+        options: otpToken == null
+            ? _public
+            : Options(
+                extra: {'skipAuth': true},
+                headers: {'x-otp-token': otpToken},
+              ),
       );
       return {
         'is_success': true,

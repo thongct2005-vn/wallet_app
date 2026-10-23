@@ -10,6 +10,12 @@ class AuthService {
 
   Options get _public => Options(extra: {'skipAuth': true});
 
+  // otp_token gửi qua header, không gửi trong body
+  Options _withOtpToken(String otpToken) => Options(
+    extra: {'skipAuth': true},
+    headers: {'x-otp-token': otpToken},
+  );
+
   Map<String, dynamic> _errorWithStatus(Object e) {
     final result = <String, dynamic>{...ApiErrorHandler.handleError(e)};
     if (e is DioException) {
@@ -64,8 +70,8 @@ class AuthService {
     try {
       final result = await api.post(
         ApiConfig.verifyLoginOtp,
-        data: {'otp_token': otpToken, 'otp': otp},
-        options: _public,
+        data: {'otp': otp},
+        options: _withOtpToken(otpToken),
       );
 
       final data = result.data['data'];
@@ -95,8 +101,8 @@ class AuthService {
     try {
       final result = await api.post(
         ApiConfig.resendLoginOtp,
-        data: {'otp_token': otpToken},
-        options: _public,
+        data: {},
+        options: _withOtpToken(otpToken),
       );
       return {'is_success': true, 'message': result.data['message']};
     } catch (e) {
@@ -129,8 +135,8 @@ class AuthService {
     try {
       final result = await api.post(
         ApiConfig.verifyRegister,
-        data: {'otp_token': otpToken, 'otp': otp, 'password': password},
-        options: _public,
+        data: {'otp': otp, 'password': password},
+        options: _withOtpToken(otpToken),
       );
 
       final data = result.data['data'];

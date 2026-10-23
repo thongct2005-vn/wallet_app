@@ -1,9 +1,11 @@
+import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/verify_pin_bottom_sheet.dart';
 import 'package:app/src/services/bank_service.dart';
 import 'package:app/src/services/wallet_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:uuid/uuid.dart';
 
 class LinkBankScreen extends StatefulWidget {
   final List<dynamic> bankList;
@@ -16,6 +18,7 @@ class _LinkBankScreenState extends State<LinkBankScreen> {
   List<dynamic> _bankList = [];
   final WalletService _walletService = WalletService();
   final BankService _bankService = BankService();
+  final Uuid _uuid = const Uuid();
 
   @override
   void initState() {
@@ -146,7 +149,8 @@ class _LinkBankScreenState extends State<LinkBankScreen> {
                         ..._bankList.map((bank) {
                           String bankId = bank['id']?.toString() ?? '';
                           String bankCode = bank['code']?.toString() ?? '';
-                          String bankName = bank['name']?.toString() ?? 'Ngân hàng';
+                          String bankName =
+                              bank['name']?.toString() ?? 'Ngân hàng';
                           String bankLogo = bank['logo_url']?.toString() ?? "";
                           bool isLinked = bank['is_linked'] as bool;
 
@@ -295,6 +299,8 @@ class _LinkBankScreenState extends State<LinkBankScreen> {
   }
 
   void _showCheckPinDialog(BuildContext context, String bankId) {
+    final String idempotencyKey = _uuid.v7();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -303,24 +309,32 @@ class _LinkBankScreenState extends State<LinkBankScreen> {
         return CheckPinBottomSheet(
           onCheckPin: (pin) async {
             try {
-              final res = await _walletService.checkPin(pin);
+              final res = await _walletService.checkPin(pin, idempotencyKey);
               return res;
             } catch (e) {
-              return {};
+              return {'is_success': false};
             }
           },
-          onSuccess: () async {
+          onSuccess: (pinToken) async {
             try {
-              await _bankService.linkBankAccount(bankId);
-              if (!mounted) return;
-              setState(() {
-                final index = _bankList.indexWhere(
-                  (bank) => bank['id'].toString() == bankId,
-                );
-                if (index != -1) {
-                  _bankList[index]['is_linked'] = true;
-                }
-              });
+              final result = await _bankService.linkBankAccount(
+                bankId,
+                idempotencyKey,
+                pinToken,
+              );
+              if (!context.mounted) return;
+              if (result['is_success'] == true) {
+                setState(() {
+                  final index = _bankList.indexWhere(
+                    (bank) => bank['id'].toString() == bankId,
+                  );
+                  if (index != -1) {
+                    _bankList[index]['is_linked'] = true;
+                  }
+                });
+              } else {
+                SnackbarUtils.failure(context, result['message']);
+              }
             } catch (e) {
               return;
             }

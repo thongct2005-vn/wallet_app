@@ -10,6 +10,7 @@ class TransactionService {
     String amount,
     String description,
     String idempotencyKey,
+    String pinToken,
   ) async {
     try {
       final result = await api.post(
@@ -19,7 +20,9 @@ class TransactionService {
           'amount': amount,
           'description': description,
         },
-        options: Options(headers: {'idempotency-key': idempotencyKey}),
+        options: Options(
+          headers: {'idempotency-key': idempotencyKey, 'x-pin-token': pinToken},
+        ),
       );
       return {
         'is_success': true,
@@ -35,12 +38,15 @@ class TransactionService {
     String amount,
     String linkedBankAccountId,
     String idempotencyKey,
+    String pinToken,
   ) async {
     try {
       final result = await api.post(
         ApiConfig.topup,
         data: {'linked_bank_account_id': linkedBankAccountId, 'amount': amount},
-        options: Options(headers: {'idempotency-key': idempotencyKey}),
+        options: Options(
+          headers: {'idempotency-key': idempotencyKey, 'x-pin-token': pinToken},
+        ),
       );
       return {
         'is_success': true,
@@ -56,12 +62,15 @@ class TransactionService {
     String amount,
     String linkedBankAccountId,
     String idempotencyKey,
+    String pinToken,
   ) async {
     try {
       final result = await api.post(
         ApiConfig.withdraw,
         data: {'linked_bank_account_id': linkedBankAccountId, 'amount': amount},
-        options: Options(headers: {'idempotency-key': idempotencyKey}),
+        options: Options(
+          headers: {'idempotency-key': idempotencyKey, 'x-pin-token': pinToken},
+        ),
       );
       return {
         'is_success': true,
@@ -76,12 +85,15 @@ class TransactionService {
   Future<Map<String, dynamic>> processQRPayment(
     String referenceCode,
     String idempotencyKey,
+    String pinToken,
   ) async {
     try {
       final result = await api.post(
         ApiConfig.payment,
         data: {'reference_code': referenceCode},
-        options: Options(headers: {'idempotency-key': idempotencyKey}),
+        options: Options(
+          headers: {'idempotency-key': idempotencyKey, 'x-pin-token': pinToken},
+        ),
       );
       return {
         'is_success': true,

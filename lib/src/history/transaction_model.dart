@@ -13,6 +13,7 @@ class TransactionModel {
   final num balanceBefore;
   final num balanceAfter;
   final String bankName;
+  final String? orderId;
 
   TransactionModel({
     required this.id,
@@ -29,6 +30,7 @@ class TransactionModel {
     required this.balanceBefore,
     required this.balanceAfter,
     required this.bankName,
+    this.orderId,
   });
 
   factory TransactionModel.fromJson(Map<String, dynamic> json) {
@@ -48,13 +50,14 @@ class TransactionModel {
       counterpartyId: isOut
           ? json['destination_user_id'] ?? ''
           : json['source_user_id'] ?? '',
-      amount: num.tryParse(json['amount']) ?? 0,
-      fee: num.tryParse(json['fee']) ?? 0,
+      amount: num.tryParse(json['amount'].toString()) ?? 0,
+      fee: num.tryParse(json['fee'].toString()) ?? 0,
       status: json['status'] ?? '',
       createdAt: DateTime.parse(json['created_at']),
-      balanceBefore: num.tryParse(json['balance_before']) ?? 0,
-      balanceAfter: num.tryParse(json['balance_after']) ?? 0,
+      balanceBefore: num.tryParse(json['balance_before'].toString()) ?? 0,
+      balanceAfter: num.tryParse(json['balance_after'].toString()) ?? 0,
       bankName: json['bank_name'] ?? '',
+      orderId: json['order_id'],
     );
   }
 }

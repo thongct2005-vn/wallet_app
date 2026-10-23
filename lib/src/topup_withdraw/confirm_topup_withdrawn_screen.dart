@@ -517,21 +517,21 @@ class _ConfirmTopUpWithdrawScreenState
         return CheckPinBottomSheet(
           onCheckPin: (pin) async {
             try {
-              final res = await _walletService.checkPin(pin);
+              final res = await _walletService.checkPin(pin, idempotencyKey);
               return res;
             } catch (e) {
-              return {};
+              return {'is_success': false};
             }
           },
-          onSuccess: () async {
-            await _handleTopUpWithdraw();
+          onSuccess: (pinToken) async {
+            await _handleTopUpWithdraw(pinToken);
           },
         );
       },
     );
   }
 
-  Future<void> _handleTopUpWithdraw() async {
+  Future<void> _handleTopUpWithdraw(String pinToken) async {
     if (!mounted) return;
     setState(() => _isProcessing = true);
     final numAmount = FormatUtils.formatAmountToNum(widget.amount).toString();
@@ -541,11 +541,13 @@ class _ConfirmTopUpWithdrawScreenState
               numAmount,
               _selectedBankId ?? "",
               idempotencyKey,
+              pinToken,
             )
           : await _transactionService.withdrawMoney(
               numAmount,
               _selectedBankId ?? "",
               idempotencyKey,
+              pinToken,
             );
       ;
       setState(() {

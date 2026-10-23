@@ -8,7 +8,8 @@ import 'package:iconsax/iconsax.dart';
 
 class ResultTranferScreen extends StatefulWidget {
   final Map<String, dynamic>? result;
-  const ResultTranferScreen({super.key, this.result});
+  final bool isMerchant;
+  const ResultTranferScreen({super.key, this.result, this.isMerchant = false});
   @override
   State<ResultTranferScreen> createState() => _ResultTranferScreenState();
 }
@@ -64,7 +65,11 @@ class _ResultTranferScreenState extends State<ResultTranferScreen> {
                 ),
                 child: IconButton(
                   onPressed: () {
-                    Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context)=>HomeScreen()), (r)=>false);
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (context) => HomeScreen()),
+                      (r) => false,
+                    );
                   },
                   padding: EdgeInsets.zero,
                   icon: const Icon(Iconsax.home_2, size: 20),
@@ -306,7 +311,7 @@ class _ResultTranferScreenState extends State<ResultTranferScreen> {
                                                     .shade50
                                                     .withValues(alpha: 0.6),
                                                 child: Text(
-                                                  'VT',
+                                                  FormatUtils.formatAvatar(data['sourceUserName']),
                                                   style: GoogleFonts.roboto(
                                                     color: Colors.pink,
                                                   ),
@@ -421,7 +426,9 @@ class _ResultTranferScreenState extends State<ResultTranferScreen> {
                                                     .shade50
                                                     .withValues(alpha: 0.6),
                                                 child: Text(
-                                                  'VT',
+                                                  FormatUtils.formatAvatar(
+                                                    data['destinationUserName'],
+                                                  ),
                                                   style: GoogleFonts.roboto(
                                                     color: Colors.pink,
                                                   ),
@@ -441,119 +448,127 @@ class _ResultTranferScreenState extends State<ResultTranferScreen> {
                                                             FontWeight.w600,
                                                       ),
                                                     ),
-                                                    Text(
-                                                      "${data['destinationPhone']}",
-                                                      style: GoogleFonts.roboto(
-                                                        fontSize: 18,
-                                                        fontWeight:
-                                                            FontWeight.w400,
-                                                        color: Colors.black
-                                                            .withValues(
-                                                              alpha: 0.5,
+                                                    if (!widget.isMerchant)
+                                                      Text(
+                                                        "${data['destinationPhone']}",
+                                                        style:
+                                                            GoogleFonts.roboto(
+                                                              fontSize: 18,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w400,
+                                                              color: Colors
+                                                                  .black
+                                                                  .withValues(
+                                                                    alpha: 0.5,
+                                                                  ),
                                                             ),
                                                       ),
-                                                    ),
                                                   ],
                                                 ),
                                               ),
                                             ],
                                           ),
-                                          SizedBox(height: 10),
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: GestureDetector(
-                                                  onTap: () {},
-                                                  child: Container(
-                                                    alignment: Alignment.center,
-                                                    width: double.infinity,
-                                                    decoration: BoxDecoration(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            5,
-                                                          ),
-                                                      border: Border.all(
-                                                        width: 1,
-                                                        color: Colors.pink,
-                                                      ),
-                                                    ),
-                                                    child: Padding(
-                                                      padding:
-                                                          EdgeInsetsGeometry.symmetric(
-                                                            vertical: 2,
-                                                          ),
-                                                      child: Text(
-                                                        "Trò chuyện",
-                                                        style:
-                                                            GoogleFonts.roboto(
-                                                              fontSize: 20,
-                                                              color:
-                                                                  Colors.pink,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w700,
+                                          if (!widget.isMerchant) ...[
+                                            SizedBox(height: 10),
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: GestureDetector(
+                                                    onTap: () {},
+                                                    child: Container(
+                                                      alignment:
+                                                          Alignment.center,
+                                                      width: double.infinity,
+                                                      decoration: BoxDecoration(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              5,
                                                             ),
+                                                        border: Border.all(
+                                                          width: 1,
+                                                          color: Colors.pink,
+                                                        ),
+                                                      ),
+                                                      child: Padding(
+                                                        padding:
+                                                            EdgeInsetsGeometry.symmetric(
+                                                              vertical: 2,
+                                                            ),
+                                                        child: Text(
+                                                          "Trò chuyện",
+                                                          style:
+                                                              GoogleFonts.roboto(
+                                                                fontSize: 20,
+                                                                color:
+                                                                    Colors.pink,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w700,
+                                                              ),
+                                                        ),
                                                       ),
                                                     ),
                                                   ),
                                                 ),
-                                              ),
-                                              SizedBox(width: 10),
-                                              Expanded(
-                                                child: GestureDetector(
-                                                  onTap: () {
-                                                    Navigator.push(
-                                                      context,
-                                                      MaterialPageRoute(
-                                                        builder: (context) =>
-                                                            AmountInputScreen(
-                                                              receiverFullName:
-                                                                  data['destinationUserName'],
-                                                              receiverId:
-                                                                  data['destinationId'],
-                                                              receiverPhone:
-                                                                  data['destinationPhone'],
-                                                            ),
-                                                      ),
-                                                    );
-                                                  },
-                                                  child: Container(
-                                                    alignment: Alignment.center,
-                                                    width: double.infinity,
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.pink,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            5,
-                                                          ),
-                                                      border: Border.all(
-                                                        width: 1,
+                                                SizedBox(width: 10),
+                                                Expanded(
+                                                  child: GestureDetector(
+                                                    onTap: () {
+                                                      Navigator.push(
+                                                        context,
+                                                        MaterialPageRoute(
+                                                          builder: (context) =>
+                                                              AmountInputScreen(
+                                                                receiverFullName:
+                                                                    data['destinationUserName'],
+                                                                receiverId:
+                                                                    data['destinationId'],
+                                                                receiverPhone:
+                                                                    data['destinationPhone'],
+                                                              ),
+                                                        ),
+                                                      );
+                                                    },
+                                                    child: Container(
+                                                      alignment:
+                                                          Alignment.center,
+                                                      width: double.infinity,
+                                                      decoration: BoxDecoration(
                                                         color: Colors.pink,
-                                                      ),
-                                                    ),
-                                                    child: Padding(
-                                                      padding:
-                                                          EdgeInsetsGeometry.symmetric(
-                                                            vertical: 2,
-                                                          ),
-                                                      child: Text(
-                                                        "Chuyển thêm",
-                                                        style:
-                                                            GoogleFonts.roboto(
-                                                              fontSize: 20,
-                                                              color:
-                                                                  Colors.white,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w700,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              5,
                                                             ),
+                                                        border: Border.all(
+                                                          width: 1,
+                                                          color: Colors.pink,
+                                                        ),
+                                                      ),
+                                                      child: Padding(
+                                                        padding:
+                                                            EdgeInsetsGeometry.symmetric(
+                                                              vertical: 2,
+                                                            ),
+                                                        child: Text(
+                                                          "Chuyển thêm",
+                                                          style:
+                                                              GoogleFonts.roboto(
+                                                                fontSize: 20,
+                                                                color: Colors
+                                                                    .white,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w700,
+                                                              ),
+                                                        ),
                                                       ),
                                                     ),
                                                   ),
                                                 ),
-                                              ),
-                                            ],
-                                          ),
+                                              ],
+                                            ),
+                                          ],
                                         ],
                                       ),
                                     ),

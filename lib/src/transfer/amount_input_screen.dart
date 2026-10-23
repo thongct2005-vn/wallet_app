@@ -12,6 +12,8 @@ class AmountInputScreen extends StatefulWidget {
   final String? amount;
   final String? description;
   final String? referenceCode;
+  final bool isMerchant;
+  final String? orderId;
   const AmountInputScreen({
     super.key,
     this.receiverPhone,
@@ -20,6 +22,8 @@ class AmountInputScreen extends StatefulWidget {
     this.amount,
     this.description,
     this.referenceCode,
+    this.isMerchant = false,
+    this.orderId,
   });
   @override
   State<AmountInputScreen> createState() => _AmountInputScreenState();
@@ -104,7 +108,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
             ),
           ),
           title: Text(
-            "Chuyển tiền tới",
+            widget.isMerchant ? "Thanh toán tới" : "Chuyển tiền tới",
             style: GoogleFonts.roboto(fontSize: 20),
           ),
         ),
@@ -185,11 +189,13 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                     fontSize: 20,
                   ),
                 ),
-                SizedBox(height: 5),
-                Text(
-                  widget.receiverPhone ?? "***",
-                  style: GoogleFonts.roboto(color: Colors.grey, fontSize: 16),
-                ),
+                if (!widget.isMerchant) ...[
+                  SizedBox(height: 5),
+                  Text(
+                    widget.receiverPhone ?? "***",
+                    style: GoogleFonts.roboto(color: Colors.grey, fontSize: 16),
+                  ),
+                ],
               ],
             ),
           ],
@@ -653,6 +659,8 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                               description: _descriptionController.text,
                               walletBalance: _walletBalance,
                               referenceCode: widget.referenceCode,
+                              isMerchant: widget.isMerchant,
+                              orderId: widget.orderId,
                             ),
                           ),
                         );
@@ -682,7 +690,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                           ),
                         )
                       : Text(
-                          "Chuyển tiền",
+                          widget.isMerchant ? "Thanh toán" : "Chuyển tiền",
                           style: GoogleFonts.roboto(
                             color: isEnable
                                 ? Colors.white

@@ -22,6 +22,7 @@ class TransactionDetailScreen extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
   final String textBtn;
+
   const TransactionDetailScreen({
     super.key,
     required this.title,
@@ -40,7 +41,10 @@ class TransactionDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final UserController _userController = Get.find<UserController>();
+    final UserController userController = Get.find<UserController>();
+    final bool isMerchant = transactionModel.type == "PAYMENT";
+    final bool isTransfer = transactionModel.type == "TRANSFER";
+
     return Scaffold(
       backgroundColor: Colors.white.withValues(alpha: 0.95),
       extendBodyBehindAppBar: true,
@@ -87,15 +91,17 @@ class TransactionDetailScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Text(
-                        "Chi Tiết Giao Dịch",
-                        style: GoogleFonts.roboto(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
+                      Expanded(
+                        child: Text(
+                          isMerchant ? title : "Chi Tiết Giao Dịch",
+                          style: GoogleFonts.roboto(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const Spacer(),
                       Container(
                         height: 30,
                         width: 30,
@@ -112,7 +118,7 @@ class TransactionDetailScreen extends StatelessWidget {
                             Navigator.pushAndRemoveUntil(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => HomeScreen(),
+                                builder: (context) => const HomeScreen(),
                               ),
                               (r) => false,
                             );
@@ -173,28 +179,32 @@ class TransactionDetailScreen extends StatelessWidget {
                                         ),
                                       ),
                                       const SizedBox(width: 12),
-                                      Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            title.toUpperCase(),
-                                            style: GoogleFonts.roboto(
-                                              fontSize: 16,
-                                              color: Colors.black54,
-                                              letterSpacing: 0.5,
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              title.toUpperCase(),
+                                              style: GoogleFonts.roboto(
+                                                fontSize: 16,
+                                                color: Colors.black54,
+                                                letterSpacing: 0.5,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            amount,
-                                            style: GoogleFonts.roboto(
-                                              fontSize: 28,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.black54,
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              amount,
+                                              style: GoogleFonts.roboto(
+                                                fontSize: 28,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.black54,
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -249,7 +259,28 @@ class TransactionDetailScreen extends StatelessWidget {
                                   ],
                                 ),
                               ),
-                              _infoRow("Tài khoản/thẻ", walletName),
+                              if (isTransfer) ...[
+                                _infoRow("Ví Mio", walletName),
+                                _infoRow(
+                                  "Số điện thoại",
+                                  transactionModel.counterpartyPhone,
+                                ),
+                              ] else if (isMerchant) ...[
+                                _infoRow(
+                                  "Cửa hàng",
+                                  transactionModel.counterpartyName,
+                                ),
+                                _infoRow(
+                                  "Nội dung",
+                                  transactionModel.description ?? '',
+                                ),
+                                _infoRow(
+                                  "Mã đơn",
+                                  transactionModel.orderId ?? transactionCode,
+                                ),
+                              ] else ...[
+                                _infoRow("Tài khoản/thẻ", walletName),
+                              ],
                               _infoRow("Tổng phí", feeText, isLast: true),
                             ],
                           ),
@@ -302,7 +333,7 @@ class TransactionDetailScreen extends StatelessWidget {
                                         builder: (context) =>
                                             TopUpWithdrawScreen(
                                               walletBalance:
-                                                  _userController.balance.value,
+                                                  userController.balance.value,
                                               isTopUpTab: true,
                                             ),
                                       ),
@@ -314,11 +345,13 @@ class TransactionDetailScreen extends StatelessWidget {
                                         builder: (context) =>
                                             TopUpWithdrawScreen(
                                               walletBalance:
-                                                  _userController.balance.value,
+                                                  userController.balance.value,
                                               isTopUpTab: false,
                                             ),
                                       ),
                                     );
+                                  } else if (textBtn == "Chia tiền") {
+                                    // Không cần xử lý logic, để cân đối giao diện
                                   }
                                 },
                                 style: ElevatedButton.styleFrom(
@@ -376,12 +409,17 @@ class TransactionDetailScreen extends StatelessWidget {
                 ),
               ),
               trailingWidget ??
-                  Text(
-                    value ?? '',
-                    style: GoogleFonts.roboto(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black,
+                  Flexible(
+                    child: Text(
+                      value ?? '',
+                      textAlign: TextAlign.end,
+                      style: GoogleFonts.roboto(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
             ],

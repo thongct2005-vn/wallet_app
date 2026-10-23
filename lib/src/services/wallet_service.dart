@@ -44,11 +44,22 @@ class WalletService {
     }
   }
 
-  Future<Map<String, dynamic>> checkPin(String pin) async {
+  Future<Map<String, dynamic>> checkPin(
+    String pin,
+    String idempotencyKey,
+  ) async {
     try {
-      final result = await api.post(ApiConfig.checkPin, data: {'pin': pin});
+      final result = await api.post(
+        ApiConfig.checkPin,
+        data: {'pin': pin, 'idempotency_key': idempotencyKey},
+      );
       final data = result.data['data'];
-      return {'is_correct': data['is_correct'], 'is_success': true};
+      return {
+        'is_correct': data['is_correct'],
+        'pin_token': data['pin_token'],
+        'remaining_attempts': data['remaining_attempts'],
+        'is_success': true,
+      };
     } catch (e) {
       debugPrint('Lỗi kiểm tra PIN: $e');
       return ApiErrorHandler.handleError(e);

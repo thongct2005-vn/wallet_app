@@ -18,6 +18,8 @@ class ConfirmTranferScreen extends StatefulWidget {
   final String? description;
   final String? walletBalance;
   final String? referenceCode;
+  final bool isMerchant;
+  final String? orderId;
 
   const ConfirmTranferScreen({
     super.key,
@@ -28,6 +30,8 @@ class ConfirmTranferScreen extends StatefulWidget {
     this.description,
     this.walletBalance,
     this.referenceCode,
+    this.isMerchant = false,
+    this.orderId,
   });
 
   @override
@@ -204,7 +208,7 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
                   Icon(Iconsax.send_1, color: Colors.redAccent),
                   SizedBox(width: 5),
                   Text(
-                    "Chuyển tiền",
+                    widget.isMerchant ? "Thanh toán" : "Chuyển tiền",
                     style: GoogleFonts.roboto(
                       fontWeight: FontWeight.w600,
                       fontSize: 22,
@@ -228,22 +232,31 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
               valueColor: Colors.lightBlueAccent,
             ),
             _buildInfoRow(
-              label: 'Người nhận',
+              label: widget.isMerchant ? 'Cửa hàng' : 'Người nhận',
               value: widget.receiverName ?? 'Không rõ tên',
               valueColor: Colors.lightBlueAccent,
+              isMultiLine: widget.isMerchant,
             ),
-            _buildInfoRow(
-              label: 'Số điện thoại',
-              value: widget.receiverPhone ?? '',
-            ),
-            if (widget.description!.isNotEmpty) ...[
+            if (!widget.isMerchant)
               _buildInfoRow(
-                label: 'Lời nhắn',
+                label: 'Số điện thoại',
+                value: widget.receiverPhone ?? '',
+              ),
+            if ((widget.description ?? '').isNotEmpty) ...[
+              _buildInfoRow(
+                label: widget.isMerchant ? 'Nội dung' : 'Lời nhắn',
                 value: widget.description ?? '',
                 isMultiLine: true,
                 crossAxisAlignment: CrossAxisAlignment.start,
               ),
             ],
+            if (widget.isMerchant && (widget.orderId ?? '').isNotEmpty)
+              _buildInfoRow(
+                label: 'Mã hóa đơn',
+                value: widget.orderId ?? '',
+                isMultiLine: true,
+                crossAxisAlignment: CrossAxisAlignment.start,
+              ),
             SizedBox(height: 10),
           ],
         ),
@@ -507,21 +520,21 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
         return CheckPinBottomSheet(
           onCheckPin: (pin) async {
             try {
-              final res = await _walletService.checkPin(pin);
+              final res = await _walletService.checkPin(pin, idempotencyKey);
               return res;
             } catch (e) {
-              return {};
+              return {'is_success': false};
             }
           },
-          onSuccess: () async {
-            await _handleTransfer();
+          onSuccess: (pinToken) async {
+            await _handleTransfer(pinToken);
           },
         );
       },
     );
   }
 
-  Future<void> _handleTransfer() async {
+  Future<void> _handleTransfer(String pinToken) async {
     if (!mounted) return;
     setState(() => _isProcessingTransfer = true);
     final numAmount = FormatUtils.formatAmountToNum(
@@ -534,10 +547,12 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
               numAmount,
               widget.description ?? "",
               idempotencyKey,
+              pinToken,
             )
           : await _transactionService.processQRPayment(
               widget.referenceCode!,
               idempotencyKey,
+              pinToken,
             );
       setState(() {
         _isProcessingTransfer = false;
@@ -547,7 +562,10 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
-            builder: (context) => ResultTranferScreen(result: result),
+            builder: (context) => ResultTranferScreen(
+              result: result,
+              isMerchant: widget.isMerchant,
+            ),
           ),
           (Route<dynamic> route) => false,
         );

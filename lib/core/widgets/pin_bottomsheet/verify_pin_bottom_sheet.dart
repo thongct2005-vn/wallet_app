@@ -4,7 +4,7 @@ import 'package:pinput/pinput.dart';
 
 class CheckPinBottomSheet extends StatefulWidget {
   final Future<Map<String, dynamic>> Function(String pin) onCheckPin;
-  final VoidCallback onSuccess;
+  final Future<void> Function(String pinToken) onSuccess;
   const CheckPinBottomSheet({
     super.key,
     required this.onCheckPin,
@@ -176,21 +176,29 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
                                 setState(() {
                                   _isLoading = false;
                                 });
-                                if (result['is_success']) {
-                                  if (result['is_correct']) {
+                                if (result['is_success'] == true) {
+                                  if (result['is_correct'] == true) {
                                     Navigator.pop(context);
-                                    widget.onSuccess();
+                                    widget.onSuccess(
+                                      result['pin_token']?.toString() ?? '',
+                                    );
                                   } else {
+                                    final remaining =
+                                        result['remaining_attempts'];
                                     setState(() {
-                                      _errorMsg =
-                                          'Mã PIN không chính xác. Vui lòng thử lại.';
+                                      _errorMsg = remaining != null
+                                          ? 'Mã PIN không chính xác. Còn $remaining lần thử.'
+                                          : 'Mã PIN không chính xác. Vui lòng thử lại.';
                                       _pinController.clear();
                                     });
                                   }
                                 } else {
-                                  _errorMsg =
-                                      'Đã có lỗi xảy ra. Vui lòng thử lại.';
-                                  _pinController.clear();
+                                  setState(() {
+                                    _errorMsg =
+                                        result['message']?.toString() ??
+                                        'Đã có lỗi xảy ra. Vui lòng thử lại.';
+                                    _pinController.clear();
+                                  });
                                 }
                               },
                             ),

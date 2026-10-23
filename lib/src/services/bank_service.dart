@@ -1,9 +1,11 @@
 import 'package:app/core/network/api_client.dart';
 import 'package:app/core/network/api_config.dart';
 import 'package:app/core/network/api_error_handler.dart';
+import 'package:dio/dio.dart';
 
 class BankService {
   final api = ApiClient().dio;
+
   Future<Map<String, dynamic>> getBankLinkStatus() async {
     try {
       final result = await api.get(ApiConfig.getBankLinkStatus);
@@ -17,11 +19,21 @@ class BankService {
     }
   }
 
-  Future<Map<String, dynamic>> linkBankAccount(String bankId) async {
+  Future<Map<String, dynamic>> linkBankAccount(
+    String bankId,
+    String idempotencyKey,
+    String pinToken,
+  ) async {
     try {
       final result = await api.post(
         ApiConfig.linkBankAccount,
         data: {'bank_id': bankId},
+        options: Options(
+          headers: {
+            'idempotency-key': idempotencyKey,
+            'x-pin-token': pinToken,
+          },
+        ),
       );
       return {'is_success': true, 'message': result.data['message']};
     } catch (e) {
