@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:app/core/utils/snackbar_utils.dart';
+import 'package:app/src/auth/forgot/forgot_type.dart';
 import 'package:app/src/kyc/kyc_face.screen.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -8,7 +9,8 @@ import 'package:iconsax/iconsax.dart';
 
 class KycBackIdScreen extends StatefulWidget {
   final File frontIdImage;
-  const KycBackIdScreen({super.key, required this.frontIdImage});
+  final ForgotKycArgs? forgot;
+  const KycBackIdScreen({super.key, required this.frontIdImage, this.forgot});
 
   @override
   State<KycBackIdScreen> createState() => _KycBackIdScreenState();
@@ -250,6 +252,7 @@ class _KycBackIdScreenState extends State<KycBackIdScreen> {
         builder: (context) => KycFaceScreen(
           frontIdImage: frontIdImage,
           backIdImage: _capturedImage!,
+          forgot: widget.forgot,
         ),
       ),
     );

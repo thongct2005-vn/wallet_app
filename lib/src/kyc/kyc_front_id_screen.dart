@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:app/core/utils/snackbar_utils.dart';
+import 'package:app/src/auth/forgot/forgot_type.dart';
 import 'package:app/src/kyc/kyc_back_id_screen.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -11,7 +12,9 @@ import 'package:app/src/services/auth_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class KycFrontIdScreen extends StatefulWidget {
-  const KycFrontIdScreen({super.key});
+  /// Khác null khi màn KYC được dùng cho luồng quên mật khẩu / quên PIN
+  final ForgotKycArgs? forgot;
+  const KycFrontIdScreen({super.key, this.forgot});
 
   @override
   State<KycFrontIdScreen> createState() => _KycFrontIdScreenState();
@@ -64,11 +67,13 @@ class _KycFrontIdScreenState extends State<KycFrontIdScreen> {
           style: GoogleFonts.roboto(color: Colors.white, fontSize: 18),
         ),
         actions: [
-          IconButton(
-            tooltip: 'Đăng xuất',
-            onPressed: () => _showConfirmLogout(context),
-            icon: const Icon(Iconsax.logout, color: Colors.white),
-          ),
+          // Luồng quên mật khẩu/PIN: người dùng đã đăng xuất sẵn nên không cần nút này
+          if (widget.forgot == null)
+            IconButton(
+              tooltip: 'Đăng xuất',
+              onPressed: () => _showConfirmLogout(context),
+              icon: const Icon(Iconsax.logout, color: Colors.white),
+            ),
         ],
       ),
       body: _capturedImage != null ? _buildPreview() : _buildCameraView(),
@@ -256,7 +261,10 @@ class _KycFrontIdScreenState extends State<KycFrontIdScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => KycBackIdScreen(frontIdImage: _capturedImage!),
+        builder: (context) => KycBackIdScreen(
+          frontIdImage: _capturedImage!,
+          forgot: widget.forgot,
+        ),
       ),
     );
   }

@@ -549,7 +549,7 @@ class _ConfirmTopUpWithdrawScreenState
               idempotencyKey,
               pinToken,
             );
-      ;
+    
       setState(() {
         _isProcessing = false;
       });

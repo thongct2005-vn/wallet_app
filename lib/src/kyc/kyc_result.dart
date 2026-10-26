@@ -1,3 +1,4 @@
+import 'package:app/src/auth/forgot/forgot_type.dart';
 import 'package:app/src/home/home_screen.dart';
 import 'package:app/src/kyc/kyc_front_id_screen.dart';
 import 'package:flutter/material.dart';
@@ -6,10 +7,12 @@ import 'package:google_fonts/google_fonts.dart';
 class KycResultScreen extends StatelessWidget {
   final bool isSuccess;
   final String msg;
+  final ForgotKycArgs? forgot;
   const KycResultScreen({
     super.key,
     required this.isSuccess,
     required this.msg,
+    this.forgot,
   });
 
   @override
@@ -68,6 +71,17 @@ class KycResultScreen extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
+                    // Luồng quên mật khẩu/PIN: thử lại về màn nhập OTP rồi chụp lại từ đầu
+                    if (forgot != null) {
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => KycFrontIdScreen(forgot: forgot),
+                        ),
+                        (r) => r.settings.name == kForgotOtpRoute || r.isFirst,
+                      );
+                      return;
+                    }
                     isSuccess? Navigator.pushReplacement(context, MaterialPageRoute(builder: (context)=>HomeScreen()))
                     : Navigator.pushReplacement(context, MaterialPageRoute(builder: (context)=>KycFrontIdScreen()));
                   },

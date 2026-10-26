@@ -5,8 +5,14 @@ import 'package:dio/dio.dart';
 
 class OtpService {
   final api = ApiClient().dio;
+  static const Duration _otpTimeout = Duration(seconds: 30);
 
-  Options get _public => Options(extra: {'skipAuth': true});
+  Options _opts({Map<String, String>? headers}) => Options(
+    extra: {'skipAuth': true},
+    headers: headers,
+    receiveTimeout: _otpTimeout,
+    sendTimeout: _otpTimeout,
+  );
 
   Future<Map<String, dynamic>> generateOtp({
     String? phone,
@@ -16,7 +22,7 @@ class OtpService {
       final result = await api.post(
         ApiConfig.sendOtp,
         data: {'phone': ?phone, 'email': ?email},
-        options: _public,
+        options: _opts(),
       );
 
       return {
@@ -39,12 +45,9 @@ class OtpService {
       final result = await api.post(
         ApiConfig.verifyOtp,
         data: {'phone': ?phone, 'email': ?email, 'otp': otp},
-        options: otpToken == null
-            ? _public
-            : Options(
-                extra: {'skipAuth': true},
-                headers: {'x-otp-token': otpToken},
-              ),
+        options: _opts(
+          headers: otpToken == null ? null : {'x-otp-token': otpToken},
+        ),
       );
       return {
         'is_success': true,

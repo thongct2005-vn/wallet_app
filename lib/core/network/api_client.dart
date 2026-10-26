@@ -11,6 +11,10 @@ class ApiClient {
   late Dio dio;
   final _storage = const FlutterSecureStorage();
 
+  static const Map<String, String> _ngrokHeaders = {
+    'ngrok-skip-browser-warning': 'true',
+  };
+
   Completer<String?>? _refreshCompleter;
 
   factory ApiClient() => _instance;
@@ -21,25 +25,28 @@ class ApiClient {
         baseUrl: ApiConfig.baseUrl,
         connectTimeout: const Duration(seconds: 5),
         receiveTimeout: const Duration(seconds: 5),
+        headers: _ngrokHeaders,
       ),
     );
 
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          final accessToken = await _storage.read(key: 'access_token');
-          if (accessToken != null) {
-            options.headers['Authorization'] = 'Bearer $accessToken';
+          if (options.extra['skipAuth'] != true) {
+            final accessToken = await _storage.read(key: 'access_token');
+            if (accessToken != null) {
+              options.headers['Authorization'] = 'Bearer $accessToken';
+            }
           }
           return handler.next(options);
         },
         onError: (DioException e, handler) async {
-          if (e.response?.statusCode != 401) {
+          if (e.response?.statusCode != 401 ||
+              e.requestOptions.extra['skipAuth'] == true) {
             return handler.next(e);
           }
 
           try {
-      
             final newAccessToken = await _getValidAccessToken();
 
             if (newAccessToken == null) {
@@ -61,7 +68,6 @@ class ApiClient {
   }
 
   Future<String?> _getValidAccessToken() async {
-   
     if (_refreshCompleter != null) {
       return _refreshCompleter!.future;
     }
@@ -75,7 +81,9 @@ class ApiClient {
         return null;
       }
 
-      final refreshDio = Dio(BaseOptions(baseUrl: dio.options.baseUrl));
+      final refreshDio = Dio(
+        BaseOptions(baseUrl: dio.options.baseUrl, headers: _ngrokHeaders),
+      );
       final response = await refreshDio.post(
         ApiConfig.refreshToken,
         data: {'refresh_token': refreshToken},

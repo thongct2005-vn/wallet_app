@@ -2,7 +2,11 @@ import 'dart:async';
 import 'dart:io';
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
+import 'package:app/src/auth/forgot/forgot_new_secret_screen.dart';
+import 'package:app/src/auth/forgot/forgot_type.dart';
+import 'package:app/src/auth/login/login_phone_screen.dart';
 import 'package:app/src/kyc/kyc_result.dart';
+import 'package:app/src/services/forgot_service.dart';
 import 'package:app/src/services/kyc.service.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
@@ -14,10 +18,12 @@ import 'package:iconsax/iconsax.dart';
 class KycFaceScreen extends StatefulWidget {
   final File frontIdImage;
   final File backIdImage;
+  final ForgotKycArgs? forgot;
   const KycFaceScreen({
     super.key,
     required this.frontIdImage,
     required this.backIdImage,
+    this.forgot,
   });
 
   @override
@@ -27,6 +33,7 @@ class KycFaceScreen extends StatefulWidget {
 class _KycFaceScreenState extends State<KycFaceScreen> {
   final UserController _userController = UserController();
   final KYCService _kycService = KYCService();
+  final ForgotService _forgotService = ForgotService();
   CameraController? _controller;
   Future<void>? _initFuture;
   File? _capturedImage;
@@ -328,7 +335,71 @@ class _KycFaceScreenState extends State<KycFaceScreen> {
     );
   }
 
+  // Luồng quên mật khẩu / PIN: gửi ảnh kèm kyc token, nhận reset token
+  Future<void> _verifyForgotKyc() async {
+    final forgot = widget.forgot!;
+    try {
+      setState(() => _isVerifying = true);
+      final result = await _forgotService.verifyKyc(
+        kycToken: forgot.kycToken,
+        frontIdImage: widget.frontIdImage,
+        backIdImage: widget.backIdImage,
+        faceImage: _capturedImage!,
+      );
+      if (!mounted) return;
+
+      if (result['is_success'] == true) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ForgotNewSecretScreen(
+              type: forgot.type,
+              resetToken: result['reset_token'],
+              phone: forgot.phone,
+            ),
+          ),
+          (r) => r.isFirst,
+        );
+        return;
+      }
+
+      // Token KYC hết hạn: làm lại từ đầu
+      if (result['status_code'] == 401) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (_) => LoginPhoneScreen(
+              isForceLogout: true,
+              msg: result['message'] ?? 'Phiên xác thực đã hết hạn',
+            ),
+          ),
+          (r) => false,
+        );
+        return;
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => KycResultScreen(
+            isSuccess: false,
+            msg: result['message'] ?? 'Xác minh thất bại',
+            forgot: forgot,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      SnackbarUtils.failure(context, '$e');
+    } finally {
+      if (mounted) {
+        setState(() => _isVerifying = false);
+      }
+    }
+  }
+
   Future<void> _verifyKYC() async {
+    if (widget.forgot != null) return _verifyForgotKyc();
     try {
       setState(() => _isVerifying = true);
       final result = await _kycService.verifyKYC(

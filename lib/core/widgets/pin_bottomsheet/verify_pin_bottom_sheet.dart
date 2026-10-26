@@ -1,4 +1,13 @@
+import 'package:app/core/controller/user_controller.dart';
+import 'package:app/core/utils/dialog_utils.dart';
+import 'package:app/main.dart';
+import 'package:app/src/auth/forgot/forgot_phone_screen.dart';
+import 'package:app/src/auth/forgot/forgot_type.dart';
+import 'package:app/src/services/auth_service.dart';
+import 'package:app/src/services/socket_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pinput/pinput.dart';
 
@@ -24,6 +33,41 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
   void dispose() {
     super.dispose();
     _pinController.dispose();
+  }
+
+  Future<bool> _logoutForResetPin() async {
+    final result = await AuthService().logout();
+    if (result['is_success'] != true) return false;
+    await const FlutterSecureStorage().deleteAll();
+    SocketService().disconnect();
+    return true;
+  }
+
+  Future<void> _onForgotPin() async {
+    final phone = Get.isRegistered<UserController>()
+        ? Get.find<UserController>().phone.value
+        : '';
+    final confirmed = await DialogUtils.showConfirmationAsync(
+      context,
+      title: 'Xác nhận',
+      message: 'Bạn có chắc chắn muốn đăng xuất để đặt lại mã PIN không?',
+      cancelText: 'Hủy',
+      confirmText: 'Xác nhận',
+      errorMessage: 'Có lỗi khi đăng xuất. Vui lòng thử lại',
+      onConfirm: _logoutForResetPin,
+    );
+    if (confirmed != true) return;
+
+    navigatorKey.currentState?.pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => ForgotPhoneScreen(
+          type: ForgotType.pin,
+          initialPhone: phone,
+          lockPhone: phone.isNotEmpty,
+        ),
+      ),
+      (r) => false,
+    );
   }
 
   @override
@@ -237,7 +281,7 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
                       ),
                     ),
                     GestureDetector(
-                      onTap: () {},
+                      onTap: _isLoading ? null : _onForgotPin,
 
                       child: Text(
                         "Quên mã PIN?",

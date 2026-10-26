@@ -82,7 +82,11 @@ class UserService {
 
         List<String> uniquePhones = phoneNumbers.toSet().toList();
         uniquePhones.remove(myPhone);
-        List<String> hashedPhones = uniquePhones.map(_hashPhone).toList();
+        // Server chỉ trả phone_hash, nên app tự ghép lại số điện thoại từ danh bạ của chính nó
+        final Map<String, String> phoneByHash = {
+          for (final p in uniquePhones) _hashPhone(p): p,
+        };
+        List<String> hashedPhones = phoneByHash.keys.toList();
 
         List<dynamic> allFoundUsers = [];
         final api = ApiClient().dio;
@@ -104,7 +108,15 @@ class UserService {
 
             final responseData = response.data;
             if (responseData != null && responseData['data'] != null) {
-              allFoundUsers.addAll(responseData['data']);
+              for (final user in responseData['data']) {
+                final phone = phoneByHash[user['phone_hash']];
+                if (phone == null) continue;
+                allFoundUsers.add({
+                  'id': user['id'],
+                  'full_name': user['full_name'],
+                  'phone': phone,
+                });
+              }
             }
           } catch (apiError) {
             return ApiErrorHandler.handleError(apiError);
@@ -123,6 +135,22 @@ class UserService {
           'message': "Vui lòng cấp quyền đọc danh bạ",
         };
       }
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> findUserByPhone(String phone) async {
+    try {
+      final result = await api.get(
+        ApiConfig.findUser,
+        queryParameters: {'phone': phone},
+      );
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'user_info': result.data['data']['user_info'],
+      };
     } catch (e) {
       return ApiErrorHandler.handleError(e);
     }

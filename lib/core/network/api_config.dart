@@ -49,6 +49,13 @@ class ApiConfig {
   static const String getBankLinkStatus = '$baseUrl/bank/status';
   static const String linkBankAccount = '$baseUrl/bank/link';
 
+  static const String forgotRequest = '$baseUrl/user/forgot/request';
+  static const String forgotResendOtp = '$baseUrl/user/forgot/resend-otp';
+  static const String forgotVerifyOtp = '$baseUrl/user/forgot/verify-otp';
+  static const String forgotKyc = '$baseUrl/user/forgot/kyc';
+  static const String resetPassword = '$baseUrl/user/reset-password';
+  static const String resetPin = '$baseUrl/user/reset-pin';
+
   static const String checkUserKYC = '$baseUrl/kyc/check';
   static const String verifyKYC = '$baseUrl/kyc/verify';
 }

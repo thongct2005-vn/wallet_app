@@ -1,3 +1,5 @@
+import 'package:app/src/auth/forgot/forgot_phone_screen.dart';
+import 'package:app/src/auth/forgot/forgot_type.dart';
 import 'package:app/src/auth/register/otp_screen.dart';
 import 'package:app/src/services/auth_service.dart';
 import 'package:flutter/material.dart';
@@ -279,6 +281,34 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
                               ),
                             ),
                           ],
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24.0,
+                              vertical: 8,
+                            ),
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: GestureDetector(
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ForgotPhoneScreen(
+                                      type: ForgotType.password,
+                                      initialPhone: widget.phoneNumber,
+                                    ),
+                                  ),
+                                ),
+                                child: Text(
+                                  'Quên mật khẩu?',
+                                  style: GoogleFonts.roboto(
+                                    fontSize: 15,
+                                    color: Colors.blue,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),

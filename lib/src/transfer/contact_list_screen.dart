@@ -1,7 +1,9 @@
+import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/format_utils.dart';
 import 'package:app/src/services/user_service.dart';
 import 'package:app/src/transfer/amount_input_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -20,16 +22,24 @@ class _ContactListScreenState extends State<ContactListScreen> {
   List<dynamic> _filteredUsers = [];
   bool _permanentlyDenied = false;
 
+  // Tìm người dùng ngoài danh bạ khi nhập đủ 10 số điện thoại
+  static final RegExp _phoneRegex = RegExp(r'^0\d{9}$');
+  bool _isFinding = false;
+  int _findSeq = 0;
+  String _findPhone = '';
+  String _findMsg = '';
+  Map<String, dynamic>? _foundUser;
+
   @override
   void initState() {
     super.initState();
     _loadContact();
-    _phoneController.addListener(_filterUsers);
+    _phoneController.addListener(_onQueryChanged);
   }
 
   @override
   void dispose() {
-    _phoneController.removeListener(_filterUsers);
+    _phoneController.removeListener(_onQueryChanged);
     _phoneController.dispose();
     super.dispose();
   }
@@ -86,9 +96,11 @@ class _ContactListScreenState extends State<ContactListScreen> {
                       controller: _phoneController,
                       maxLength: 25,
                       cursorColor: Colors.pink,
+                      style: GoogleFonts.roboto(fontSize: 16),
 
                       decoration: InputDecoration(
                         hintText: 'Tìm tên, SĐT',
+                        hintStyle: GoogleFonts.roboto(fontSize: 16),
                         counterText: '',
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.only(left: 10, right: 15),
@@ -144,15 +156,22 @@ class _ContactListScreenState extends State<ContactListScreen> {
                           const SizedBox(height: 16),
                           ElevatedButton(
                             onPressed: () => openAppSettings(),
-                            child: const Text("Mở Cài đặt"),
+                            child: Text("Mở Cài đặt", style: GoogleFonts.roboto()),
                           ),
                         ],
                       ],
                     ),
                   ),
                 )
+              : _filteredUsers.isEmpty && _phoneRegex.hasMatch(_query)
+              ? _buildFindResult()
               : _filteredUsers.isEmpty
-              ? Center(child: Text('Không tìm thấy người dùng này'))
+              ? Center(
+                  child: Text(
+                    'Không tìm thấy người dùng này',
+                    style: GoogleFonts.roboto(fontSize: 16),
+                  ),
+                )
               : Container(
                   margin: EdgeInsets.all(10),
                   decoration: BoxDecoration(
@@ -193,41 +212,10 @@ class _ContactListScreenState extends State<ContactListScreen> {
                             itemCount: _filteredUsers.length,
                             itemBuilder: (context, index) {
                               final user = _filteredUsers[index];
-                              return ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: Colors.pink.shade50
-                                      .withValues(alpha: 0.6),
-                                  child: Text(
-                                    FormatUtils.formatAvatar(
-                                      user['full_name'] ?? '',
-                                    ),
-                                    style: GoogleFonts.roboto(
-                                      color: Colors.pink,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                title: Text(
-                                  user['full_name'] ?? 'Không rõ tên',
-                                  style: GoogleFonts.roboto(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 20,
-                                  ),
-                                ),
-                                subtitle: Text(user['phone']),
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => AmountInputScreen(
-                                        receiverPhone: user['phone'],
-                                        receiverFullName:
-                                            user['full_name'] ?? 'Không rõ tên',
-                                        receiverId: user['id'],
-                                      ),
-                                    ),
-                                  );
-                                },
+                              return _buildUserTile(
+                                fullName: user['full_name'] ?? 'Không rõ tên',
+                                phone: user['phone'] ?? '',
+                                userId: user['id'],
                               );
                             },
                           ),
@@ -239,6 +227,143 @@ class _ContactListScreenState extends State<ContactListScreen> {
         ),
       ],
     );
+  }
+
+  String get _query => _phoneController.text.trim();
+
+  Widget _buildUserTile({
+    required String fullName,
+    required String phone,
+    required dynamic userId,
+  }) {
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: Colors.pink.shade50.withValues(alpha: 0.6),
+        child: Text(
+          FormatUtils.formatAvatar(fullName),
+          style: GoogleFonts.roboto(
+            color: Colors.pink,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+      title: Text(
+        fullName,
+        style: GoogleFonts.roboto(fontWeight: FontWeight.w700, fontSize: 20),
+      ),
+      subtitle: Text(phone, style: GoogleFonts.roboto(fontSize: 14)),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => AmountInputScreen(
+              receiverPhone: phone,
+              receiverFullName: fullName,
+              receiverId: userId,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Kết quả tìm theo số điện thoại (người dùng không có trong danh bạ)
+  Widget _buildFindResult() {
+    if (_isFinding) {
+      return const Center(child: CircularProgressIndicator(color: Colors.pink));
+    }
+    if (_foundUser != null) {
+      return Container(
+        margin: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.9),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey.shade100, width: 1),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(15, 10, 0, 0),
+              child: Text(
+                'Kết quả tìm kiếm',
+                style: GoogleFonts.roboto(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Material(
+                color: Colors.transparent,
+                child: _buildUserTile(
+                  fullName: _foundUser!['full_name'] ?? 'Không rõ tên',
+                  phone: _findPhone,
+                  userId: _foundUser!['user_id'],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Text(
+          _findMsg.isNotEmpty ? _findMsg : 'Không tìm thấy người dùng này',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.roboto(fontSize: 16),
+        ),
+      ),
+    );
+  }
+
+  void _onQueryChanged() {
+    _filterUsers();
+    final seq = ++_findSeq;
+    final query = _query;
+    if (!_phoneRegex.hasMatch(query) || _filteredUsers.isNotEmpty) {
+      setState(() {
+        _isFinding = false;
+        _foundUser = null;
+        _findMsg = '';
+      });
+      return;
+    }
+    _findUser(query, seq);
+  }
+
+  Future<void> _findUser(String phone, int seq) async {
+    if (phone == Get.find<UserController>().phone.value) {
+      setState(() {
+        _isFinding = false;
+        _foundUser = null;
+        _findMsg = 'Bạn không thể chuyển tiền cho chính mình';
+      });
+      return;
+    }
+
+    setState(() {
+      _isFinding = true;
+      _foundUser = null;
+      _findMsg = '';
+      _findPhone = phone;
+    });
+
+    final result = await _userService.findUserByPhone(phone);
+    if (!mounted || seq != _findSeq) return;
+
+    setState(() {
+      _isFinding = false;
+      if (result['is_success'] == true) {
+        _foundUser = result['user_info'];
+      } else {
+        _findMsg = result['message']?.toString() ?? 'Không tìm thấy người dùng này';
+      }
+    });
   }
 
   void _filterUsers() {
@@ -261,7 +386,7 @@ class _ContactListScreenState extends State<ContactListScreen> {
     if (!mounted) return;
     setState(() {
       _isLoading = false;
-      if (result['is_success']) {
+      if (result['is_success'] == true) {
         _users = result['data'];
         _filteredUsers = _users;
         _errMsg = '';

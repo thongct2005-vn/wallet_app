@@ -1,7 +1,7 @@
 import 'package:app/core/network/api_config.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:socket_io_client/socket_io_client.dart' as sk;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get/get.dart';
 import 'package:app/core/controller/user_controller.dart';
@@ -12,7 +12,7 @@ class SocketService {
   factory SocketService() => _instance;
   SocketService._internal();
 
-  IO.Socket? socket;
+  sk.Socket? socket;
   final _storage = const FlutterSecureStorage();
 
   Future<void> connect() async {
@@ -25,9 +25,9 @@ class SocketService {
       return;
     }
 
-    socket = IO.io(
+    socket = sk.io(
       ApiConfig.socketUrl,
-      IO.OptionBuilder()
+      sk.OptionBuilder()
           .setTransports(['websocket', 'polling'])
           .disableAutoConnect()
           .setAuth({'token': token})

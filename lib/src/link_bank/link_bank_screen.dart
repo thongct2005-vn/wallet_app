@@ -149,8 +149,7 @@ class _LinkBankScreenState extends State<LinkBankScreen> {
                         ..._bankList.map((bank) {
                           String bankId = bank['id']?.toString() ?? '';
                           String bankCode = bank['code']?.toString() ?? '';
-                          String bankName =
-                              bank['name']?.toString() ?? 'Ngân hàng';
+                          String bankName = bank['name']?.toString() ?? 'Ngân hàng';
                           String bankLogo = bank['logo_url']?.toString() ?? "";
                           bool isLinked = bank['is_linked'] as bool;
 
@@ -299,6 +298,7 @@ class _LinkBankScreenState extends State<LinkBankScreen> {
   }
 
   void _showCheckPinDialog(BuildContext context, String bankId) {
+    // checkPin cần idempotency key để cấp pin_token; mỗi lần mở hộp thoại dùng một key mới
     final String idempotencyKey = _uuid.v7();
 
     showModalBottomSheet(
@@ -316,28 +316,27 @@ class _LinkBankScreenState extends State<LinkBankScreen> {
             }
           },
           onSuccess: (pinToken) async {
-            try {
-              final result = await _bankService.linkBankAccount(
-                bankId,
-                idempotencyKey,
-                pinToken,
+            final result = await _bankService.linkBankAccount(
+              bankId,
+              idempotencyKey,
+              pinToken,
+            );
+            if (!mounted) return;
+            if (result['is_success'] != true) {
+              SnackbarUtils.failure(
+                this.context,
+                result['message']?.toString() ?? 'Liên kết ngân hàng thất bại',
               );
-              if (!context.mounted) return;
-              if (result['is_success'] == true) {
-                setState(() {
-                  final index = _bankList.indexWhere(
-                    (bank) => bank['id'].toString() == bankId,
-                  );
-                  if (index != -1) {
-                    _bankList[index]['is_linked'] = true;
-                  }
-                });
-              } else {
-                SnackbarUtils.failure(context, result['message']);
-              }
-            } catch (e) {
               return;
             }
+            setState(() {
+              final index = _bankList.indexWhere(
+                (bank) => bank['id'].toString() == bankId,
+              );
+              if (index != -1) {
+                _bankList[index]['is_linked'] = true;
+              }
+            });
           },
         );
       },
