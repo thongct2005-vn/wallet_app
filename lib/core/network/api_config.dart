@@ -17,6 +17,11 @@ class ApiConfig {
   static const String register = '$baseUrl/auth/register';
   static const String verifyRegister = '$baseUrl/auth/verify-register';
   static const String logout = '$baseUrl/auth/logout';
+
+  // Google Authenticator (TOTP)
+  static const String totpSetup = '$baseUrl/auth/totp/setup';
+  static const String totpEnable = '$baseUrl/auth/totp/enable';
+  static const String totpDisable = '$baseUrl/auth/totp/disable';
   static const String refreshToken = '$baseUrl/auth/refresh-token';
   static const String getMe = '$baseUrl/auth/me';
   static const String sendOtp = '$baseUrl/otp/send-otp';

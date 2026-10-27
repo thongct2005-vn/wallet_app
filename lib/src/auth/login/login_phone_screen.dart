@@ -329,6 +329,10 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
                                                   LoginPasswordScreen(
                                                     phoneNumber:
                                                         _phoneController.text,
+                                                    // Server báo tài khoản đã bật Google Authenticator
+                                                    isTotpEnabled:
+                                                        result['data']['otp_method'] ==
+                                                        'totp',
                                                   ),
                                             ),
                                           );

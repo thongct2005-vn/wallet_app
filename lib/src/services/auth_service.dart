@@ -57,6 +57,8 @@ class AuthService {
         'message': result.data['message'],
         'otp_token': result.data['data']['otp_token'],
         'masked_email': result.data['data']['masked_email'],
+        // 'email' (mặc định) hoặc 'totp' khi tài khoản đã bật Google Authenticator
+        'otp_method': result.data['data']['otp_method'] ?? 'email',
       };
     } catch (e) {
       return _errorWithStatus(e);
@@ -92,6 +94,51 @@ class AuthService {
         'full_name': user['full_name'],
         'phone': user['phone'],
       };
+    } catch (e) {
+      return _errorWithStatus(e);
+    }
+  }
+
+  // Lấy mã QR (otpauth uri) để thêm tài khoản vào Google Authenticator.
+  // Server kiểm tra số điện thoại + mật khẩu; chưa bật chính thức cho tới khi
+  // người dùng đăng nhập xong và nhập mã đầu tiên (enableTotp).
+  Future<Map<String, dynamic>> setupTotp({
+    required String phone,
+    required String password,
+  }) async {
+    try {
+      final result = await api.post(
+        ApiConfig.totpSetup,
+        data: {'phone': phone, 'password': password},
+        options: _public,
+      );
+      final data = result.data['data'];
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'otpauth_uri': data['otpauth_uri'],
+        'secret': data['secret'],
+      };
+    } catch (e) {
+      return _errorWithStatus(e);
+    }
+  }
+
+  // Gọi sau khi đăng nhập (có access token): xác nhận mã đầu tiên để bật TOTP
+  Future<Map<String, dynamic>> enableTotp(String code) async {
+    try {
+      final result = await api.post(ApiConfig.totpEnable, data: {'code': code});
+      return {'is_success': true, 'message': result.data['message']};
+    } catch (e) {
+      return _errorWithStatus(e);
+    }
+  }
+
+  // Gọi sau khi đăng nhập: tắt Google Authenticator, quay lại OTP qua email
+  Future<Map<String, dynamic>> disableTotp() async {
+    try {
+      final result = await api.post(ApiConfig.totpDisable, data: {});
+      return {'is_success': true, 'message': result.data['message']};
     } catch (e) {
       return _errorWithStatus(e);
     }

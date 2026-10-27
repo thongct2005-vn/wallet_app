@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/src/auth/forgot/forgot_type.dart';
 import 'package:app/src/kyc/kyc_back_id_screen.dart';
+import 'package:app/src/services/socket_service.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -291,6 +292,7 @@ class _KycFrontIdScreenState extends State<KycFrontIdScreen> {
 
   Future<bool> _logout() async {
     final result = await _authService.logout();
+    SocketService().disconnect();
     await _storage.deleteAll();
     return result['is_success'] == true;
   }

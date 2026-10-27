@@ -2,6 +2,7 @@ import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/dialog_utils.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
 import 'package:app/src/services/auth_service.dart';
+import 'package:app/src/services/socket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get/get.dart';
@@ -330,11 +331,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<bool> _logout() async {
-    final result = await _authService.logout();
-    await _storage.deleteAll();
-    if (result['is_success']) return true;
-    return false;
-  }
+  final result = await _authService.logout();
+  SocketService().disconnect();          // thêm dòng này
+  await _storage.deleteAll();
+  return result['is_success'] == true;
+}
 }
 
 class CurvedHeaderClipper extends CustomClipper<Path> {

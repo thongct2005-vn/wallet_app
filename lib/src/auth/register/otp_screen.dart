@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:app/core/controller/user_controller.dart';
+import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
+import 'package:app/src/auth/login/totp_confirm_dialog.dart';
 import 'package:app/src/home/home_screen.dart';
 import 'package:app/src/kyc/kyc_front_id_screen.dart';
 import 'package:app/src/services/app_data_service.dart';
@@ -25,6 +27,15 @@ class OtpScreen extends StatefulWidget {
   final bool? isLogin;
   final String? otpToken;
   final String? password;
+
+  /// true: tài khoản dùng Google Authenticator, nhập mã từ ứng dụng thay vì email
+  final bool isTotp;
+
+  /// true: sau khi đăng nhập xong, hỏi mã Google Authenticator để bật tính năng
+  final bool enableTotpAfterLogin;
+
+  /// true: sau khi đăng nhập xong, tắt Google Authenticator (quay về OTP email)
+  final bool disableTotpAfterLogin;
   const OtpScreen({
     super.key,
     this.phoneNumber,
@@ -32,6 +43,9 @@ class OtpScreen extends StatefulWidget {
     this.isLogin,
     this.otpToken,
     this.password,
+    this.isTotp = false,
+    this.enableTotpAfterLogin = false,
+    this.disableTotpAfterLogin = false,
   });
 
   @override
@@ -70,7 +84,7 @@ class _OtpScreenState extends State<OtpScreen> {
         if (mounted) setState(() {});
       });
     }
-    _startCountdown();
+    if (!widget.isTotp) _startCountdown();
   }
 
   @override
@@ -196,19 +210,26 @@ class _OtpScreenState extends State<OtpScreen> {
                                         ),
                                         height: 1.5,
                                       ),
-                                      children: [
-                                        const TextSpan(
-                                          text:
-                                              "Mã xác thực sẽ được gửi đến email ",
-                                        ),
-                                        TextSpan(
-                                          text: widget.email ?? "",
-                                          style: GoogleFonts.roboto(
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.black,
-                                          ),
-                                        ),
-                                      ],
+                                      children: widget.isTotp
+                                          ? [
+                                              const TextSpan(
+                                                text:
+                                                    "Mở ứng dụng Google Authenticator và nhập mã 6 số đang hiển thị cho tài khoản này.",
+                                              ),
+                                            ]
+                                          : [
+                                              const TextSpan(
+                                                text:
+                                                    "Mã xác thực sẽ được gửi đến email ",
+                                              ),
+                                              TextSpan(
+                                                text: widget.email ?? "",
+                                                style: GoogleFonts.roboto(
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.black,
+                                                ),
+                                              ),
+                                            ],
                                     ),
                                   ),
                                 ],
@@ -226,6 +247,7 @@ class _OtpScreenState extends State<OtpScreen> {
                               ),
                             ),
                             const SizedBox(height: 24),
+                            if (!widget.isTotp)
                             TextButton(
                               onPressed: (_countdown > 0 || _isResending)
                                   ? null
@@ -559,6 +581,26 @@ class _OtpScreenState extends State<OtpScreen> {
     setState(() {
       _isLoading = false;
     });
+
+    // Người dùng đã chọn dùng Google Authenticator: nhập mã đầu tiên để bật
+    if (widget.enableTotpAfterLogin) {
+      await showTotpConfirmDialog(context);
+      if (!mounted) return;
+    }
+
+    // Người dùng chọn quay về OTP qua email: tắt Google Authenticator
+    if (widget.disableTotpAfterLogin) {
+      final off = await _authService.disableTotp();
+      if (!mounted) return;
+      if (off['is_success'] == true) {
+        SnackbarUtils.success(context, 'Đã chuyển sang nhận OTP qua email');
+      } else {
+        SnackbarUtils.failure(
+          context,
+          off['message'] ?? 'Không thể chuyển sang OTP email, vui lòng thử lại',
+        );
+      }
+    }
 
     final Widget next = userKYC['data']['is_kyc']
         ? HomeScreen()

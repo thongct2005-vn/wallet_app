@@ -1,5 +1,6 @@
 import 'package:app/src/auth/forgot/forgot_phone_screen.dart';
 import 'package:app/src/auth/forgot/forgot_type.dart';
+import 'package:app/src/auth/login/totp_setup_dialog.dart';
 import 'package:app/src/auth/register/otp_screen.dart';
 import 'package:app/src/services/auth_service.dart';
 import 'package:flutter/material.dart';
@@ -7,7 +8,14 @@ import 'package:google_fonts/google_fonts.dart';
 
 class LoginPasswordScreen extends StatefulWidget {
   final String? phoneNumber;
-  const LoginPasswordScreen({super.key, this.phoneNumber});
+
+  /// Tài khoản đã bật Google Authenticator: ô tích đổi thành "gửi OTP qua email"
+  final bool isTotpEnabled;
+  const LoginPasswordScreen({
+    super.key,
+    this.phoneNumber,
+    this.isTotpEnabled = false,
+  });
 
   @override
   State<LoginPasswordScreen> createState() => _LoginPasswordScreenState();
@@ -21,6 +29,12 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
   bool _isHidePassword = true;
   bool _isLoading = false;
   String _msg = "";
+  // Người dùng chọn dùng Google Authenticator ở các lần đăng nhập sau
+  bool _useTotp = false;
+  // Đã bật Google Authenticator và người dùng muốn quay lại OTP qua email
+  bool _useEmail = false;
+  // Mã QR đã tạo (otpauth_uri, secret); null nếu chưa tạo
+  Map<String, String>? _totpSetup;
 
   @override
   void initState() {
@@ -59,6 +73,13 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
       });
       return;
     }
+    if (_useTotp && _totpSetup == null) {
+      setState(() {
+        _hasError = true;
+        _msg = "Vui lòng quét mã QR để liên kết Google Authenticator";
+      });
+      return;
+    }
 
     setState(() {
       _hasError = false;
@@ -84,6 +105,15 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
             email: result['masked_email'],
             isLogin: true,
             otpToken: result['otp_token'],
+            // Tài khoản đã bật Google Authenticator thì nhập mã từ ứng dụng
+            isTotp: result['otp_method'] == 'totp',
+            // Đã quét QR: sau khi đăng nhập sẽ nhập mã đầu tiên để bật
+            enableTotpAfterLogin:
+                _useTotp &&
+                _totpSetup != null &&
+                result['otp_method'] != 'totp',
+            // Đã nhập đúng mã Authenticator xong thì chuyển về OTP email
+            disableTotpAfterLogin: _useEmail && result['otp_method'] == 'totp',
           ),
         ),
       );
@@ -92,6 +122,40 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
         _msg = result['message'] ?? "Đăng nhập thất bại";
         _hasError = true;
       });
+    }
+  }
+
+  bool get _optionChecked => widget.isTotpEnabled ? _useEmail : _useTotp;
+
+  void _toggleOption(bool? value) {
+    setState(() {
+      final next = value ?? !_optionChecked;
+      if (widget.isTotpEnabled) {
+        _useEmail = next;
+      } else {
+        _useTotp = next;
+      }
+    });
+  }
+
+  Future<void> _openTotpSetup() async {
+    final password = _passwordController.text;
+    if (!isValidPassword(password)) {
+      setState(() {
+        _hasError = true;
+        _msg = "Nhập mật khẩu 6 số trước khi lấy mã QR";
+      });
+      return;
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+    final result = await showTotpSetupDialog(
+      context,
+      phone: widget.phoneNumber ?? "",
+      password: password,
+      cached: _totpSetup,
+    );
+    if (result != null && mounted) {
+      setState(() => _totpSetup = result);
     }
   }
 
@@ -158,7 +222,8 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
                 child: Column(
                   children: [
                     Expanded(
-                      child: Column(
+                      child: SingleChildScrollView(
+                        child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Padding(
@@ -309,7 +374,112 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
                               ),
                             ),
                           ),
+                          // ----- Google Authenticator -----
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24.0,
+                            ),
+                            child: InkWell(
+                              onTap: () => _toggleOption(null),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SizedBox(
+                                    height: 24,
+                                    width: 24,
+                                    child: Checkbox(
+                                      value: _optionChecked,
+                                      activeColor: Colors.pink,
+                                      materialTapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      onChanged: _toggleOption,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      widget.isTotpEnabled
+                                          ? 'Gửi OTP qua email thay cho Google '
+                                                'Authenticator ở các lần đăng nhập sau'
+                                          : 'Dùng mã Google Authenticator thay cho OTP '
+                                                'qua email ở các lần đăng nhập sau',
+                                      style: GoogleFonts.roboto(
+                                        fontSize: 14,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          if (widget.isTotpEnabled && _useEmail)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(56, 6, 24, 0),
+                              child: Text(
+                                'Lần đăng nhập này bạn vẫn nhập mã Google '
+                                'Authenticator, từ lần sau sẽ nhận OTP qua email.',
+                                style: GoogleFonts.roboto(
+                                  fontSize: 12.5,
+                                  height: 1.4,
+                                  color: Colors.black.withValues(alpha: 0.55),
+                                ),
+                              ),
+                            ),
+                          if (_useTotp && !widget.isTotpEnabled)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(24, 10, 24, 0),
+                              child: GestureDetector(
+                                onTap: _openTotpSetup,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.pink.withValues(alpha: 0.06),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: Colors.pink.withValues(alpha: 0.3),
+                                      width: 0.5,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.qr_code_2_rounded,
+                                        color: Colors.pink,
+                                        size: 30,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          _totpSetup == null
+                                              ? 'Quét mã QR để liên kết Google Authenticator'
+                                              : 'Đã tạo mã QR, nhấn để xem lại',
+                                          style: GoogleFonts.roboto(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.pink,
+                                          ),
+                                        ),
+                                      ),
+                                      Icon(
+                                        _totpSetup == null
+                                            ? Icons.chevron_right_rounded
+                                            : Icons.check_circle_rounded,
+                                        color: _totpSetup == null
+                                            ? Colors.pink
+                                            : Colors.green,
+                                        size: 22,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
+                      ),
                       ),
                     ),
                     Padding(
