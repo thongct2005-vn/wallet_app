@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:app/core/network/api_config.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
+import 'package:app/src/services/socket_service.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -106,6 +107,7 @@ class ApiClient {
   }
 
   Future<void> _logout() async {
+    SocketService().disconnect();
     await _storage.deleteAll();
     if (navigatorKey.currentState != null) {
       navigatorKey.currentState!.pushAndRemoveUntil(

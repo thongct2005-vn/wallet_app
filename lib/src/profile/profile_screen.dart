@@ -332,7 +332,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<bool> _logout() async {
   final result = await _authService.logout();
-  SocketService().disconnect();          // thêm dòng này
+  SocketService().disconnect();   
   await _storage.deleteAll();
   return result['is_success'] == true;
 }
