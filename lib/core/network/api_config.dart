@@ -20,6 +20,7 @@ class ApiConfig {
 
   // Google Authenticator (TOTP)
   static const String totpSetup = '$baseUrl/auth/totp/setup';
+  static const String totpRecover = '$baseUrl/auth/totp/recover';
   static const String totpEnable = '$baseUrl/auth/totp/enable';
   static const String totpDisable = '$baseUrl/auth/totp/disable';
   static const String refreshToken = '$baseUrl/auth/refresh-token';

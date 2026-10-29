@@ -517,7 +517,17 @@ class _ConfirmTopUpWithdrawScreenState
         return CheckPinBottomSheet(
           onCheckPin: (pin) async {
             try {
-              final res = await _walletService.checkPin(pin, idempotencyKey);
+              final numAmount =
+                  FormatUtils.formatAmountToNum(widget.amount).toString();
+              final res = await _walletService.checkPin(
+                pin,
+                idempotencyKey,
+                action: widget.isTopUpTab ? 'TOPUP' : 'WITHDRAW',
+                params: {
+                  'linked_bank_account_id': _selectedBankId ?? '',
+                  'amount': numAmount,
+                },
+              );
               return res;
             } catch (e) {
               return {'is_success': false};

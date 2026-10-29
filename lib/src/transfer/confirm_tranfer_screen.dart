@@ -520,7 +520,21 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
         return CheckPinBottomSheet(
           onCheckPin: (pin) async {
             try {
-              final res = await _walletService.checkPin(pin, idempotencyKey);
+              final numAmount = FormatUtils.formatAmountToNum(
+                widget.amount ?? '0',
+              ).toString();
+              final isQr = widget.referenceCode != null;
+              final res = await _walletService.checkPin(
+                pin,
+                idempotencyKey,
+                action: isQr ? 'QR_PAYMENT' : 'TRANSFER',
+                params: isQr
+                    ? {'reference_code': widget.referenceCode!}
+                    : {
+                        'destination_user_id': widget.receiverId ?? '',
+                        'amount': numAmount,
+                      },
+              );
               return res;
             } catch (e) {
               return {'is_success': false};

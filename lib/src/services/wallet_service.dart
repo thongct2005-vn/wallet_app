@@ -44,14 +44,27 @@ class WalletService {
     }
   }
 
+  /// [action] và [params] cho server biết PIN này xác nhận giao dịch nào, để pin_token
+  /// chỉ dùng được cho đúng giao dịch đó (đổi số tiền/người nhận sẽ bị từ chối):
+  ///   TRANSFER   -> destination_user_id, amount
+  ///   TOPUP / WITHDRAW -> linked_bank_account_id, amount
+  ///   QR_PAYMENT -> reference_code
+  ///   BANK_LINK  -> bank_id
   Future<Map<String, dynamic>> checkPin(
     String pin,
-    String idempotencyKey,
-  ) async {
+    String idempotencyKey, {
+    required String action,
+    required Map<String, dynamic> params,
+  }) async {
     try {
       final result = await api.post(
         ApiConfig.checkPin,
-        data: {'pin': pin, 'idempotency_key': idempotencyKey},
+        data: {
+          'pin': pin,
+          'idempotency_key': idempotencyKey,
+          'action': action,
+          'params': params,
+        },
       );
       final data = result.data['data'];
       return {

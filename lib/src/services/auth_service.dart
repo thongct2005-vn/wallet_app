@@ -124,6 +124,30 @@ class AuthService {
     }
   }
 
+  // Lấy lại mã QR đã liên kết (lỡ xoá mã trong Google Authenticator).
+  // Cần đúng mật khẩu; server trả về khoá cũ chứ không tạo khoá mới.
+  Future<Map<String, dynamic>> recoverTotp({
+    required String phone,
+    required String password,
+  }) async {
+    try {
+      final result = await api.post(
+        ApiConfig.totpRecover,
+        data: {'phone': phone, 'password': password},
+        options: _public,
+      );
+      final data = result.data['data'];
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'otpauth_uri': data['otpauth_uri'],
+        'secret': data['secret'],
+      };
+    } catch (e) {
+      return _errorWithStatus(e);
+    }
+  }
+
   // Gọi sau khi đăng nhập (có access token): xác nhận mã đầu tiên để bật TOTP
   Future<Map<String, dynamic>> enableTotp(String code) async {
     try {

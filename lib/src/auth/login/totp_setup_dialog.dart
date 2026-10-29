@@ -13,12 +13,18 @@ Future<Map<String, String>?> showTotpSetupDialog(
   required String phone,
   required String password,
   Map<String, String>? cached,
+  bool recover = false,
 }) {
   return showDialog<Map<String, String>?>(
     context: context,
     barrierDismissible: false,
     builder: (_) =>
-        _TotpSetupDialog(phone: phone, password: password, cached: cached),
+        _TotpSetupDialog(
+          phone: phone,
+          password: password,
+          cached: cached,
+          recover: recover,
+        ),
   );
 }
 
@@ -26,11 +32,14 @@ class _TotpSetupDialog extends StatefulWidget {
   final String phone;
   final String password;
   final Map<String, String>? cached;
+  // true: lấy lại mã QR đã liên kết (tài khoản đã bật Google Authenticator)
+  final bool recover;
 
   const _TotpSetupDialog({
     required this.phone,
     required this.password,
     this.cached,
+    this.recover = false,
   });
 
   @override
@@ -56,10 +65,15 @@ class _TotpSetupDialogState extends State<_TotpSetupDialog> {
       _isLoading = true;
       _error = '';
     });
-    final result = await _authService.setupTotp(
-      phone: widget.phone,
-      password: widget.password,
-    );
+    final result = widget.recover
+        ? await _authService.recoverTotp(
+            phone: widget.phone,
+            password: widget.password,
+          )
+        : await _authService.setupTotp(
+            phone: widget.phone,
+            password: widget.password,
+          );
     if (!mounted) return;
     if (result['is_success'] == true) {
       setState(() {
@@ -121,7 +135,10 @@ class _TotpSetupDialogState extends State<_TotpSetupDialog> {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(text, style: GoogleFonts.roboto(fontSize: 13.5, height: 1.4)),
+            child: Text(
+              text,
+              style: GoogleFonts.roboto(fontSize: 13.5, height: 1.4),
+            ),
           ),
         ],
       ),
@@ -130,6 +147,9 @@ class _TotpSetupDialogState extends State<_TotpSetupDialog> {
 
   @override
   Widget build(BuildContext context) {
+    // Chỉ hiện nút "Thử lại" khi tải mã thất bại
+    final bool showRetry = !_isLoading && _data == null;
+
     return Dialog(
       backgroundColor: Colors.white,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -148,7 +168,9 @@ class _TotpSetupDialogState extends State<_TotpSetupDialog> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Liên kết Google Authenticator',
+                      widget.recover
+                          ? 'Lấy lại mã Google Authenticator'
+                          : 'Liên kết Google Authenticator',
                       style: GoogleFonts.roboto(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
@@ -162,8 +184,11 @@ class _TotpSetupDialogState extends State<_TotpSetupDialog> {
               _step('2', 'Quét mã bên dưới (hoặc chọn "Nhập khoá thiết lập").'),
               _step(
                 '3',
-                'Đăng nhập như bình thường. Sau khi vào được tài khoản, '
-                'nhập mã 6 số trong ứng dụng để hoàn tất.',
+                widget.recover
+                    ? 'Đóng cửa sổ này, bấm \"Xác nhận\" rồi nhập mã 6 số '
+                          'trong ứng dụng để đăng nhập.'
+                    : 'Đăng nhập như bình thường. Sau khi vào được tài khoản, '
+                          'nhập mã 6 số trong ứng dụng để hoàn tất.',
               ),
               const SizedBox(height: 10),
               if (_isLoading)
@@ -227,33 +252,81 @@ class _TotpSetupDialogState extends State<_TotpSetupDialog> {
               ] else ...[
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Text(
-                    _error,
-                    style: GoogleFonts.roboto(color: Colors.red, fontSize: 14),
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: _load,
-                    child: const Text('Thử lại'),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.red.shade700, width: 1.5),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.red.shade700,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _error,
+                            style: GoogleFonts.roboto(
+                              color: Colors.red.shade700,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
               const SizedBox(height: 6),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context, _data),
-                  style: TextButton.styleFrom(foregroundColor: Colors.pink),
-                  child: Text(
-                    'Đóng',
-                    style: GoogleFonts.roboto(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
+              Row(
+                children: [
+                  // "Thử lại" nằm góc trái, cùng hàng với "Đóng"
+                  if (showRetry)
+                    ElevatedButton(
+                      onPressed: _load,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.pink,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 10,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: Text(
+                        'Thử lại',
+                        style: GoogleFonts.roboto(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, _data),
+                    style: TextButton.styleFrom(foregroundColor: Colors.pink),
+                    child: Text(
+                      'Đóng',
+                      style: GoogleFonts.roboto(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
             ],
           ),

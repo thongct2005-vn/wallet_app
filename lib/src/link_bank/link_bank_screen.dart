@@ -309,7 +309,12 @@ class _LinkBankScreenState extends State<LinkBankScreen> {
         return CheckPinBottomSheet(
           onCheckPin: (pin) async {
             try {
-              final res = await _walletService.checkPin(pin, idempotencyKey);
+              final res = await _walletService.checkPin(
+                pin,
+                idempotencyKey,
+                action: 'BANK_LINK',
+                params: {'bank_id': bankId},
+              );
               return res;
             } catch (e) {
               return {'is_success': false};
