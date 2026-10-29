@@ -35,7 +35,9 @@ class _ConfirmTopUpWithdrawScreenState
   final BankService _bankService = BankService();
   bool _isProcessing = false;
   final Uuid _uuid = const Uuid();
-  late final String idempotencyKey;
+  // Mã idempotency gắn với đúng một giao dịch (số tiền + ngân hàng). Đổi ngân
+  // hàng thì phải tạo mã mới, nếu không server báo "Mã đã được sử dụng với dữ liệu khác"
+  late String idempotencyKey;
   String? _selectedBankId;
   bool isLoadingLinkedBanks = false;
 
@@ -338,8 +340,11 @@ class _ConfirmTopUpWithdrawScreenState
     final bool isSelected = _selectedBankId == bank['id'];
     return GestureDetector(
       onTap: () {
+        if (_selectedBankId == bank['id']) return;
         setState(() {
           _selectedBankId = bank['id'];
+          // Đổi nguồn tiền = giao dịch mới nên cần mã idempotency mới
+          idempotencyKey = _uuid.v7();
         });
       },
       child: Container(
