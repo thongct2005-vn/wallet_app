@@ -17,16 +17,162 @@ class ScanQRScreen extends StatefulWidget {
 class _ScanQRScreenState extends State<ScanQRScreen> {
   final PaymentService _paymentService = PaymentService();
   final WalletService _walletService = WalletService();
+
+  // normal + detectionTimeoutMs: mỗi lần đọc cách nhau 1 giây
+  // (detectionTimeoutMs chỉ có tác dụng khi detectionSpeed = normal)
   final MobileScannerController _controller = MobileScannerController(
     formats: const [BarcodeFormat.qrCode],
     cameraResolution: const Size(1280, 720),
-    detectionSpeed: DetectionSpeed.noDuplicates,
+    detectionSpeed: DetectionSpeed.normal,
+    detectionTimeoutMs: 1000,
   );
+
+  // Chặn xử lý trùng trong lúc đang gọi API / đang mở màn hình khác
+  bool _isProcessing = false;
 
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  // Cho phép quét lại. Dùng thay cho mọi chỗ gọi _controller.start().
+  void _resumeScan() {
+    _isProcessing = false;
+    if (mounted) _controller.start();
+  }
+
+  void _showError(String message) {
+    DialogUtils.showNotification(
+      context,
+      title: "Thông báo",
+      message: message,
+      onClose: _resumeScan,
+    );
+  }
+
+  Future<void> _onDetect(BarcodeCapture capture) async {
+    if (_isProcessing) return;
+    if (capture.barcodes.isEmpty) return;
+    final String? qrData = capture.barcodes.first.rawValue;
+    if (qrData == null) return;
+
+    _isProcessing = true;
+    _controller.stop();
+
+    try {
+      if (qrData.startsWith('Mio')) {
+        await _handleStaticQr(qrData);
+      } else {
+        await _handleDynamicQr(qrData);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      _showError("Không đọc được mã QR. Vui lòng thử lại");
+    }
+  }
+
+  Future<void> _handleStaticQr(String qrData) async {
+    final result = await _paymentService.getUserInfoByStaticQR(qrData);
+    if (!mounted) return;
+
+    if (result['is_success'] != true) {
+      _showError(result['message'] ?? "Mã QR không hợp lệ");
+      return;
+    }
+
+    final info = result['user_info'];
+    if (info['role'] != 'USER') {
+      _showError("Mã QR không hợp lệ");
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AmountInputScreen(
+          receiverId: info['user_id'],
+          receiverFullName: info['full_name'],
+          receiverPhone: info['phone'],
+        ),
+      ),
+    ).then((_) => _resumeScan());
+  }
+
+  Future<void> _handleDynamicQr(String qrData) async {
+    final result = await _paymentService.getUserInfoByDynamicQR(qrData);
+    if (!mounted) return;
+
+    if (result['is_success'] != true) {
+      _showError(result['message'] ?? "Mã QR không hợp lệ");
+      return;
+    }
+
+    final info = result['user_info'];
+    final role = info['role'];
+    if (role != 'USER' && role != 'MERCHANT') {
+      _showError("Mã QR không hợp lệ");
+      return;
+    }
+
+    final receiverPhone = info['destination_phone'];
+    final receiverId = info['destination_user_id'];
+    final receiverFullName = info['destination_name'];
+    final String? amount = info['amount']?.toString();
+    final String? description = info['description']?.toString();
+    final bool isMerchant = role == 'MERCHANT';
+    final String? orderId = info['order_id']?.toString();
+
+    // QR đã có sẵn số tiền và nội dung: bỏ qua màn nhập tiền
+    final bool hasFixedInfo =
+        (amount ?? '').isNotEmpty && (description ?? '').isNotEmpty;
+
+    if (!hasFixedInfo) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => AmountInputScreen(
+            receiverId: receiverId,
+            receiverFullName: receiverFullName,
+            receiverPhone: receiverPhone,
+            amount: amount,
+            description: description,
+            referenceCode: qrData,
+            isMerchant: isMerchant,
+            orderId: orderId,
+          ),
+        ),
+      ).then((_) => _resumeScan());
+      return;
+    }
+
+    final check = await _walletService.checkTransferEligibility(amount!);
+    if (!mounted) return;
+
+    if (check['is_success'] != true) {
+      _showError("Hệ thống đang bảo trì. Vui lòng thử lại sau");
+    } else if (check['is_eligible'] != true) {
+      _showError("Số dư trong ví không đủ");
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ConfirmTranferScreen(
+            receiverId: receiverId,
+            receiverName: receiverFullName,
+            receiverPhone: receiverPhone,
+            amount: FormatUtils.formatDisplayNumber(
+              FormatUtils.formatAmountToNum(amount),
+            ),
+            description: description,
+            walletBalance: check['wallet_balance'],
+            referenceCode: qrData,
+            isMerchant: isMerchant,
+            orderId: orderId,
+          ),
+        ),
+      ).then((_) => _resumeScan());
+    }
   }
 
   @override
@@ -72,152 +218,7 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
       ),
       body: Stack(
         children: [
-          MobileScanner(
-            controller: _controller,
-            onDetect: (BarcodeCapture capture) async {
-              final List<Barcode> barCodes = capture.barcodes;
-              if (barCodes.isNotEmpty) {
-                final String? qrData = barCodes.first.rawValue;
-                if (qrData != null) {
-                  _controller.stop();
-                  if (qrData.startsWith('Mio')) {
-                    final result = await _paymentService.getUserInfoByStaticQR(
-                      qrData,
-                    );
-                    if (!context.mounted) return;
-                    if (result['is_success']) {
-                      if (result['user_info']['role'] == 'USER') {
-                        final receiverPhone = result['user_info']['phone'];
-                        final receiverId = result['user_info']['user_id'];
-                        final receiverFullName =
-                            result['user_info']['full_name'];
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => AmountInputScreen(
-                              receiverId: receiverId,
-                              receiverFullName: receiverFullName,
-                              receiverPhone: receiverPhone,
-                            ),
-                          ),
-                        ).then((value) {
-                          _controller.start();
-                        });
-                      }
-                    } else {
-                      DialogUtils.showNotification(
-                        context,
-                        title: "Thông báo",
-                        message: result['message'] ?? "Mã QR không hợp lệ",
-                        onClose: () => _controller.start(),
-                      );
-                    }
-                  }
-                  /*------------------------------------*/
-                  else {
-                    final result = await _paymentService.getUserInfoByDynamicQR(
-                      qrData,
-                    );
-                    if (!context.mounted) return;
-                    if (result['is_success']) {
-                      final info = result['user_info'];
-                      final role = info['role'];
-                      if (role == 'USER' || role == 'MERCHANT') {
-                        final receiverPhone = info['destination_phone'];
-                        final receiverId = info['destination_user_id'];
-                        final receiverFullName = info['destination_name'];
-                        final String? amount = info['amount']?.toString();
-                        final String? description = info['description']
-                            ?.toString();
-                        final bool isMerchant = role == 'MERCHANT';
-                        final String? orderId = info['order_id']?.toString();
-
-                        // QR đã có sẵn số tiền và nội dung: bỏ qua màn nhập tiền
-                        final bool hasFixedInfo =
-                            (amount ?? '').isNotEmpty &&
-                            (description ?? '').isNotEmpty;
-
-                        if (hasFixedInfo) {
-                          final check = await _walletService
-                              .checkTransferEligibility(amount!);
-                          if (!context.mounted) return;
-                          if (check['is_success'] != true) {
-                            DialogUtils.showNotification(
-                              context,
-                              title: "Thông báo",
-                              message:
-                                  "Hệ thống đang bảo trì. Vui lòng thử lại sau",
-                              onClose: () => _controller.start(),
-                            );
-                          } else if (check['is_eligible'] != true) {
-                            DialogUtils.showNotification(
-                              context,
-                              title: "Thông báo",
-                              message: "Số dư trong ví không đủ",
-                              onClose: () => _controller.start(),
-                            );
-                          } else {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ConfirmTranferScreen(
-                                  receiverId: receiverId,
-                                  receiverName: receiverFullName,
-                                  receiverPhone: receiverPhone,
-                                  amount: FormatUtils.formatDisplayNumber(
-                                    FormatUtils.formatAmountToNum(amount),
-                                  ),
-                                  description: description,
-                                  walletBalance: check['wallet_balance'],
-                                  referenceCode: qrData,
-                                  isMerchant: isMerchant,
-                                  orderId: orderId,
-                                ),
-                              ),
-                            ).then((value) {
-                              _controller.start();
-                            });
-                          }
-                        } else {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => AmountInputScreen(
-                                receiverId: receiverId,
-                                receiverFullName: receiverFullName,
-                                receiverPhone: receiverPhone,
-                                amount: amount,
-                                description: description,
-                                referenceCode: qrData,
-                                isMerchant: isMerchant,
-                                orderId: orderId,
-                              ),
-                            ),
-                          ).then((value) {
-                            _controller.start();
-                          });
-                        }
-                      } else {
-                        DialogUtils.showNotification(
-                          context,
-                          title: "Thông báo",
-                          message: "Mã QR không hợp lệ",
-                          onClose: () => _controller.start(),
-                        );
-                      }
-                    } else {
-                      DialogUtils.showNotification(
-                        context,
-                        title: "Thông báo",
-                        message: result['message'] ?? "Mã QR không hợp lệ",
-                        onClose: () => _controller.start(),
-                      );
-                    }
-                  }
-                }
-              }
-            },
-          ),
+          MobileScanner(controller: _controller, onDetect: _onDetect),
 
           Center(
             child: SizedBox(
