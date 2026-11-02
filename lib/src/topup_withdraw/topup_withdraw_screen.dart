@@ -48,17 +48,16 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
 
   void _handleAmountChanged(String value) {
     num amountNum = FormatUtils.formatAmountToNum(value);
-    final num minAmount = _isTopUpTab ? 1000 : 10000;
     if (amountNum == 0) {
       setState(() {
         _msg = _isTopUpTab
             ? 'Vui lòng nhập số tiền cần nạp'
             : 'Vui lòng nhập số tiền cần rút';
       });
-    } else if (amountNum < minAmount) {
+    } else if (amountNum < 10000) {
       setState(() {
         _msg =
-            'Số tiền tối thiểu là ${FormatUtils.formatDisplayNumber(minAmount)}đ';
+            'Số tiền tối thiểu là 10.000đ';
       });
     } else if (amountNum > 50000000) {
       setState(() {

@@ -40,7 +40,6 @@ class UserService {
       }
       return false;
     } catch (e) {
-      debugPrint('Lỗi tạo mã PIN: $e');
       return false;
     }
   }
@@ -50,7 +49,6 @@ class UserService {
       final result = await api.get(ApiConfig.checkPinStatus);
       return result.data['data']['has_pin'] ?? false;
     } catch (e) {
-      debugPrint('Lỗi kiểm tra trạng thái pin: $e');
       return false;
     }
   }

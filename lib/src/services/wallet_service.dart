@@ -2,7 +2,6 @@ import 'package:app/core/network/api_client.dart';
 import 'package:app/core/network/api_config.dart';
 import 'package:app/core/network/api_error_handler.dart';
 import 'package:app/core/utils/format_utils.dart';
-import 'package:flutter/cupertino.dart';
 
 class WalletService {
   final api = ApiClient().dio;
@@ -19,7 +18,6 @@ class WalletService {
         'balance': balance,
       };
     } catch (e) {
-      debugPrint('Lỗi lấy số dư ví: $e');
       return ApiErrorHandler.handleError(e);
     }
   }
@@ -39,17 +37,10 @@ class WalletService {
         'is_success': true,
       };
     } catch (e) {
-      debugPrint('Lỗi kiểm tra số dư: $e');
        return ApiErrorHandler.handleError(e);
     }
   }
 
-  /// [action] và [params] cho server biết PIN này xác nhận giao dịch nào, để pin_token
-  /// chỉ dùng được cho đúng giao dịch đó (đổi số tiền/người nhận sẽ bị từ chối):
-  ///   TRANSFER   -> destination_user_id, amount
-  ///   TOPUP / WITHDRAW -> linked_bank_account_id, amount
-  ///   QR_PAYMENT -> reference_code
-  ///   BANK_LINK  -> bank_id
   Future<Map<String, dynamic>> checkPin(
     String pin,
     String idempotencyKey, {
@@ -74,7 +65,6 @@ class WalletService {
         'is_success': true,
       };
     } catch (e) {
-      debugPrint('Lỗi kiểm tra PIN: $e');
       return ApiErrorHandler.handleError(e);
     }
   }
