@@ -13,6 +13,14 @@ import 'package:app/src/history/transaction_model.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
 
+const Color _kPink = Color(0xFFEC407A);
+const Color _kPinkDark = Color(0xFFD81B60);
+const Color _kPinkLight = Color(0xFFF48FB1);
+const Color _kText = Color(0xFF1F1B24);
+const Color _kMuted = Color(0xFF8A8590);
+const Color _kIncome = Color(0xFF2E9E5B);
+const Color _kExpense = Color(0xFFE53935);
+
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
   @override
@@ -165,7 +173,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return PopScope(
       canPop: false,
       child: Scaffold(
-        backgroundColor: Colors.white.withValues(alpha: 0.95),
+        backgroundColor: const Color(0xFFFAF6F8),
         extendBodyBehindAppBar: true,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
@@ -173,34 +181,46 @@ class _HistoryScreenState extends State<HistoryScreen> {
           actions: [
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.only(left: 10, top: 10, bottom: 10),
+                padding: const EdgeInsets.only(left: 16, top: 10, bottom: 10),
                 child: Container(
-                  height: 50,
+                  height: 46,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(30),
                     color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: _kPink.withValues(alpha: 0.12),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      const SizedBox(width: 12),
-                      Icon(
+                      const SizedBox(width: 14),
+                      const Icon(
                         Iconsax.search_normal_1,
                         size: 20,
-                        color: Colors.black.withValues(alpha: 0.5),
+                        color: _kPink,
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: TextField(
                           controller: _searchController,
                           onChanged: _onSearchChanged,
                           textAlignVertical: TextAlignVertical.center,
-                          cursorColor: Colors.pink,
-                          decoration: const InputDecoration(
+                          cursorColor: _kPink,
+                          style: GoogleFonts.roboto(fontSize: 15),
+                          decoration: InputDecoration(
                             border: InputBorder.none,
                             isDense: true,
                             contentPadding: EdgeInsets.zero,
                             hintText: "Tìm kiếm giao dịch",
+                            hintStyle: GoogleFonts.roboto(
+                              fontSize: 15,
+                              color: _kMuted,
+                            ),
                           ),
                         ),
                       ),
@@ -234,21 +254,22 @@ class _HistoryScreenState extends State<HistoryScreen> {
               icon: Icons.file_download_outlined,
               tooltip: 'Xuất Excel',
               onPressed: _exportExcel,
-              padding: const EdgeInsets.only(left: 8, right: 12),
+              padding: const EdgeInsets.only(left: 8, right: 16),
             ),
           ],
         ),
         body: Stack(
           children: [
             Container(
-              height: 500,
+              height: 420,
               width: double.infinity,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.pink.shade200.withValues(alpha: 0.75),
+                    _kPink.withValues(alpha: 0.22),
+                    _kPinkLight.withValues(alpha: 0.08),
                     Colors.white.withValues(alpha: 0.0),
                   ],
                 ),
@@ -256,7 +277,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
             SafeArea(
               child: RefreshIndicator(
-                color: Colors.pink,
+                color: _kPink,
                 onRefresh: () async {
                   setState(() {
                     _allTransactions.clear();
@@ -267,17 +288,32 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 },
                 child: CustomScrollView(
                   controller: _scrollController,
+                  physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
                     SliverToBoxAdapter(child: _buildSummaryCard()),
                     SliverToBoxAdapter(
                       child: Padding(
-                        padding: const EdgeInsets.only(left: 15, bottom: 5),
-                        child: Text(
-                          "Giao dịch gần đây",
-                          style: GoogleFonts.roboto(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w400,
-                          ),
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 4,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                color: _kPink,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              "Giao dịch gần đây",
+                              style: GoogleFonts.roboto(
+                                fontSize: 19,
+                                fontWeight: FontWeight.w700,
+                                color: _kText,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -285,20 +321,35 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 15,
-                            vertical: 5,
+                            horizontal: 16,
+                            vertical: 4,
                           ),
                           child: Row(
                             children: [
                               Chip(
+                                avatar: const Icon(
+                                  Iconsax.calendar_1,
+                                  size: 16,
+                                  color: _kPink,
+                                ),
                                 label: Text(
                                   '${FormatUtils.formatCustomDateTime(_startDate.toString())} - ${FormatUtils.formatCustomDateTime(_endDate.toString())}',
-                                  style: GoogleFonts.roboto(fontSize: 13),
+                                  style: GoogleFonts.roboto(
+                                    fontSize: 13,
+                                    color: _kPinkDark,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
-                                backgroundColor: Colors.pink.withValues(
-                                  alpha: 0.1,
+                                backgroundColor: _kPink.withValues(alpha: 0.1),
+                                side: BorderSide.none,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
                                 ),
-                                deleteIcon: const Icon(Icons.close, size: 16),
+                                deleteIcon: const Icon(
+                                  Icons.close,
+                                  size: 16,
+                                  color: _kPinkDark,
+                                ),
                                 onDeleted: _clearDateFilter,
                               ),
                             ],
@@ -308,14 +359,33 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     if (_filteredTransactions.isEmpty && !_isLoading)
                       SliverToBoxAdapter(
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 40),
-                          child: Center(
-                            child: Text(
-                              _searchKeyword.isEmpty
-                                  ? "Chưa có giao dịch nào"
-                                  : "Không tìm thấy giao dịch phù hợp",
-                              style: GoogleFonts.roboto(color: Colors.grey),
-                            ),
+                          padding: const EdgeInsets.symmetric(vertical: 48),
+                          child: Column(
+                            children: [
+                              Container(
+                                width: 84,
+                                height: 84,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: _kPink.withValues(alpha: 0.08),
+                                ),
+                                child: const Icon(
+                                  Iconsax.receipt_search,
+                                  color: _kPink,
+                                  size: 38,
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              Text(
+                                _searchKeyword.isEmpty
+                                    ? "Chưa có giao dịch nào"
+                                    : "Không tìm thấy giao dịch phù hợp",
+                                style: GoogleFonts.roboto(
+                                  color: _kMuted,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       )
@@ -338,13 +408,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         child: Padding(
                           padding: EdgeInsets.symmetric(vertical: 20),
                           child: Center(
-                            child: CircularProgressIndicator(
-                              color: Colors.pink,
-                            ),
+                            child: CircularProgressIndicator(color: _kPink),
                           ),
                         ),
                       ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 20)),
+                    const SliverToBoxAdapter(child: SizedBox(height: 24)),
                   ],
                 ),
               ),
@@ -357,82 +425,63 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Widget _buildSummaryCard() {
     return Padding(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
       child: Container(
         width: double.infinity,
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(15),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 5),
-                child: Text(
-                  "Tổng quan tháng ${DateTime.now().month}",
-                  style: GoogleFonts.roboto(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              Row(
-                children: [
-                  Expanded(
-                    child: _summaryBox(
-                      "Tổng thu",
-                      '${FormatUtils.formatDisplayNumber(_totalIncome)}đ',
-                      Colors.green,
-                    ),
-                  ),
-                 
-                  const SizedBox(width: 5),
-                   Expanded(
-                    child: _summaryBox(
-                      "Tổng chi",
-                      '${FormatUtils.formatDisplayNumber(_totalExpense)}đ',
-                      Colors.red,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFF06292), _kPinkDark],
           ),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: _kPink.withValues(alpha: 0.35),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+            ),
+          ],
         ),
-      ),
-    );
-  }
-
-  Widget _summaryBox(String label, String value, Color? textColor) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(width: 0.5, color: Colors.grey),
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              label,
-              style: GoogleFonts.roboto(
-                fontSize: 18,
-                color: Colors.black.withValues(alpha: 0.6),
-              ),
+            Row(
+              children: [
+                const Icon(Iconsax.calendar_1, color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  "Tổng quan tháng ${DateTime.now().month}",
+                  style: GoogleFonts.roboto(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 5),
-            Text(
-              value,
-              style: GoogleFonts.roboto(
-                fontSize: 18,
-                color: textColor,
-                fontWeight: FontWeight.w500,
-              ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: _summaryBox(
+                    "Tổng thu",
+                    '${FormatUtils.formatDisplayNumber(_totalIncome)}đ',
+                    _kIncome,
+                    Iconsax.arrow_down_2,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _summaryBox(
+                    "Tổng chi",
+                    '${FormatUtils.formatDisplayNumber(_totalExpense)}đ',
+                    _kExpense,
+                    Iconsax.arrow_up_3,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -440,24 +489,77 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  Widget _buildMonthHeader(String label) {
+  Widget _summaryBox(
+    String label,
+    String value,
+    Color? textColor,
+    IconData icon,
+  ) {
     return Container(
-      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.blue.shade50,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: textColor?.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: textColor, size: 15),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: GoogleFonts.roboto(fontSize: 14, color: _kMuted),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: GoogleFonts.roboto(
+                fontSize: 18,
+                color: textColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
-      padding: const EdgeInsets.fromLTRB(15, 8, 0, 8),
+    );
+  }
+
+  Widget _buildMonthHeader(String label) {
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFFFAF6F8),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       alignment: Alignment.centerLeft,
-      child: Text(
-        label,
-        style: GoogleFonts.roboto(fontSize: 20, fontWeight: FontWeight.w500),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: _kPink.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.roboto(
+            fontSize: 14.5,
+            fontWeight: FontWeight.w600,
+            color: _kPinkDark,
+          ),
+        ),
       ),
     );
   }
@@ -471,21 +573,24 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return Padding(
       padding: padding,
       child: Container(
-        height: 30,
-        width: 30,
+        height: 42,
+        width: 42,
         decoration: BoxDecoration(
-          border: Border.all(
-            width: 0.1,
-            color: Colors.black.withValues(alpha: 0.5),
-          ),
           color: Colors.white,
           shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: _kPink.withValues(alpha: 0.12),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: IconButton(
           padding: EdgeInsets.zero,
           tooltip: tooltip,
           onPressed: onPressed,
-          icon: Icon(icon, size: 20),
+          icon: Icon(icon, size: 21, color: _kText),
         ),
       ),
     );
@@ -670,11 +775,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
               : 'Chuyển lại'
         : "Giao dịch không xác định";
 
+    final displayColor = iconColor == Colors.yellow
+        ? Colors.amber.shade700
+        : iconColor;
+
     return Material(
       color: Colors.white,
       child: Column(
         children: [
-          ListTile(
+          InkWell(
             onTap: () {
               Navigator.push(
                 context,
@@ -701,57 +810,86 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ),
               );
             },
-            leading: CircleAvatar(
-              backgroundColor: iconColor.withValues(alpha: 0.1),
-              child: Icon(icon, color: iconColor, size: 20),
-            ),
-            title: Text(
-              title,
-              style: GoogleFonts.roboto(
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-                color: Colors.black.withValues(alpha: 0.7),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: displayColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: Icon(icon, color: displayColor, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.roboto(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: _kText,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          FormatUtils.formatCustomDateTime(
+                            t.createdAt.toString(),
+                          ),
+                          style: GoogleFonts.roboto(
+                            fontSize: 12.5,
+                            color: _kMuted,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '$amountPrefix${FormatUtils.formatDisplayNumber(t.amount)}đ',
+                        style: GoogleFonts.roboto(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: amountColor == Colors.green
+                              ? _kIncome
+                              : _kText,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Số dư: ${FormatUtils.formatDisplayNumber(isOut ? t.balanceBefore : t.balanceAfter)}đ',
+                        style: GoogleFonts.roboto(
+                          fontSize: 12,
+                          color: _kMuted,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ),
-            subtitle: Text(
-              FormatUtils.formatCustomDateTime(t.createdAt.toString()),
-              style: GoogleFonts.roboto(fontSize: 14, color: Colors.grey),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '$amountPrefix${FormatUtils.formatDisplayNumber(t.amount)}đ',
-                  style: GoogleFonts.roboto(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: amountColor,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Số dư ví: ${FormatUtils.formatDisplayNumber(isOut ? t.balanceBefore : t.balanceAfter)}đ',
-                  style: GoogleFonts.roboto(
-                    fontSize: 14,
-                    color: Colors.black.withValues(alpha: 0.5),
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ],
             ),
           ),
           if (!isLast)
-            Padding(
-              padding: const EdgeInsets.only(right: 25),
-              child: Divider(
-                height: 1,
-                thickness: 0.5,
-                indent: 72,
-                color: Colors.grey.shade200,
-              ),
+            Divider(
+              height: 1,
+              thickness: 0.6,
+              indent: 74,
+              endIndent: 16,
+              color: Colors.grey.shade200,
             ),
         ],
       ),

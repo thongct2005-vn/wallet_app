@@ -12,6 +12,25 @@ import 'package:app/src/services/wallet_service.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:uuid/uuid.dart';
 
+const Color _kPink = Color(0xFFEC407A);
+const Color _kPinkDark = Color(0xFFD81B60);
+const Color _kPinkLight = Color(0xFFF48FB1);
+const Color _kText = Color(0xFF1F1B24);
+const Color _kMuted = Color(0xFF8A8590);
+const Color _kBg = Color(0xFFFAF6F8);
+
+BoxDecoration _cardDeco() => BoxDecoration(
+  color: Colors.white,
+  borderRadius: BorderRadius.circular(22),
+  boxShadow: [
+    BoxShadow(
+      color: _kPink.withValues(alpha: 0.08),
+      blurRadius: 22,
+      offset: const Offset(0, 8),
+    ),
+  ],
+);
+
 class ConfirmTopUpWithdrawScreen extends StatefulWidget {
   final String amount;
   final List<dynamic> linkedBanks;
@@ -60,36 +79,41 @@ class _ConfirmTopUpWithdrawScreenState
     return PopScope(
       canPop: !_isProcessing,
       child: Scaffold(
-        backgroundColor: Colors.white.withValues(alpha: 0.95),
+        backgroundColor: _kBg,
         extendBodyBehindAppBar: true,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
+          centerTitle: true,
           leading: Padding(
-            padding: EdgeInsets.fromLTRB(10, 15, 0, 15),
+            padding: const EdgeInsets.fromLTRB(16, 8, 0, 8),
             child: Container(
               height: 40,
               width: 40,
               decoration: BoxDecoration(
-                border: Border.all(
-                  width: 1,
-                  color: Colors.white.withValues(alpha: 0.8),
-                ),
+                color: Colors.white,
                 shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.8),
+                boxShadow: [
+                  BoxShadow(
+                    color: _kPink.withValues(alpha: 0.14),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: IconButton(
                 padding: EdgeInsets.zero,
                 onPressed: _isProcessing ? null : () => Navigator.pop(context),
-                icon: Icon(Icons.arrow_back, size: 20),
+                icon: const Icon(Icons.arrow_back, size: 20, color: _kText),
               ),
             ),
           ),
           title: Text(
             "Thanh toán an toàn",
             style: GoogleFonts.roboto(
-              fontSize: 20,
-              fontWeight: FontWeight.w500,
+              fontSize: 19,
+              fontWeight: FontWeight.w700,
+              color: _kText,
             ),
           ),
         ),
@@ -97,14 +121,15 @@ class _ConfirmTopUpWithdrawScreenState
             ? Stack(
                 children: [
                   Container(
-                    height: 500,
+                    height: 380,
                     width: double.infinity,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          Colors.pink.shade200.withValues(alpha: 0.75),
+                          _kPink.withValues(alpha: 0.24),
+                          _kPinkLight.withValues(alpha: 0.08),
                           Colors.white.withValues(alpha: 0.0),
                         ],
                       ),
@@ -115,11 +140,11 @@ class _ConfirmTopUpWithdrawScreenState
                       children: [
                         Expanded(
                           child: SingleChildScrollView(
-                            padding: const EdgeInsets.fromLTRB(15, 10, 15, 15),
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                             child: Column(
                               children: [
                                 _buildContainerTopUpInfo(context, selectedBank),
-                                const SizedBox(height: 15),
+                                const SizedBox(height: 16),
                                 _buildContainerBankList(context),
                               ],
                             ),
@@ -169,37 +194,39 @@ class _ConfirmTopUpWithdrawScreenState
   ) {
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-      ),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+      decoration: _cardDeco(),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: EdgeInsets.all(10),
-            child: Row(
-              children: [
-                Icon(Iconsax.wallet_1, color: Colors.pink, size: 24,),
-                SizedBox(width: 5),
-                Text(
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _kPink.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: const Icon(Iconsax.wallet_1, color: _kPink, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
                   widget.isTopUpTab
                       ? "Nạp tiền vào ví Mio"
                       : "Rút tiền về ngân hàng",
                   style: GoogleFonts.roboto(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 19,
+                    color: _kText,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(10, 0, 10, 0),
-            child: Divider(
-              height: 1.2,
-              color: Colors.grey.withValues(alpha: 0.5),
-            ),
-          ),
+          const SizedBox(height: 14),
+          Divider(height: 1, color: Colors.black.withValues(alpha: 0.07)),
           _buildInfoRow(
             label: widget.isTopUpTab ? 'Nguồn tiền' : 'Rút về NH liên kết',
             value: selectedBank['bank_name'] ?? '',
@@ -208,31 +235,35 @@ class _ConfirmTopUpWithdrawScreenState
             label: 'Số tiền',
             value:
                 '${FormatUtils.formatDisplayNumber(FormatUtils.formatAmountToNum(widget.amount))}đ',
+            bold: true,
           ),
           if (!widget.isTopUpTab) ...[
             _buildInfoRow(label: 'Phí giao dịch', value: 'Miễn phí'),
           ],
-          SizedBox(height: 10),
         ],
       ),
     );
   }
 
-  Widget _buildInfoRow({required String label, required String value}) {
+  Widget _buildInfoRow({
+    required String label,
+    required String value,
+    bool bold = false,
+  }) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(10, 10, 10, 0),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
             label,
             style: GoogleFonts.roboto(
-              color: Colors.black.withValues(alpha: 0.4),
-              fontSize: 20,
+              color: _kMuted,
+              fontSize: 15,
               fontWeight: FontWeight.w400,
             ),
           ),
-          SizedBox(width: 100),
+          const SizedBox(width: 16),
           Expanded(
             child: Text(
               value,
@@ -240,8 +271,9 @@ class _ConfirmTopUpWithdrawScreenState
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.roboto(
-                fontWeight: FontWeight.w500,
-                fontSize: 20,
+                fontWeight: bold ? FontWeight.w700 : FontWeight.w600,
+                fontSize: 16,
+                color: bold ? _kPinkDark : _kText,
               ),
             ),
           ),
@@ -253,85 +285,81 @@ class _ConfirmTopUpWithdrawScreenState
   Widget _buildContainerBankList(BuildContext context) {
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(5, 5, 5, 10),
-              child: Text(
-                "Nạp từ tài khoản/thẻ",
-                style: GoogleFonts.roboto(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 20,
-                ),
+      padding: const EdgeInsets.all(16),
+      decoration: _cardDeco(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(2, 0, 2, 12),
+            child: Text(
+              widget.isTopUpTab ? "Nạp từ tài khoản/thẻ" : "Rút về tài khoản/thẻ",
+              style: GoogleFonts.roboto(
+                fontWeight: FontWeight.w700,
+                fontSize: 17,
+                color: _kText,
               ),
             ),
-            for (final bank in widget.linkedBanks) ...[
-              _buildBankOption(bank),
-              const SizedBox(height: 10),
-            ],
+          ),
+          for (final bank in widget.linkedBanks) ...[
+            _buildBankOption(bank),
             const SizedBox(height: 10),
-            GestureDetector(
-              onTap: () async {
-                setState(() {
-                  isLoadingLinkedBanks = true;
-                });
-                final result = await _getLinkedBanks();
-                setState(() {
-                  isLoadingLinkedBanks = false;
-                });
-                if (!context.mounted) return;
-                if (result['is_success']) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => LinkBankScreen(
-                        bankList: result['data']['available_banks'],
-                      ),
+          ],
+          const SizedBox(height: 4),
+          InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () async {
+              setState(() {
+                isLoadingLinkedBanks = true;
+              });
+              final result = await _getLinkedBanks();
+              setState(() {
+                isLoadingLinkedBanks = false;
+              });
+              if (!context.mounted) return;
+              if (result['is_success']) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => LinkBankScreen(
+                      bankList: result['data']['available_banks'],
                     ),
-                  );
-                } else {
-                  SnackbarUtils.failure(context, result['message']);
-                }
-              },
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    width: 0.5,
-                    color: Colors.grey.withValues(alpha: 0.5),
                   ),
-                ),
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                  child: Row(
-                    children: [
-                      Icon(Iconsax.box_add, color: Colors.pink, size: 25),
-                      const SizedBox(width: 10),
-                      Text(
-                        "Ngân hàng liên kết",
-                        style: GoogleFonts.roboto(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const Spacer(),
-                      Icon(Iconsax.arrow_right, size: 25),
-                    ],
-                  ),
+                );
+              } else {
+                SnackbarUtils.failure(context, result['message']);
+              }
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                color: _kPink.withValues(alpha: 0.05),
+                border: Border.all(
+                  width: 1,
+                  color: _kPink.withValues(alpha: 0.35),
                 ),
               ),
+              child: Row(
+                children: [
+                  const Icon(Iconsax.box_add, color: _kPink, size: 24),
+                  const SizedBox(width: 12),
+                  Text(
+                    "Ngân hàng liên kết",
+                    style: GoogleFonts.roboto(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: _kPinkDark,
+                    ),
+                  ),
+                  const Spacer(),
+                  const Icon(Iconsax.arrow_right_3, size: 18, color: _kPink),
+                ],
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -347,82 +375,79 @@ class _ConfirmTopUpWithdrawScreenState
           idempotencyKey = _uuid.v7();
         });
       },
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
         width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(16),
+          color: isSelected ? _kPink.withValues(alpha: 0.05) : Colors.white,
           border: Border.all(
-            width: isSelected ? 2 : 1,
-            color: isSelected
-                ? Colors.pink
-                : Colors.grey.withValues(alpha: 0.3),
+            width: isSelected ? 1.5 : 1,
+            color: isSelected ? _kPink : Colors.grey.withValues(alpha: 0.28),
           ),
         ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-          child: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: SizedBox(
-                  width: 25,
-                  height: 25,
-                  child: Image.network(
-                    bank['logo_url'],
-                    headers: const {'ngrok-skip-browser-warning': 'true'},
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, progress) {
-                      if (progress == null) return child;
-                      return Container(
-                        color: Colors.grey.shade200,
-                        child: const SizedBox(),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: Colors.grey.shade200,
-                        child: const Icon(Iconsax.bank, size: 16),
-                      );
-                    },
-                  ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 36,
+                height: 36,
+                child: Image.network(
+                  bank['logo_url'],
+                  headers: const {'ngrok-skip-browser-warning': 'true'},
+                  fit: BoxFit.cover,
+                  loadingBuilder: (context, child, progress) {
+                    if (progress == null) return child;
+                    return Container(
+                      color: Colors.grey.shade200,
+                      child: const SizedBox(),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: Colors.grey.shade200,
+                      child: const Icon(Iconsax.bank, size: 18),
+                    );
+                  },
                 ),
               ),
-
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  bank['bank_name'] ?? '',
-                  style: GoogleFonts.roboto(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                bank['bank_name'] ?? '',
+                style: GoogleFonts.roboto(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: _kText,
                 ),
               ),
-              Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: isSelected ? Colors.pink : Colors.grey,
-                    width: 2,
-                  ),
+            ),
+            Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected ? _kPink : Colors.grey.shade400,
+                  width: 2,
                 ),
-                alignment: Alignment.center,
-                child: isSelected
-                    ? Container(
-                        width: 12,
-                        height: 12,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.pink,
-                        ),
-                      )
-                    : null,
               ),
-            ],
-          ),
+              alignment: Alignment.center,
+              child: isSelected
+                  ? Container(
+                      width: 11,
+                      height: 11,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _kPink,
+                      ),
+                    )
+                  : null,
+            ),
+          ],
         ),
       ),
     );
@@ -431,9 +456,19 @@ class _ConfirmTopUpWithdrawScreenState
   Widget _buildContainerConfirmButton(BuildContext context) {
     return Container(
       width: double.infinity,
-      color: Colors.white,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
       child: Padding(
-        padding: EdgeInsets.fromLTRB(10, 15, 10, 15),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -444,21 +479,27 @@ class _ConfirmTopUpWithdrawScreenState
                 Text(
                   "Tổng tiền",
                   style: GoogleFonts.roboto(
-                    fontSize: 20,
-                    color: Colors.black.withValues(alpha: 0.7),
+                    fontSize: 16,
+                    color: _kMuted,
                     fontWeight: FontWeight.w400,
                   ),
                 ),
-                Text(
-                  '${FormatUtils.formatDisplayNumber(FormatUtils.formatAmountToNum(widget.amount))}đ',
-                  style: GoogleFonts.roboto(
-                    fontSize: 35,
-                    fontWeight: FontWeight.w700,
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '${FormatUtils.formatDisplayNumber(FormatUtils.formatAmountToNum(widget.amount))}đ',
+                      style: GoogleFonts.roboto(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w800,
+                        color: _kText,
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             GestureDetector(
               onTap: _isProcessing || _selectedBankId == null
                   ? null
@@ -467,43 +508,55 @@ class _ConfirmTopUpWithdrawScreenState
                     },
               child: Container(
                 width: double.infinity,
+                height: 54,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(16),
+                  gradient: _isProcessing
+                      ? null
+                      : const LinearGradient(
+                          colors: [Color(0xFFF06292), _kPinkDark],
+                        ),
                   color: _isProcessing
                       ? Colors.black.withValues(alpha: 0.1)
-                      : Colors.pinkAccent,
+                      : null,
+                  boxShadow: _isProcessing
+                      ? null
+                      : [
+                          BoxShadow(
+                            color: _kPink.withValues(alpha: 0.35),
+                            blurRadius: 14,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
                 ),
-                child: Padding(
-                  padding: EdgeInsets.only(top: 10, bottom: 10),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _isProcessing
-                          ? SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Icon(
-                              Icons.lock_outline,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _isProcessing
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
                               color: Colors.white,
-                              size: 20,
+                              strokeWidth: 2,
                             ),
-                      const SizedBox(width: 10),
-                      Text(
-                        "Xác nhận",
-                        style: GoogleFonts.roboto(
-                          fontSize: 20,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
+                          )
+                        : const Icon(
+                            Icons.lock_outline,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                    const SizedBox(width: 10),
+                    Text(
+                      "Xác nhận",
+                      style: GoogleFonts.roboto(
+                        fontSize: 18,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),

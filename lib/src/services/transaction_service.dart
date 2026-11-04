@@ -146,12 +146,8 @@ class TransactionService {
   }
 }
 
-  /// Server chỉ nhận ngày dạng YYYY-MM-DD (giờ Việt Nam)
   static String _dateOnly(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
-  /// Yêu cầu server tạo file Excel và gửi đến email đã đăng ký.
-  /// Thành công: data = {'email': <email đã che>, 'row_count': <số giao dịch>}
   Future<Map<String, dynamic>> exportHistoryToEmail({
     required DateTime startDate,
     required DateTime endDate,
@@ -163,8 +159,7 @@ class TransactionService {
           'start_date': _dateOnly(startDate),
           'end_date': _dateOnly(endDate),
         },
-        // Tạo file và gửi mail có thể lâu hơn mức 5 giây mặc định của ApiClient
-        options: Options(receiveTimeout: const Duration(seconds: 40)),
+        options: Options(receiveTimeout: const Duration(seconds: 30)),
       );
       return {
         'is_success': true,
