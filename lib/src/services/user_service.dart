@@ -4,7 +4,6 @@ import 'package:app/core/network/api_error_handler.dart';
 import 'package:crypto/crypto.dart';
 import 'package:app/core/network/api_client.dart';
 import 'package:app/core/network/api_config.dart';
-import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
@@ -80,7 +79,6 @@ class UserService {
 
         List<String> uniquePhones = phoneNumbers.toSet().toList();
         uniquePhones.remove(myPhone);
-        // Server chỉ trả phone_hash, nên app tự ghép lại số điện thoại từ danh bạ của chính nó
         final Map<String, String> phoneByHash = {
           for (final p in uniquePhones) _hashPhone(p): p,
         };

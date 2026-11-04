@@ -17,11 +17,9 @@ import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-
 const Color _kPink = Color(0xFFEC407A);
 const Color _kPinkDark = Color(0xFFD81B60);
 const Color _kPinkLight = Color(0xFFF48FB1);
-const Color _kBg = Color(0xFFFAF6F8);
 const Color _kText = Color(0xFF1F1B24);
 const Color _kMuted = Color(0xFF8A8590);
 
@@ -52,7 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isHidenWalletBalance = false;
   String _balance = '0';
   bool _hasPin = false;
-  bool _isCheckingBank = false; // chỉ dùng để hiện loading khi chờ API
+  bool _isCheckingBank = false;
   int _selectedIndex = 0;
 
   @override
@@ -458,27 +456,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ],
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _isHidenWalletBalance ? "• • • • • • • •" : _balance,
-                      style: GoogleFonts.roboto(
-                        color: Colors.white,
-                        fontSize: 32,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: _isHidenWalletBalance ? 2 : 0,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "Kéo xuống để cập nhật số dư",
-                      style: GoogleFonts.roboto(
-                        color: Colors.white.withValues(alpha: 0.7),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
+
+                Text(
+                  _isHidenWalletBalance ? "• • • • • • • •" : _balance,
+                  style: GoogleFonts.roboto(
+                    color: Colors.white,
+                    fontSize: 32,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: _isHidenWalletBalance ? 2 : 0,
+                  ),
                 ),
               ],
             ),
