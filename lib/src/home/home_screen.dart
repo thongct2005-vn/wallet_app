@@ -310,7 +310,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   width: 44,
                   height: 44,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
+                  errorBuilder: (_, _, _) => Container(
                     width: 44,
                     height: 44,
                     color: _kPink.withValues(alpha: 0.12),

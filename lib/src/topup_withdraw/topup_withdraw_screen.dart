@@ -32,11 +32,11 @@ class TopUpWithdrawScreen extends StatefulWidget {
     return PageRouteBuilder<T>(
       transitionDuration: const Duration(milliseconds: 320),
       reverseTransitionDuration: const Duration(milliseconds: 260),
-      pageBuilder: (_, __, ___) => TopUpWithdrawScreen(
+      pageBuilder: (_, _, _) => TopUpWithdrawScreen(
         walletBalance: walletBalance,
         isTopUpTab: isTopUpTab,
       ),
-      transitionsBuilder: (_, animation, __, child) {
+      transitionsBuilder: (_, animation, _, child) {
         final curved = CurvedAnimation(
           parent: animation,
           curve: Curves.easeOutCubic,

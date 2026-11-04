@@ -1,11 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Bottom sheet chọn khoảng ngày (thay cho showDateRangePicker mặc định).
-///
-/// - Chọn nhanh: 7 ngày qua, 30 ngày qua, Tháng này, Tháng trước.
-/// - [maxDays]: giới hạn số ngày tối đa của khoảng chọn (null = không giới hạn).
-/// - Trả về [DateTimeRange] (chỉ có ngày, giờ = 00:00) hoặc null nếu người dùng đóng sheet.
 class DateRangePickerSheet extends StatefulWidget {
   final String title;
   final String confirmText;
@@ -65,7 +60,7 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
 
   late final DateTime _first;
   late final DateTime _last;
-  late DateTime _month; // ngày 1 của tháng đang hiển thị
+  late DateTime _month;
   DateTime? _start;
   DateTime? _end;
 
@@ -119,7 +114,7 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
     if (day.isBefore(_first) || day.isAfter(_last)) return false;
 
     final max = widget.maxDays;
-    // Đang chọn ngày kết thúc: chặn các ngày vượt quá số ngày tối đa
+
     if (max != null && _start != null && _end == null) {
       final limit = DateTime(_start!.year, _start!.month, _start!.day + max - 1);
       if (day.isAfter(limit)) return false;
@@ -189,7 +184,6 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
     final end = _end ?? _start;
     final selectedDays =
         (_start != null && end != null) ? _daysBetween(_start!, end) : 0;
-    // Hộp "Từ ngày" sáng khi bước tiếp theo là chọn ngày bắt đầu, ngược lại sáng hộp "Đến ngày"
     final pickingStart = _start == null || _end != null;
 
     return Container(
@@ -411,7 +405,7 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
 
   List<Widget> _buildWeeks() {
     final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
-    final lead = DateTime(_month.year, _month.month, 1).weekday - 1; // T2 = 0
+    final lead = DateTime(_month.year, _month.month, 1).weekday - 1;
     final cells = <Widget>[];
 
     for (var i = 0; i < lead; i++) {
@@ -420,7 +414,7 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
     for (var d = 1; d <= daysInMonth; d++) {
       cells.add(_buildDay(DateTime(_month.year, _month.month, d)));
     }
-    // Luôn đủ 6 hàng để chiều cao sheet không nhảy khi đổi tháng
+
     while (cells.length < 42) {
       cells.add(const SizedBox(height: 44));
     }
@@ -443,7 +437,7 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
     final isEdge = isStart || isEnd;
     final hasRange = _start != null && end != null && end.isAfter(_start!);
     final inBand =
-        hasRange && !day.isBefore(_start!) && !day.isAfter(end!);
+        hasRange && !day.isBefore(_start!) && !day.isAfter(end);
     final leftBand = inBand && !isStart;
     final rightBand = inBand && !isEnd;
     final isToday = _same(day, DateTime.now());

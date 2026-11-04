@@ -185,7 +185,7 @@ class _TotpSetupDialogState extends State<_TotpSetupDialog> {
               _step(
                 '3',
                 widget.recover
-                    ? 'Đóng cửa sổ này, bấm \"Xác nhận\" rồi nhập mã 6 số '
+                    ? 'Đóng cửa sổ này, bấm "Xác nhận" rồi nhập mã 6 số '
                           'trong ứng dụng để đăng nhập.'
                     : 'Đăng nhập như bình thường. Sau khi vào được tài khoản, '
                           'nhập mã 6 số trong ứng dụng để hoàn tất.',
