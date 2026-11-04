@@ -8,17 +8,21 @@ class KycResultScreen extends StatelessWidget {
   final bool isSuccess;
   final String msg;
   final ForgotKycArgs? forgot;
+  final bool isUpdate;
   const KycResultScreen({
     super.key,
     required this.isSuccess,
     required this.msg,
     this.forgot,
+    this.isUpdate = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final primaryColor = isSuccess ? Colors.lightGreen : Colors.redAccent;
-    final titleText = isSuccess ? 'Xác minh thành công' : 'Xác minh thất bại';
+    final titleText = isUpdate
+        ? (isSuccess ? 'Cập nhật thành công' : 'Cập nhật thất bại')
+        : (isSuccess ? 'Xác minh thành công' : 'Xác minh thất bại');
     final subtitleText = msg;
 
     return Scaffold(
@@ -83,7 +87,7 @@ class KycResultScreen extends StatelessWidget {
                       return;
                     }
                     isSuccess? Navigator.pushReplacement(context, MaterialPageRoute(builder: (context)=>HomeScreen()))
-                    : Navigator.pushReplacement(context, MaterialPageRoute(builder: (context)=>KycFrontIdScreen()));
+                    : Navigator.pushReplacement(context, MaterialPageRoute(builder: (context)=>KycFrontIdScreen(isUpdate: isUpdate)));
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.pinkAccent,

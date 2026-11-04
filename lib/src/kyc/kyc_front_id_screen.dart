@@ -15,7 +15,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class KycFrontIdScreen extends StatefulWidget {
   /// Khác null khi màn KYC được dùng cho luồng quên mật khẩu / quên PIN
   final ForgotKycArgs? forgot;
-  const KycFrontIdScreen({super.key, this.forgot});
+  // true: người dùng đã KYC, đang cập nhật lại thông tin
+  final bool isUpdate;
+  const KycFrontIdScreen({super.key, this.forgot, this.isUpdate = false});
 
   @override
   State<KycFrontIdScreen> createState() => _KycFrontIdScreenState();
@@ -69,7 +71,7 @@ class _KycFrontIdScreenState extends State<KycFrontIdScreen> {
         ),
         actions: [
           // Luồng quên mật khẩu/PIN: người dùng đã đăng xuất sẵn nên không cần nút này
-          if (widget.forgot == null)
+          if (widget.forgot == null && !widget.isUpdate)
             IconButton(
               tooltip: 'Đăng xuất',
               onPressed: () => _showConfirmLogout(context),
@@ -265,6 +267,7 @@ class _KycFrontIdScreenState extends State<KycFrontIdScreen> {
         builder: (context) => KycBackIdScreen(
           frontIdImage: _capturedImage!,
           forgot: widget.forgot,
+          isUpdate: widget.isUpdate,
         ),
       ),
     );

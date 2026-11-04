@@ -1,4 +1,8 @@
 import 'dart:async';
+import 'package:app/core/utils/dialog_utils.dart';
+import 'package:app/core/utils/loading_util.dart';
+import 'package:app/core/utils/snackbar_utils.dart';
+import 'package:app/core/widgets/date_range_picker_sheet.dart';
 import 'package:app/src/history/transaction_detail_screen.dart';
 import 'package:app/src/services/transaction_service.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +11,7 @@ import 'package:flutter_sticky_header/flutter_sticky_header.dart';
 import 'package:app/core/utils/format_utils.dart';
 import 'package:app/src/history/transaction_model.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:intl/intl.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -30,6 +35,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
   DateTime? _endDate;
   double _totalIncome = 0;
   double _totalExpense = 0;
+  bool _isExporting = false;
+  static const int _exportMaxDays = 31; // khớp EXPORT.MAX_DAYS ở backend
 
   @override
   void initState() {
@@ -217,27 +224,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 15),
-              child: Container(
-                height: 30,
-                width: 30,
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    width: 0.1,
-                    color: Colors.black.withValues(alpha: 0.5),
-                  ),
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  padding: EdgeInsets.zero,
-                  onPressed: () {
-                    _showDateFilterDialog();
-                  },
-                  icon: const Icon(Iconsax.filter, size: 20),
-                ),
-              ),
+            _appBarCircleButton(
+              icon: Iconsax.filter,
+              tooltip: 'Lọc theo ngày',
+              onPressed: _showDateFilterDialog,
+              padding: const EdgeInsets.only(left: 12),
+            ),
+            _appBarCircleButton(
+              icon: Icons.file_download_outlined,
+              tooltip: 'Xuất Excel',
+              onPressed: _exportExcel,
+              padding: const EdgeInsets.only(left: 8, right: 12),
             ),
           ],
         ),
@@ -465,44 +462,49 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
+  Widget _appBarCircleButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+    required EdgeInsetsGeometry padding,
+  }) {
+    return Padding(
+      padding: padding,
+      child: Container(
+        height: 30,
+        width: 30,
+        decoration: BoxDecoration(
+          border: Border.all(
+            width: 0.1,
+            color: Colors.black.withValues(alpha: 0.5),
+          ),
+          color: Colors.white,
+          shape: BoxShape.circle,
+        ),
+        child: IconButton(
+          padding: EdgeInsets.zero,
+          tooltip: tooltip,
+          onPressed: onPressed,
+          icon: Icon(icon, size: 20),
+        ),
+      ),
+    );
+  }
+
   Future<void> _showDateFilterDialog() async {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final oneYearAgo = DateTime(now.year - 1, now.month, now.day);
 
-    final result = await showDateRangePicker(
-      context: context,
+    final result = await DateRangePickerSheet.show(
+      context,
+      title: 'Lọc theo ngày',
+      confirmText: 'Áp dụng',
       firstDate: oneYearAgo,
-      lastDate: now,
-      initialDateRange: _startDate != null && _endDate != null
+      lastDate: today,
+      initialRange: _startDate != null && _endDate != null
           ? DateTimeRange(start: _startDate!, end: _endDate!)
-          : DateTimeRange(
-              start: now.subtract(const Duration(days: 7)),
-              end: now,
-            ),
-      locale: const Locale('vi', 'VN'),
-      helpText: 'Chọn khoảng thời gian',
-      saveText: 'Áp dụng',
-      cancelText: 'Hủy',
-      confirmText: 'Xong',
-      fieldStartLabelText: 'Từ ngày',
-      fieldEndLabelText: 'Đến ngày',
-      errorInvalidRangeText: 'Khoảng ngày không hợp lệ',
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Colors.pink,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Colors.black87,
-            ),
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(foregroundColor: Colors.pink),
-            ),
-          ),
-          child: child!,
-        );
-      },
+          : null,
     );
 
     if (result != null) {
@@ -511,6 +513,81 @@ class _HistoryScreenState extends State<HistoryScreen> {
         _endDate = result.end;
         _applyFilter();
       });
+    }
+  }
+
+  // ===== Xuất Excel =====
+
+  Future<void> _exportExcel() async {
+    if (_isExporting) return;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final range = await DateRangePickerSheet.show(
+      context,
+      title: 'Xuất lịch sử giao dịch',
+      confirmText: 'Tiếp tục',
+      firstDate: DateTime(now.year - 1, now.month, now.day),
+      lastDate: today,
+      maxDays: _exportMaxDays,
+      initialRange: DateTimeRange(
+        start: DateTime(today.year, today.month, today.day - 29),
+        end: today,
+      ),
+    );
+    if (range == null || !mounted) return;
+
+    final fmt = DateFormat('dd/MM/yyyy');
+    await DialogUtils.showConfirmation(
+      context,
+      title: 'Xuất file Excel',
+      message:
+          'Bạn có muốn gửi file Excel lịch sử giao dịch từ ngày ${fmt.format(range.start)} đến ngày ${fmt.format(range.end)} đến email đã đăng ký của bạn không?',
+      confirmText: 'Gửi file',
+      onConfirm: () => _sendExportEmail(range),
+    );
+  }
+
+  Future<void> _sendExportEmail(DateTimeRange range) async {
+    if (!mounted || _isExporting) return;
+    _isExporting = true;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const PopScope(
+        canPop: false,
+        child: Center(child: FireworkStarSpinner()),
+      ),
+    );
+
+    try {
+      final result = await _transactionService.exportHistoryToEmail(
+        startDate: range.start,
+        endDate: range.end,
+      );
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop(); // đóng loading
+
+      if (result['is_success'] == true) {
+        final email = result['data']?['email']?.toString();
+        await DialogUtils.showNotification(
+          context,
+          title: 'Đã gửi file Excel',
+          message: email != null && email.isNotEmpty
+              ? 'File lịch sử giao dịch đã được gửi đến email $email. Vui lòng kiểm tra hộp thư (kể cả mục thư rác).'
+              : 'File lịch sử giao dịch đã được gửi đến email đã đăng ký của bạn.',
+        );
+      } else {
+        SnackbarUtils.failure(
+          context,
+          result['message']?.toString() ??
+              'Không gửi được file, vui lòng thử lại',
+        );
+      }
+    } finally {
+      _isExporting = false;
     }
   }
 

@@ -19,11 +19,13 @@ class KycFaceScreen extends StatefulWidget {
   final File frontIdImage;
   final File backIdImage;
   final ForgotKycArgs? forgot;
+  final bool isUpdate;
   const KycFaceScreen({
     super.key,
     required this.frontIdImage,
     required this.backIdImage,
     this.forgot,
+    this.isUpdate = false,
   });
 
   @override
@@ -398,8 +400,45 @@ class _KycFaceScreenState extends State<KycFaceScreen> {
     }
   }
 
+  // Luồng cập nhật thông tin KYC từ trang profile
+  Future<void> _updateKYC() async {
+    try {
+      setState(() => _isVerifying = true);
+      final result = await _kycService.updateKYC(
+        widget.frontIdImage,
+        widget.backIdImage,
+        _capturedImage!,
+      );
+      if (!mounted) return;
+      final isSuccess = result['is_success'] == true;
+      if (isSuccess) {
+        final name = result['data']?['full_name'];
+        if (name != null) _userController.setUserFullName(newFullName: name);
+      }
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => KycResultScreen(
+            isSuccess: isSuccess,
+            msg: result['message'] ?? 'Cập nhật thông tin thất bại',
+            isUpdate: true,
+          ),
+        ),
+        (r) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      SnackbarUtils.failure(context, '$e');
+    } finally {
+      if (mounted) {
+        setState(() => _isVerifying = false);
+      }
+    }
+  }
+
   Future<void> _verifyKYC() async {
     if (widget.forgot != null) return _verifyForgotKyc();
+    if (widget.isUpdate) return _updateKYC();
     try {
       setState(() => _isVerifying = true);
       final result = await _kycService.verifyKYC(

@@ -1,6 +1,7 @@
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/dialog_utils.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
+import 'package:app/src/kyc/kyc_front_id_screen.dart';
 import 'package:app/src/services/auth_service.dart';
 import 'package:app/src/services/socket_service.dart';
 import 'package:flutter/material.dart';
@@ -147,7 +148,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Colors.pinkAccent,
                     "Thông tin cá nhân",
                     "Cập nhật thông tin cá nhân của bạn",
-                    () {},
+                    () => _showConfirmUpdateKyc(context),
                   ),
                   Padding(
                     padding: EdgeInsets.fromLTRB(50, 2, 20, 2),
@@ -307,6 +308,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showConfirmUpdateKyc(BuildContext context) {
+    DialogUtils.showConfirmation(
+      context,
+      title: "Cập nhật thông tin",
+      message: "Bạn có muốn cập nhật thông tin cá nhân không?",
+      cancelText: "Không",
+      confirmText: "Có",
+      onConfirm: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const KycFrontIdScreen(isUpdate: true),
+          ),
+        );
+      },
     );
   }
 

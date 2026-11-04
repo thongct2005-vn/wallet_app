@@ -1,6 +1,5 @@
-//https://my-ewallet-api.onrender.com/api/v2
 //https://orectic-noctilucent-ronan.ngrok-free.dev
-//http://localhost:3000/api/v2
+
 
 class ApiConfig {
   static const String origin =
@@ -18,7 +17,6 @@ class ApiConfig {
   static const String verifyRegister = '$baseUrl/auth/verify-register';
   static const String logout = '$baseUrl/auth/logout';
 
-  // Google Authenticator (TOTP)
   static const String totpSetup = '$baseUrl/auth/totp/setup';
   static const String totpRecover = '$baseUrl/auth/totp/recover';
   static const String totpEnable = '$baseUrl/auth/totp/enable';
@@ -44,6 +42,8 @@ class ApiConfig {
   static const String payment = '$baseUrl/transaction/qr-payment';
   static const String history = '$baseUrl/transaction/history';
   static const String historySummary = '$baseUrl/transaction/summary';
+  static const String historyExportEmail =
+      '$baseUrl/transaction/export-email';
 
   static const String createStaticQRToken = '$baseUrl/payment/qr/static';
   static const String getUserInfoByStaticQR =
@@ -64,4 +64,5 @@ class ApiConfig {
 
   static const String checkUserKYC = '$baseUrl/kyc/check';
   static const String verifyKYC = '$baseUrl/kyc/verify';
+  static const String updateKYC = '$baseUrl/kyc/update';
 }

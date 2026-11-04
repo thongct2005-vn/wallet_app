@@ -10,7 +10,13 @@ import 'package:iconsax/iconsax.dart';
 class KycBackIdScreen extends StatefulWidget {
   final File frontIdImage;
   final ForgotKycArgs? forgot;
-  const KycBackIdScreen({super.key, required this.frontIdImage, this.forgot});
+  final bool isUpdate;
+  const KycBackIdScreen({
+    super.key,
+    required this.frontIdImage,
+    this.forgot,
+    this.isUpdate = false,
+  });
 
   @override
   State<KycBackIdScreen> createState() => _KycBackIdScreenState();
@@ -253,6 +259,7 @@ class _KycBackIdScreenState extends State<KycBackIdScreen> {
           frontIdImage: frontIdImage,
           backIdImage: _capturedImage!,
           forgot: widget.forgot,
+          isUpdate: widget.isUpdate,
         ),
       ),
     );
