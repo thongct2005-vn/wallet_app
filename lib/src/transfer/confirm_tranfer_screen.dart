@@ -70,7 +70,7 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
             elevation: 0,
             centerTitle: true,
             leading: TransferCircleButton(
-              icon: Icons.arrow_back,
+              icon: Icons.arrow_back_ios_new_rounded,
               onPressed: _isProcessingTransfer
                   ? null
                   : () => Navigator.pop(context),

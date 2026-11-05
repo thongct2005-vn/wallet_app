@@ -1,7 +1,9 @@
+import 'package:app/src/auth/auth_ui.dart';
 import 'package:app/src/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 /// Hiện dialog chứa mã QR để quét bằng Google Authenticator.
@@ -18,13 +20,12 @@ Future<Map<String, String>?> showTotpSetupDialog(
   return showDialog<Map<String, String>?>(
     context: context,
     barrierDismissible: false,
-    builder: (_) =>
-        _TotpSetupDialog(
-          phone: phone,
-          password: password,
-          cached: cached,
-          recover: recover,
-        ),
+    builder: (_) => _TotpSetupDialog(
+      phone: phone,
+      password: password,
+      cached: cached,
+      recover: recover,
+    ),
   );
 }
 
@@ -112,32 +113,36 @@ class _TotpSetupDialogState extends State<_TotpSetupDialog> {
 
   Widget _step(String number, String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 20,
-            height: 20,
+            width: 22,
+            height: 22,
             alignment: Alignment.center,
             decoration: const BoxDecoration(
-              color: Colors.pink,
+              color: kAuthPinkSoft,
               shape: BoxShape.circle,
             ),
             child: Text(
               number,
               style: GoogleFonts.roboto(
-                color: Colors.white,
+                color: kAuthPinkDark,
                 fontSize: 12,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
-              style: GoogleFonts.roboto(fontSize: 13.5, height: 1.4),
+              style: GoogleFonts.roboto(
+                fontSize: 13.2,
+                height: 1.4,
+                color: kAuthText.withValues(alpha: 0.85),
+              ),
             ),
           ),
         ],
@@ -152,177 +157,186 @@ class _TotpSetupDialogState extends State<_TotpSetupDialog> {
 
     return Dialog(
       backgroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 380),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  const Icon(Icons.security_rounded, color: Colors.pink),
-                  const SizedBox(width: 8),
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: kAuthPinkSoft,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Iconsax.security,
+                      color: kAuthPinkDark,
+                      size: 21,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       widget.recover
                           ? 'Lấy lại mã Google Authenticator'
                           : 'Liên kết Google Authenticator',
                       style: GoogleFonts.roboto(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 17.5,
+                        fontWeight: FontWeight.w700,
+                        color: kAuthText,
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
-              _step('1', 'Mở Google Authenticator, chọn dấu + rồi "Quét mã QR".'),
+              const SizedBox(height: 16),
+              _step(
+                '1',
+                'Mở Google Authenticator, chọn dấu + rồi "Quét mã QR".',
+              ),
               _step('2', 'Quét mã bên dưới (hoặc chọn "Nhập khoá thiết lập").'),
               _step(
                 '3',
                 widget.recover
-                    ? 'Đóng cửa sổ này, bấm "Xác nhận" rồi nhập mã 6 số '
-                          'trong ứng dụng để đăng nhập.'
-                    : 'Đăng nhập như bình thường. Sau khi vào được tài khoản, '
-                          'nhập mã 6 số trong ứng dụng để hoàn tất.',
+                    ? 'Đóng cửa sổ này, bấm "Xác nhận" rồi nhập mã 6 số trong ứng dụng để đăng nhập.'
+                    : 'Đăng nhập như bình thường. Sau khi vào được tài khoản, nhập mã 6 số trong ứng dụng để hoàn tất.',
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               if (_isLoading)
                 const SizedBox(
-                  height: 220,
+                  height: 210,
                   child: Center(
-                    child: CircularProgressIndicator(color: Colors.pink),
+                    child: CircularProgressIndicator(color: kAuthPink),
                   ),
                 )
               else if (_data != null) ...[
                 Center(
                   child: Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.grey.withValues(alpha: 0.3),
-                      ),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: kAuthBorder),
+                      boxShadow: [
+                        BoxShadow(
+                          color: kAuthPink.withValues(alpha: 0.08),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
                     ),
                     child: QrImageView(
                       data: _data!['otpauth_uri']!,
                       version: QrVersions.auto,
-                      size: 200,
+                      size: 192,
                       backgroundColor: Colors.white,
                       errorCorrectionLevel: QrErrorCorrectLevel.M,
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 Text(
                   'Khoá thiết lập thủ công',
                   style: GoogleFonts.roboto(
-                    fontSize: 12.5,
-                    color: Colors.black.withValues(alpha: 0.55),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: kAuthMuted,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SelectableText(
-                        _groupSecret(_data!['secret']!),
-                        style: GoogleFonts.robotoMono(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
+                  decoration: BoxDecoration(
+                    color: kAuthBg,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: kAuthBorder),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: SelectableText(
+                          _groupSecret(_data!['secret']!),
+                          style: GoogleFonts.robotoMono(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                            color: kAuthText,
+                          ),
                         ),
                       ),
-                    ),
-                    IconButton(
-                      onPressed: _copySecret,
-                      tooltip: 'Sao chép',
-                      icon: Icon(
-                        _copied ? Icons.check_rounded : Icons.copy_rounded,
-                        size: 20,
-                        color: _copied ? Colors.green : Colors.pink,
+                      TextButton.icon(
+                        onPressed: _copySecret,
+                        style: TextButton.styleFrom(
+                          foregroundColor:
+                              _copied ? kAuthSuccess : kAuthPinkDark,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        icon: Icon(
+                          _copied ? Icons.check_rounded : Iconsax.copy,
+                          size: 16,
+                        ),
+                        label: Text(
+                          _copied ? 'Đã chép' : 'Sao chép',
+                          style: GoogleFonts.roboto(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ] else ...[
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.red.shade700, width: 1.5),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.warning_amber_rounded,
-                          color: Colors.red.shade700,
-                          size: 22,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _error,
-                            style: GoogleFonts.roboto(
-                              color: Colors.red.shade700,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              height: 1.3,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: AuthErrorBanner(message: _error),
                 ),
               ],
-              const SizedBox(height: 6),
+              const SizedBox(height: 16),
               Row(
                 children: [
                   // "Thử lại" nằm góc trái, cùng hàng với "Đóng"
-                  if (showRetry)
-                    ElevatedButton(
-                      onPressed: _load,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.pink,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 10,
+                  if (showRetry) ...[
+                    Expanded(
+                      child: AuthPrimaryButton(
+                        label: 'Thử lại',
+                        onTap: _load,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context, _data),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: kAuthPinkDark,
+                        minimumSize: const Size.fromHeight(48),
+                        side: BorderSide(
+                          color: kAuthPink.withValues(alpha: 0.45),
                         ),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                       ),
                       child: Text(
-                        'Thử lại',
+                        'Đóng',
                         style: GoogleFonts.roboto(
                           fontSize: 15,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
-                      ),
-                    ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, _data),
-                    style: TextButton.styleFrom(foregroundColor: Colors.pink),
-                    child: Text(
-                      'Đóng',
-                      style: GoogleFonts.roboto(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),

@@ -106,7 +106,7 @@ class _ConfirmTopUpWithdrawScreenState
                 child: IconButton(
                   padding: EdgeInsets.zero,
                   onPressed: _isProcessing ? null : () => Navigator.pop(context),
-                  icon: const Icon(Icons.arrow_back, size: 20, color: _kText),
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: _kText),
                 ),
               ),
             ),

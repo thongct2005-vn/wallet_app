@@ -223,7 +223,7 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
                     child: Row(
                       children: [
                         _circleButton(
-                          icon: Icons.arrow_back,
+                          icon: Icons.arrow_back_ios_new_rounded,
                           onPressed: () {
                             FocusManager.instance.primaryFocus?.unfocus();
                             if (Navigator.canPop(context)) {

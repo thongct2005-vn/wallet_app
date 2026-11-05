@@ -47,72 +47,90 @@ class _ContactListScreenState extends State<ContactListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: kTfBg,
-      extendBodyBehindAppBar: true,
-      resizeToAvoidBottomInset: false,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        leading: TransferCircleButton(
-          icon: Icons.arrow_back,
-          onPressed: () {
-            FocusManager.instance.primaryFocus?.unfocus();
-            Navigator.pop(context);
-          },
-        ),
-        title: const TransferAppBarTitle('Chuyển tiền'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(66),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-            child: Container(
-              height: 50,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: kTfPink.withValues(alpha: 0.12),
-                    blurRadius: 14,
-                    offset: const Offset(0, 4),
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+      child: Scaffold(
+        backgroundColor: kTfBg,
+        extendBodyBehindAppBar: true,
+        resizeToAvoidBottomInset: false,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: true,
+          leading: TransferCircleButton(
+            icon: Icons.arrow_back_ios_new_rounded,
+            onPressed: () {
+              FocusManager.instance.primaryFocus?.unfocus();
+              Navigator.pop(context);
+            },
+          ),
+          title: const TransferAppBarTitle('Chuyển tiền'),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(66),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: TextFieldTapRegion(
+                child: Container(
+                  height: 50,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: kTfPink.withValues(alpha: 0.12),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  const SizedBox(width: 14),
-                  const Icon(Iconsax.search_normal_1, size: 20, color: kTfPink),
-                  Expanded(
-                    child: TextField(
-                      controller: _phoneController,
-                      maxLength: 25,
-                      cursorColor: kTfPink,
-                      style: GoogleFonts.roboto(fontSize: 16, color: kTfText),
-                      decoration: InputDecoration(
-                        hintText: 'Tìm tên, SĐT',
-                        hintStyle: GoogleFonts.roboto(
-                          fontSize: 16,
-                          color: kTfMuted,
-                        ),
-                        counterText: '',
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.only(
-                          left: 10,
-                          right: 15,
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 14),
+                      const Icon(
+                        Iconsax.search_normal_1,
+                        size: 20,
+                        color: kTfPink,
+                      ),
+                      Expanded(
+                        child: TextField(
+                          controller: _phoneController,
+                          maxLength: 25,
+                          cursorColor: kTfPink,
+                          textInputAction: TextInputAction.search,
+                          onTapOutside: (_) =>
+                              FocusManager.instance.primaryFocus?.unfocus(),
+                          onSubmitted: (_) =>
+                              FocusManager.instance.primaryFocus?.unfocus(),
+                          style: GoogleFonts.roboto(
+                            fontSize: 16,
+                            color: kTfText,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Tìm tên, SĐT',
+                            hintStyle: GoogleFonts.roboto(
+                              fontSize: 16,
+                              color: kTfMuted,
+                            ),
+                            counterText: '',
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.only(
+                              left: 10,
+                              right: 15,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
         ),
+        body: _buildBody(context),
       ),
-      body: _buildBody(context),
     );
   }
 
@@ -129,11 +147,13 @@ class _ContactListScreenState extends State<ContactListScreen> {
               ? _buildFindResult()
               : _filteredUsers.isEmpty
               ? _buildEmptyState('Không tìm thấy người dùng này')
-              : _buildListCard(
-                  title: 'Danh bạ',
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.only(bottom: 8),
+                : _buildListCard(
+                    title: 'Danh bạ',
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: const EdgeInsets.only(bottom: 8),
                     separatorBuilder: (context, index) {
                       return Divider(
                         height: 1,

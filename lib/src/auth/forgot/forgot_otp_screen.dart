@@ -1,13 +1,14 @@
 import 'dart:async';
-
 import 'package:app/core/utils/dialog_utils.dart';
+import 'package:app/core/utils/snackbar_utils.dart';
+import 'package:app/src/auth/auth_ui.dart';
 import 'package:app/src/auth/forgot/forgot_type.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
 import 'package:app/src/kyc/kyc_guide_screen.dart';
 import 'package:app/src/services/forgot_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:pinput/pinput.dart';
+import 'package:iconsax/iconsax.dart';
 
 const int _resendSeconds = 60;
 
@@ -29,35 +30,59 @@ class ForgotOtpScreen extends StatefulWidget {
   State<ForgotOtpScreen> createState() => _ForgotOtpScreenState();
 }
 
-class _ForgotOtpScreenState extends State<ForgotOtpScreen> {
+class _ForgotOtpScreenState extends State<ForgotOtpScreen>
+    with SmoothAutoFocusMixin {
   final TextEditingController _otpController = TextEditingController();
+  final FocusNode _otpFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
   final ForgotService _forgotService = ForgotService();
-  bool _isLoading = false;
-  bool _isResending = false;
-  int _countdown = 0;
-  String _msg = '';
+
+  final ValueNotifier<bool> _isLoadingNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _isResendingNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<int> _countdownNotifier = ValueNotifier<int>(0);
+  final ValueNotifier<String> _msgNotifier = ValueNotifier<String>('');
+  final ValueNotifier<bool> _hasFocusNotifier = ValueNotifier<bool>(false);
   Timer? _timer;
+
+  @override
+  FocusNode get initialFocusNode => _otpFocusNode;
 
   @override
   void initState() {
     super.initState();
+    _otpFocusNode.addListener(_onFocusChanged);
     _startCountdown();
+  }
+
+  void _onFocusChanged() {
+    _hasFocusNotifier.value = _otpFocusNode.hasFocus;
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _otpFocusNode.removeListener(_onFocusChanged);
     _otpController.dispose();
+    _otpFocusNode.dispose();
+    _scrollController.dispose();
+    _isLoadingNotifier.dispose();
+    _isResendingNotifier.dispose();
+    _countdownNotifier.dispose();
+    _msgNotifier.dispose();
+    _hasFocusNotifier.dispose();
     super.dispose();
   }
 
   void _startCountdown() {
-    setState(() => _countdown = _resendSeconds);
+    _countdownNotifier.value = _resendSeconds;
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) return t.cancel();
-      if (_countdown > 0) {
-        setState(() => _countdown--);
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      if (_countdownNotifier.value > 0) {
+        _countdownNotifier.value = _countdownNotifier.value - 1;
       } else {
         t.cancel();
       }
@@ -65,6 +90,7 @@ class _ForgotOtpScreenState extends State<ForgotOtpScreen> {
   }
 
   void _backToLogin(String message) {
+    FocusManager.instance.primaryFocus?.unfocus();
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
@@ -75,40 +101,42 @@ class _ForgotOtpScreenState extends State<ForgotOtpScreen> {
   }
 
   Future<void> _resend() async {
-    setState(() {
-      _isResending = true;
-      _msg = '';
-    });
+    _isResendingNotifier.value = true;
+    _msgNotifier.value = '';
+
     final result = await _forgotService.resendOtp(widget.otpToken);
     if (!mounted) return;
-    setState(() => _isResending = false);
+    _isResendingNotifier.value = false;
 
     if (result['is_success'] == true) {
       _startCountdown();
+      SnackbarUtils.success(context, 'Đã gửi lại mã OTP');
     } else if (result['status_code'] == 401) {
       _backToLogin(result['message'] ?? 'Phiên xác thực đã hết hạn');
     } else {
-      setState(() => _msg = result['message'] ?? 'Không thể gửi lại mã');
+      _msgNotifier.value =
+          result['message']?.toString() ?? 'Không thể gửi lại mã';
     }
   }
 
   Future<void> _verify() async {
-    final code = _otpController.text;
+    if (_isLoadingNotifier.value) return;
+    final code = _otpController.text.trim();
     if (code.length != 6) {
-      setState(() => _msg = 'Vui lòng nhập đủ 6 số');
+      _msgNotifier.value = 'Vui lòng nhập đủ 6 số';
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _msg = '';
-    });
+    FocusManager.instance.primaryFocus?.unfocus();
+    _isLoadingNotifier.value = true;
+    _msgNotifier.value = '';
+
     final result = await _forgotService.verifyOtp(
       otpToken: widget.otpToken,
       otp: code,
     );
     if (!mounted) return;
-    setState(() => _isLoading = false);
+    _isLoadingNotifier.value = false;
 
     if (result['is_success'] != true) {
       if (result['status_code'] == 401) {
@@ -116,7 +144,9 @@ class _ForgotOtpScreenState extends State<ForgotOtpScreen> {
         return;
       }
       _otpController.clear();
-      setState(() => _msg = result['message'] ?? 'Mã OTP không chính xác');
+      _msgNotifier.value =
+          result['message']?.toString() ?? 'Mã OTP không chính xác';
+      requestKeyboardFocus(_otpFocusNode);
       return;
     }
 
@@ -125,10 +155,8 @@ class _ForgotOtpScreenState extends State<ForgotOtpScreen> {
       context,
       title: 'Xác minh danh tính',
       message: hasKyc
-          ? 'Vui lòng chụp CCCD và khuôn mặt. Thông tin phải trùng với '
-                'giấy tờ bạn đã dùng để định danh tài khoản.'
-          : 'Tài khoản của bạn chưa được định danh. Vui lòng chụp CCCD và '
-                'khuôn mặt để xác minh và hoàn tất định danh.',
+          ? 'Vui lòng chụp CCCD và khuôn mặt. Thông tin phải trùng với giấy tờ bạn đã dùng để định danh tài khoản.'
+          : 'Tài khoản của bạn chưa được định danh. Vui lòng chụp CCCD và khuôn mặt để xác minh và hoàn tất định danh.',
       closeText: 'Tiếp tục',
     );
     if (!mounted) return;
@@ -150,144 +178,120 @@ class _ForgotOtpScreenState extends State<ForgotOtpScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pinTheme = PinTheme(
-      width: 46,
-      height: 56,
-      textStyle: GoogleFonts.roboto(fontSize: 22, fontWeight: FontWeight.w600),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.4)),
+    return AuthScaffold(
+      appBarTitle: 'Xác nhận OTP',
+      onBack: () => Navigator.pop(context),
+      scrollController: _scrollController,
+      hasFocusListenable: _hasFocusNotifier,
+      bottomBar: ValueListenableBuilder<bool>(
+        valueListenable: _isLoadingNotifier,
+        builder: (context, isLoading, _) {
+          return AuthPrimaryButton(
+            label: 'Xác nhận',
+            icon: Iconsax.tick_circle,
+            loading: isLoading,
+            onTap: _verify,
+          );
+        },
       ),
-    );
-
-    return GestureDetector(
-      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: AppBar(
-          title: Text(
-            'Xác nhận OTP',
-            style: GoogleFonts.roboto(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 6),
+          AuthHeroBanner(
+            icon: Iconsax.shield_tick,
+            badgeText: 'Khôi phục ${widget.type.label}',
+            title: 'Nhập mã xác thực OTP',
+            subtitle:
+                'Mã xác thực gồm 6 chữ số đã được gửi đến email ${widget.maskedEmail}',
+          ),
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
+            decoration: authCardDeco(radius: 22),
+            child: Column(
+              children: [
+                ValueListenableBuilder<String>(
+                  valueListenable: _msgNotifier,
+                  builder: (context, msg, _) {
+                    return Column(
+                      children: [
+                        AuthOtpInputRow(
+                          controller: _otpController,
+                          focusNode: _otpFocusNode,
+                          hasError: msg.isNotEmpty,
+                          onChanged: (_) {
+                            if (_msgNotifier.value.isNotEmpty) {
+                              _msgNotifier.value = '';
+                            }
+                          },
+                          onCompleted: (_) => _verify(),
+                        ),
+                        if (msg.isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          AuthErrorBanner(message: msg),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 18),
+                ValueListenableBuilder<bool>(
+                  valueListenable: _isResendingNotifier,
+                  builder: (context, isResending, _) {
+                    if (isResending) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 6),
+                        child: SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            color: kAuthPink,
+                          ),
+                        ),
+                      );
+                    }
+                    return ValueListenableBuilder<int>(
+                      valueListenable: _countdownNotifier,
+                      builder: (context, seconds, _) {
+                        final canResend = seconds <= 0;
+                        return TextButton.icon(
+                          onPressed: canResend ? _resend : null,
+                          style: TextButton.styleFrom(
+                            foregroundColor: kAuthPinkDark,
+                            disabledForegroundColor: kAuthMuted,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                          ),
+                          icon: Icon(
+                            Iconsax.refresh,
+                            size: 16,
+                            color: canResend ? kAuthPinkDark : kAuthMuted,
+                          ),
+                          label: Text(
+                            canResend
+                                ? 'Gửi lại mã OTP'
+                                : 'Gửi lại mã sau ${seconds}s',
+                            style: GoogleFonts.roboto(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ],
             ),
           ),
-        ),
-        body: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 10),
-                      Text(
-                        'Mã xác thực đã được gửi đến email ${widget.maskedEmail}',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.roboto(
-                          fontSize: 14,
-                          height: 1.5,
-                          color: Colors.black.withValues(alpha: 0.6),
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-                      Pinput(
-                        controller: _otpController,
-                        length: 6,
-                        autofocus: true,
-                        keyboardType: TextInputType.number,
-                        defaultPinTheme: pinTheme,
-                        focusedPinTheme: pinTheme.copyWith(
-                          decoration: pinTheme.decoration!.copyWith(
-                            border: Border.all(color: Colors.pink, width: 2),
-                          ),
-                        ),
-                        onChanged: (_) {
-                          if (_msg.isNotEmpty) setState(() => _msg = '');
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextButton(
-                        onPressed: (_countdown > 0 || _isResending)
-                            ? null
-                            : _resend,
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.pink,
-                          disabledForegroundColor: Colors.grey,
-                        ),
-                        child: _isResending
-                            ? const SizedBox(
-                                height: 16,
-                                width: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.pink,
-                                ),
-                              )
-                            : Text(
-                                _countdown > 0
-                                    ? 'Gửi lại mã sau $_countdown s'
-                                    : 'Gửi lại mã',
-                                style: GoogleFonts.roboto(fontSize: 15),
-                              ),
-                      ),
-                      if (_msg.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          _msg,
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.roboto(
-                            color: Colors.red,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 55,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _verify,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.pink,
-                      disabledBackgroundColor: Colors.pink.withValues(
-                        alpha: 0.4,
-                      ),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: _isLoading
-                        ? const SizedBox(
-                            height: 24,
-                            width: 24,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : Text(
-                            'Xác nhận',
-                            style: GoogleFonts.roboto(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+        ],
       ),
     );
   }

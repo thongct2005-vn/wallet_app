@@ -1,12 +1,12 @@
 import 'package:app/core/utils/dialog_utils.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
+import 'package:app/src/auth/auth_ui.dart';
 import 'package:app/src/auth/register/register_email.dart';
 import 'package:app/src/services/auth_service.dart';
 import 'package:app/src/services/otp_service.dart';
 import 'package:flutter/material.dart';
-import 'package:country_flags/country_flags.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 import 'login_password_screen.dart';
 
 class LoginPhoneScreen extends StatefulWidget {
@@ -27,393 +27,246 @@ class LoginPhoneScreen extends StatefulWidget {
 }
 
 class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
+  static final RegExp _phoneRegex = RegExp(r'^(0|)[3|5|7|8|9][0-9]{8}$');
+
   final TextEditingController _phoneController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
   final OtpService _otpService = OtpService();
   final AuthService _authService = AuthService();
-  bool _hasError = false;
-  bool _isPhoneExists = false;
-  String _msg = '';
-  bool _isLoading = false;
-  bool _isSendingOtp = false;
+
+  final ValueNotifier<String> _errorNotifier = ValueNotifier<String>('');
+  final ValueNotifier<bool> _isLoadingNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _isSendingOtpNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _hasFocusNotifier = ValueNotifier<bool>(false);
 
   @override
   void initState() {
     super.initState();
-    _phoneController.text = widget.initialPhoneNumber ?? "";
-    _phoneController.addListener(() {
-      setState(() {
-        if (_hasError) {
-          _hasError = false;
+    _phoneController.text = widget.initialPhoneNumber ?? '';
+    _phoneController.addListener(_onPhoneChanged);
+    _focusNode.addListener(_onFocusChanged);
+
+    if (widget.isRegisterSucess == true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          SnackbarUtils.success(context, 'Tạo ví thành công');
         }
       });
-    });
-    _focusNode.addListener(() {
-      setState(() {});
-    });
-
-    if (widget.isRegisterSucess != null && widget.isRegisterSucess == true) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        SnackbarUtils.success(context, "Tạo ví thành công");
-      });
     }
-    if (widget.isForceLogout != null && widget.isForceLogout == true) {
+    if (widget.isForceLogout == true && widget.msg != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        DialogUtils.showNotification(
-          context,
-          title: "Thông báo",
-          message: widget.msg!,
-        );
+        if (mounted) {
+          DialogUtils.showNotification(
+            context,
+            title: 'Thông báo',
+            message: widget.msg!,
+          );
+        }
       });
     }
   }
 
+  void _onPhoneChanged() {
+    if (_errorNotifier.value.isNotEmpty) {
+      _errorNotifier.value = '';
+    }
+  }
+
+  void _onFocusChanged() {
+    final focused = _focusNode.hasFocus;
+    _hasFocusNotifier.value = focused;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final target = (focused ? 48.0 : 0.0).clamp(
+        0.0,
+        _scrollController.position.maxScrollExtent,
+      );
+      if ((_scrollController.offset - target).abs() > 2.0) {
+        _scrollController.animateTo(
+          target,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _phoneController.removeListener(_onPhoneChanged);
+    _focusNode.removeListener(_onFocusChanged);
     _phoneController.dispose();
     _focusNode.dispose();
+    _scrollController.dispose();
+    _errorNotifier.dispose();
+    _isLoadingNotifier.dispose();
+    _isSendingOtpNotifier.dispose();
+    _hasFocusNotifier.dispose();
     super.dispose();
+  }
+
+  Future<void> _onContinue() async {
+    final phone = _phoneController.text.trim();
+    if (phone.isEmpty) {
+      _errorNotifier.value = 'Vui lòng nhập số điện thoại';
+      return;
+    }
+    if (!_isValidPhoneNumber(phone)) {
+      _errorNotifier.value = 'Số điện thoại không hợp lệ';
+      return;
+    }
+
+    FocusManager.instance.primaryFocus?.unfocus();
+    _errorNotifier.value = '';
+    _isLoadingNotifier.value = true;
+
+    final result = await _authService.checkPhoneExist(phone);
+    if (!mounted) return;
+    _isLoadingNotifier.value = false;
+
+    if (result['is_success'] == true) {
+      final bool isPhoneExists = result['data']['is_phone_exists'] == true;
+      if (!isPhoneExists) {
+        DialogUtils.showConfirmation(
+          context,
+          title: 'Đăng ký tài khoản mới',
+          message:
+              'Bạn có muốn dùng số điện thoại $phone để đăng ký tài khoản Ví Mio không?',
+          cancelText: 'Đổi SĐT',
+          confirmText: 'Xác nhận',
+          onConfirm: () async {
+            _isSendingOtpNotifier.value = true;
+            await _otpService.generateOtp(phone: phone, email: null);
+            if (!mounted) return;
+            _isSendingOtpNotifier.value = false;
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    RegisterEmailScreen(initialEmail: null, phone: phone),
+              ),
+            );
+          },
+        );
+      } else {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => LoginPasswordScreen(
+              phoneNumber: phone,
+              // Server báo tài khoản đã bật Google Authenticator
+              isTotpEnabled: result['data']['otp_method'] == 'totp',
+            ),
+          ),
+        );
+      }
+    } else {
+      SnackbarUtils.failure(
+        context,
+        result['message']?.toString() ?? 'Có lỗi xảy ra, vui lòng thử lại',
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      child: GestureDetector(
-        onTap: () {
-          FocusManager.instance.primaryFocus?.unfocus();
-        },
-        child: Scaffold(
-          backgroundColor: Colors.white.withValues(alpha: 0.95),
-          extendBodyBehindAppBar: true,
-          appBar: AppBar(
-            title: Text(
-              "Nhập SĐT",
-              style: GoogleFonts.roboto(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-              ),
+      child: AuthScaffold(
+        appBarTitle: 'Đăng nhập / Đăng ký',
+        scrollController: _scrollController,
+        hasFocusListenable: _hasFocusNotifier,
+        bottomBar: ValueListenableBuilder<bool>(
+          valueListenable: _isLoadingNotifier,
+          builder: (context, isLoading, _) {
+            return AuthPrimaryButton(
+              label: 'Tiếp tục',
+              loading: isLoading,
+              onTap: _onContinue,
+            );
+          },
+        ),
+        overlay: ValueListenableBuilder<bool>(
+          valueListenable: _isSendingOtpNotifier,
+          builder: (context, isSending, _) {
+            if (!isSending) return const SizedBox.shrink();
+            return const AuthLoadingOverlay(label: 'Đang khởi tạo đăng ký...');
+          },
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 8),
+            const AuthHeroBanner(
+              icon: Iconsax.wallet_3,
+              badgeText: 'Ví điện tử Mio',
+              title: 'Bắt đầu với số điện thoại',
+              subtitle:
+                  'Nhập số điện thoại để đăng nhập hoặc mở ví mới hoàn toàn miễn phí chỉ trong 1 phút.',
             ),
-            backgroundColor: Colors.transparent,
-          ),
-          body: Stack(
-            children: [
-              Container(
-                width: double.infinity,
-                height: 500,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.blue.withValues(alpha: 0.25),
-                      Colors.white.withValues(alpha: 0),
-                    ],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
-              ),
-              SafeArea(
+            const SizedBox(height: 24),
+            RepaintBoundary(
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: authCardDeco(radius: 22),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24.0,
+                    Text('Số điện thoại của bạn', style: kAuthSectionLabelStyle),
+                    const SizedBox(height: 10),
+                    ValueListenableBuilder<String>(
+                      valueListenable: _errorNotifier,
+                      builder: (context, err, _) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            AuthPhoneField(
+                              controller: _phoneController,
+                              focusNode: _focusNode,
+                              hasError: err.isNotEmpty,
+                              onSubmitted: (_) => _onContinue(),
                             ),
-                            child: RichText(
-                              text: TextSpan(
-                                children: [
-                                  TextSpan(
-                                    text: "Số điện thoại",
-                                    style: GoogleFonts.dancingScript(
-                                      color: Colors.pink,
-                                      fontSize: 35,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  TextSpan(
-                                    text: " của bạn",
-                                    style: TextStyle(
-                                      color: Colors.black,
-                                      fontSize: 25,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 25),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24.0,
-                            ),
-                            child: Container(
-                              height: 55,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                border: Border.all(
-                                  color: _hasError
-                                      ? Colors.red
-                                      : _focusNode.hasFocus
-                                      ? Colors.pink
-                                      : Colors.grey,
-                                  width: _hasError
-                                      ? 1
-                                      : _focusNode.hasFocus
-                                      ? 1
-                                      : 0.5,
-                                ),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Row(
-                                children: [
-                                  SizedBox(width: 10),
-                                  SizedBox(
-                                    width: 30,
-                                    height: 20,
-                                    child: CountryFlag.fromCountryCode('VN'),
-                                  ),
-                                  SizedBox(width: 10),
-                                  SizedBox(
-                                    width: 50,
-                                    height: 30,
-                                    child: Text(
-                                      "+84",
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 20,
-                                      ),
-                                    ),
-                                  ),
-
-                                  SizedBox(
-                                    height: 35,
-                                    width: 10,
-                                    child: Text(
-                                      "|",
-                                      style: TextStyle(
-                                        fontSize: 25,
-                                        color: Colors.grey,
-                                        fontWeight: FontWeight.w300,
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(width: 5),
-                                  Expanded(
-                                    child: TextField(
-                                      controller: _phoneController,
-                                      keyboardType: TextInputType.phone,
-                                      inputFormatters: [
-                                        FilteringTextInputFormatter.digitsOnly,
-                                      ],
-                                      decoration: const InputDecoration(
-                                        hintText: "Số điện thoại",
-                                        border: InputBorder.none,
-                                        counterText: "",
-                                      ),
-                                      style: TextStyle(fontSize: 20),
-                                      cursorColor: Colors.pink,
-                                      focusNode: _focusNode,
-                                      maxLength: 10,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          if (_hasError) ...[
-                            const SizedBox(height: 5),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24.0,
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.error_outline_rounded,
-                                    color: Colors.red,
-                                    size: 15,
-                                  ),
-                                  SizedBox(width: 3),
-                                  Text(
-                                    _msg,
-                                    style: GoogleFonts.roboto(
-                                      color: Colors.red,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                            if (err.isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              AuthErrorBanner(message: err),
+                            ],
                           ],
-                        ],
-                      ),
+                        );
+                      },
                     ),
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(15, 10, 15, 10),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 55,
-                        child: ElevatedButton(
-                          onPressed: _isLoading
-                              ? null
-                              : () async {
-                                  if (_phoneController.text.isEmpty) {
-                                    setState(() {
-                                      _hasError = true;
-                                      _msg = "Vui lòng nhập số điện thoại";
-                                    });
-                                  } else if (!_isValidPhoneNumber(
-                                    _phoneController.text,
-                                  )) {
-                                    setState(() {
-                                      _hasError = true;
-                                      _msg = "Số điện thoại không hợp lệ";
-                                    });
-                                  } else {
-                                    setState(() {
-                                      _hasError = false;
-                                      _isLoading = true;
-                                    });
-                                    final result = await _authService
-                                        .checkPhoneExist(_phoneController.text);
-
-                                    if (!context.mounted) return;
-
-                                    setState(() {
-                                      _isLoading = false;
-                                      if (result['is_success'] == true) {
-                                        _isPhoneExists =
-                                            result['data']['is_phone_exists'];
-                                        if (!_isPhoneExists) {
-                                          DialogUtils.showConfirmation(
-                                            context,
-                                            title: "Thông báo",
-                                            message:
-                                                "Bạn có muốn dùng số điện thoại ${_phoneController.text} để đăng ký tài khoản.",
-                                            cancelText: "Đổi SĐT",
-                                            confirmText: "Xác nhận",
-                                            onConfirm: () async {
-                                              setState(() {
-                                                _isSendingOtp = true;
-                                              });
-                                              await _otpService.generateOtp(
-                                                phone: _phoneController.text,
-                                                email: null,
-                                              );
-                                              setState(() {
-                                                _isSendingOtp = false;
-                                              });
-                                              if (!context.mounted) return;
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (context) =>
-                                                      RegisterEmailScreen(
-                                                        initialEmail: null,
-                                                        phone: _phoneController
-                                                            .text,
-                                                      ),
-                                                ),
-                                              );
-                                            },
-                                          );
-                                        } else {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) =>
-                                                  LoginPasswordScreen(
-                                                    phoneNumber:
-                                                        _phoneController.text,
-                                                    // Server báo tài khoản đã bật Google Authenticator
-                                                    isTotpEnabled:
-                                                        result['data']['otp_method'] ==
-                                                        'totp',
-                                                  ),
-                                            ),
-                                          );
-                                        }
-                                      } else {
-                                        SnackbarUtils.failure(
-                                          context,
-                                          result['message'],
-                                        );
-                                      }
-                                    });
-
-                                    setState(() {
-                                      _isLoading = false;
-                                    });
-                                  }
-                                },
-                          style: ElevatedButton.styleFrom(
-                            disabledBackgroundColor: Colors.black.withValues(
-                              alpha: 0.1,
-                            ),
-                            backgroundColor: Colors.pink,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadiusGeometry.circular(10),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        const Icon(
+                          Iconsax.shield_tick,
+                          size: 16,
+                          color: kAuthSuccess,
+                        ),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: Text(
+                            'Kết nối được bảo vệ bằng xác thực hai lớp an toàn.',
+                            style: GoogleFonts.roboto(
+                              fontSize: 12.5,
+                              color: kAuthMuted,
                             ),
                           ),
-                          child: _isLoading
-                              ? SizedBox(
-                                  height: 25,
-                                  width: 25,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : Text(
-                                  "Tiếp tục",
-                                  style: GoogleFonts.roboto(
-                                    color: Colors.white,
-                                    fontSize: 25,
-                                  ),
-                                ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              if (_isSendingOtp)
-                Positioned.fill(
-                  child: Container(
-                    color: Colors.transparent,
-                    child: Center(
-                      child: Container(
-                        width: 50,
-                        height: 50,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade400,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 3,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
   bool _isValidPhoneNumber(String phone) {
-    if (phone.isEmpty) {
-      return false;
-    }
-    final RegExp phoneRegex = RegExp(r'^(0|)[3|5|7|8|9][0-9]{8}$');
-    return phoneRegex.hasMatch(phone);
+    if (phone.isEmpty) return false;
+    return _phoneRegex.hasMatch(phone);
   }
 }

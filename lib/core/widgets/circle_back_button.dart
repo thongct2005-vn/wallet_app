@@ -7,7 +7,7 @@ class CircleBackButton extends StatelessWidget {
   const CircleBackButton({
     super.key,
     required this.onPressed,
-    this.icon = Icons.arrow_back,
+    this.icon = Icons.arrow_back_ios_new_rounded,
   });
 
   @override

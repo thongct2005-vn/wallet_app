@@ -1,7 +1,10 @@
+import 'package:app/src/auth/auth_ui.dart';
 import 'package:app/src/auth/register/otp_screen.dart';
 import 'package:app/src/services/auth_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 
 class CreatePasswordScreen extends StatefulWidget {
   final String? phoneNumber;
@@ -13,360 +16,265 @@ class CreatePasswordScreen extends StatefulWidget {
 }
 
 class _CreatePasswordScreenState extends State<CreatePasswordScreen> {
+  static final List<TextInputFormatter> _digitsOnly = [
+    FilteringTextInputFormatter.digitsOnly,
+  ];
+
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _passwordConfirmController =
       TextEditingController();
   final AuthService _authService = AuthService();
   final FocusNode _focusPassword = FocusNode();
   final FocusNode _focusConfirm = FocusNode();
-  bool _hasError = false;
-  bool _isHidePassword = true;
-  bool _isHidePasswordConfirm = true;
-  bool _isLoading = false;
-  String _msg = "";
+  final ScrollController _scrollController = ScrollController();
+
+  final ValueNotifier<String> _errorNotifier = ValueNotifier<String>('');
+  final ValueNotifier<bool> _isHidePasswordNotifier = ValueNotifier<bool>(true);
+  final ValueNotifier<bool> _isHideConfirmNotifier = ValueNotifier<bool>(true);
+  final ValueNotifier<bool> _isLoadingNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _hasAnyFocusNotifier = ValueNotifier<bool>(false);
 
   @override
   void initState() {
     super.initState();
     _passwordController.addListener(_clearError);
     _passwordConfirmController.addListener(_clearError);
-    _focusPassword.addListener(() => setState(() {}));
-    _focusConfirm.addListener(() => setState(() {}));
+    _focusPassword.addListener(_onFocusChanged);
+    _focusConfirm.addListener(_onFocusChanged);
   }
 
   void _clearError() {
-    if (_hasError) {
-      setState(() {
-        _hasError = false;
-        _msg = "";
-      });
+    if (_errorNotifier.value.isNotEmpty) {
+      _errorNotifier.value = '';
     }
+  }
+
+  void _onFocusChanged() {
+    final pwdFocused = _focusPassword.hasFocus;
+    final confirmFocused = _focusConfirm.hasFocus;
+    _hasAnyFocusNotifier.value = pwdFocused || confirmFocused;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final double target;
+      if (confirmFocused) {
+        target = 105.0;
+      } else if (pwdFocused) {
+        target = 50.0;
+      } else {
+        target = 0.0;
+      }
+      final clamped = target.clamp(
+        0.0,
+        _scrollController.position.maxScrollExtent,
+      );
+      if ((_scrollController.offset - clamped).abs() > 2.0) {
+        _scrollController.animateTo(
+          clamped,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
   }
 
   @override
   void dispose() {
+    _passwordController.removeListener(_clearError);
+    _passwordConfirmController.removeListener(_clearError);
+    _focusPassword.removeListener(_onFocusChanged);
+    _focusConfirm.removeListener(_onFocusChanged);
     _passwordController.dispose();
     _passwordConfirmController.dispose();
     _focusPassword.dispose();
     _focusConfirm.dispose();
+    _scrollController.dispose();
+    _errorNotifier.dispose();
+    _isHidePasswordNotifier.dispose();
+    _isHideConfirmNotifier.dispose();
+    _isLoadingNotifier.dispose();
+    _hasAnyFocusNotifier.dispose();
     super.dispose();
+  }
+
+  Future<void> _onSubmit() async {
+    final pwd = _passwordController.text;
+    final confirm = _passwordConfirmController.text;
+
+    if (pwd.isEmpty) {
+      _errorNotifier.value = 'Vui lòng nhập mật khẩu';
+      return;
+    }
+    if (confirm.isEmpty) {
+      _errorNotifier.value = 'Vui lòng nhập xác nhận mật khẩu';
+      return;
+    }
+    if (!isValidPassword(pwd)) {
+      _errorNotifier.value = 'Mật khẩu phải có đúng 6 số';
+      return;
+    }
+    if (confirm != pwd) {
+      _errorNotifier.value = 'Mật khẩu và mật khẩu xác nhận không khớp';
+      return;
+    }
+
+    FocusManager.instance.primaryFocus?.unfocus();
+    _errorNotifier.value = '';
+    _isLoadingNotifier.value = true;
+
+    final result = await _authService.register(
+      widget.phoneNumber ?? '',
+      widget.email ?? '',
+    );
+
+    if (!mounted) return;
+    _isLoadingNotifier.value = false;
+
+    if (result['is_success'] == true) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => OtpScreen(
+            phoneNumber: widget.phoneNumber,
+            email: widget.email,
+            isLogin: false,
+            otpToken: result['data']['otp_token'],
+            password: pwd,
+          ),
+        ),
+      );
+    } else {
+      _errorNotifier.value =
+          result['message']?.toString() ?? 'Không thể tạo tài khoản';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: true,
-      child: GestureDetector(
-        onTap: () {
-          FocusManager.instance.primaryFocus?.unfocus();
+    return AuthScaffold(
+      appBarTitle: 'Tạo mật khẩu',
+      onBack: () => Navigator.pop(context),
+      scrollController: _scrollController,
+      hasFocusListenable: _hasAnyFocusNotifier,
+      bottomBar: ValueListenableBuilder<bool>(
+        valueListenable: _isLoadingNotifier,
+        builder: (context, isLoading, _) {
+          return AuthPrimaryButton(
+            label: 'Tiếp tục',
+            loading: isLoading,
+            onTap: _onSubmit,
+          );
         },
-        child: Scaffold(
-          extendBodyBehindAppBar: true,
-          backgroundColor: Colors.white.withValues(alpha: 0.95),
-          appBar: AppBar(
-            title: Text(
-              "Tạo mật khẩu",
-              style: GoogleFonts.roboto(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            leading: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 10, 0, 10),
-              child: Container(
-                height: 40,
-                width: 40,
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    width: 1,
-                    color: Colors.white.withValues(alpha: 0.8),
-                  ),
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.8),
-                ),
-                child: IconButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                  padding: EdgeInsets.zero,
-                  icon: const Icon(Icons.arrow_back, size: 20),
-                ),
-              ),
-            ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 6),
+          const AuthHeroBanner(
+            icon: Iconsax.security,
+            badgeText: 'Bước 2/3 • Thiết lập bảo mật',
+            title: 'Tạo mật khẩu đăng nhập',
+            subtitle:
+                'Thiết lập mật khẩu gồm 6 chữ số để bảo vệ tài khoản Ví Mio của bạn.',
           ),
-          body: Stack(
-            children: [
-              Container(
-                width: double.infinity,
-                height: 500,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.blue.withValues(alpha: 0.25),
-                      Colors.white.withValues(alpha: 0),
-                    ],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
-              ),
-              SafeArea(
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+          const SizedBox(height: 24),
+          RepaintBoundary(
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: authCardDeco(radius: 22),
+              child: ValueListenableBuilder<String>(
+                valueListenable: _errorNotifier,
+                builder: (context, err, _) {
+                  final hasErr = err.isNotEmpty;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Mật khẩu mới (6 số)', style: kAuthSectionLabelStyle),
+                      const SizedBox(height: 8),
+                      ValueListenableBuilder<bool>(
+                        valueListenable: _isHidePasswordNotifier,
+                        builder: (context, isHidden, _) {
+                          return AuthTextField(
+                            controller: _passwordController,
+                            focusNode: _focusPassword,
+                            hintText: 'Nhập mật khẩu 6 số',
+                            leadingIcon: Icons.lock_outline_rounded,
+                            obscureText: isHidden,
+                            onToggleObscure: () {
+                              _isHidePasswordNotifier.value = !isHidden;
+                            },
+                            hasError: hasErr,
+                            keyboardType:
+                                const TextInputType.numberWithOptions(
+                                  signed: false,
+                                  decimal: false,
+                                ),
+                            textInputAction: TextInputAction.next,
+                            inputFormatters: _digitsOnly,
+                            maxLength: 6,
+                            onSubmitted: (_) =>
+                                requestKeyboardFocus(_focusConfirm),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Xác nhận lại mật khẩu',
+                        style: kAuthSectionLabelStyle,
+                      ),
+                      const SizedBox(height: 8),
+                      ValueListenableBuilder<bool>(
+                        valueListenable: _isHideConfirmNotifier,
+                        builder: (context, isHidden, _) {
+                          return AuthTextField(
+                            controller: _passwordConfirmController,
+                            focusNode: _focusConfirm,
+                            hintText: 'Nhập lại mật khẩu 6 số',
+                            leadingIcon: Icons.lock_reset_rounded,
+                            obscureText: isHidden,
+                            onToggleObscure: () {
+                              _isHideConfirmNotifier.value = !isHidden;
+                            },
+                            hasError: hasErr,
+                            keyboardType:
+                                const TextInputType.numberWithOptions(
+                                  signed: false,
+                                  decimal: false,
+                                ),
+                            inputFormatters: _digitsOnly,
+                            maxLength: 6,
+                            onSubmitted: (_) => _onSubmit(),
+                          );
+                        },
+                      ),
+                      if (hasErr) ...[
+                        const SizedBox(height: 12),
+                        AuthErrorBanner(message: err),
+                      ],
+                      const SizedBox(height: 14),
+                      Row(
                         children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24.0,
-                            ),
-                            child: RichText(
-                              text: TextSpan(
-                                children: [
-                                  TextSpan(
-                                    text: "Tạo mật khẩu",
-                                    style: GoogleFonts.dancingScript(
-                                      color: Colors.pink,
-                                      fontSize: 35,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const TextSpan(
-                                    text: " của bạn",
-                                    style: TextStyle(
-                                      color: Colors.black,
-                                      fontSize: 25,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                          const Icon(
+                            Iconsax.shield_tick,
+                            size: 16,
+                            color: kAuthSuccess,
                           ),
-                          const SizedBox(height: 25),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24.0,
-                            ),
-                            child: Column(
-                              children: [
-                                _buildPasswordField(
-                                  hint: "Mật khẩu 6 số",
-                                  controller: _passwordController,
-                                  focusNode: _focusPassword,
-                                  isHidden: _isHidePassword,
-                                  onToggleVisibility: () {
-                                    setState(() {
-                                      _isHidePassword = !_isHidePassword;
-                                    });
-                                  },
-                                ),
-                                const SizedBox(height: 20),
-                                _buildPasswordField(
-                                  hint: "Xác nhận lại mật khẩu",
-                                  controller: _passwordConfirmController,
-                                  focusNode: _focusConfirm,
-                                  isHidden: _isHidePasswordConfirm,
-                                  onToggleVisibility: () {
-                                    setState(() {
-                                      _isHidePasswordConfirm =
-                                          !_isHidePasswordConfirm;
-                                    });
-                                  },
-                                ),
-                                if (_hasError) ...[
-                                  const SizedBox(height: 5),
-                                  Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.error_outline_rounded,
-                                        color: Colors.red,
-                                        size: 15,
-                                      ),
-                                      const SizedBox(width: 3),
-                                      Text(
-                                        _msg,
-                                        style: GoogleFonts.roboto(
-                                          color: Colors.red,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ],
+                          const SizedBox(width: 7),
+                          Expanded(
+                            child: Text(
+                              'Không đặt mật khẩu trùng ngày sinh hoặc dãy số dễ đoán.',
+                              style: GoogleFonts.roboto(
+                                fontSize: 12.5,
+                                color: kAuthMuted,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(15, 10, 15, 10),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 55,
-                        child: ElevatedButton(
-                          onPressed: _isLoading
-                              ? null
-                              : () async {
-                                  if (_passwordController.text.isEmpty) {
-                                    setState(() {
-                                      _hasError = true;
-                                      _msg = "Vui lòng nhập mật khẩu";
-                                    });
-                                  } else if (_passwordConfirmController
-                                      .text
-                                      .isEmpty) {
-                                    setState(() {
-                                      _hasError = true;
-                                      _msg = "Vui lòng nhập xác nhận mật khẩu";
-                                    });
-                                  } else if (!isValidPassword(
-                                    _passwordController.text,
-                                  )) {
-                                    setState(() {
-                                      _hasError = true;
-                                      _msg = "Mật khẩu phải có đúng 6 số";
-                                    });
-                                  } else if (_passwordConfirmController.text !=
-                                      _passwordController.text) {
-                                    setState(() {
-                                      _hasError = true;
-                                      _msg =
-                                          "Mật khẩu và mật khẩu xác nhận không khớp";
-                                    });
-                                  } else {
-                                    setState(() {
-                                      _hasError = false;
-                                      _isLoading = true;
-                                    });
-
-                                    final result = await _authService.register(
-                                      widget.phoneNumber ?? "",
-                                      widget.email ?? "",
-                                    );
-
-                                    if (!context.mounted) return;
-
-                                    setState(() {
-                                      _isLoading = false;
-                                    });
-
-                                    if (result['is_success'] == true) {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => OtpScreen(
-                                            phoneNumber: widget.phoneNumber,
-                                            email: widget.email,
-                                            isLogin: false,
-                                            otpToken:
-                                                result['data']['otp_token'],
-                                            password: _passwordController.text,
-                                          ),
-                                        ),
-                                      );
-                                    } else {
-                                      setState(() {
-                                        _hasError = true;
-                                        _msg = result['message'] ?? "";
-                                      });
-                                    }
-                                  }
-                                },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.pink,
-                            disabledBackgroundColor: Colors.black.withValues(
-                              alpha: 0.1,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          child: _isLoading
-                              ? const SizedBox(
-                                  width: 25,
-                                  height: 25,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : Text(
-                                  "Tiếp tục",
-                                  style: GoogleFonts.roboto(
-                                    color: Colors.white,
-                                    fontSize: 25,
-                                  ),
-                                ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                    ],
+                  );
+                },
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPasswordField({
-    required String hint,
-    required TextEditingController controller,
-    required FocusNode focusNode,
-    required bool isHidden,
-    required VoidCallback onToggleVisibility,
-  }) {
-    return Container(
-      height: 55,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: _hasError
-              ? Colors.red
-              : focusNode.hasFocus
-              ? Colors.pink
-              : Colors.grey,
-          width: _hasError
-              ? 1
-              : focusNode.hasFocus
-              ? 1
-              : 0.5,
-        ),
-        borderRadius: BorderRadius.circular(10),
-        color: Colors.white,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              textAlign: TextAlign.start,
-              focusNode: focusNode,
-              controller: controller,
-              maxLength: 6,
-              keyboardType: TextInputType.number,
-              style: const TextStyle(fontSize: 20),
-              decoration: InputDecoration(
-                hintText: hint,
-                hintStyle: GoogleFonts.roboto(color: Colors.grey),
-                border: InputBorder.none,
-                counterText: "",
-                contentPadding: const EdgeInsets.only(left: 10, top: 8),
-                suffixIcon: IconButton(
-                  onPressed: onToggleVisibility,
-                  icon: Icon(
-                    isHidden
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                  ),
-                ),
-              ),
-              obscureText: isHidden,
-              cursorColor: Colors.pink,
             ),
           ),
         ],

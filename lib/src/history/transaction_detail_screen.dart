@@ -54,7 +54,7 @@ class TransactionDetailScreen extends StatelessWidget {
         elevation: 0,
         centerTitle: true,
         leading: TransferCircleButton(
-          icon: Icons.arrow_back,
+          icon: Icons.arrow_back_ios_new_rounded,
           onPressed: () => Navigator.pop(context),
         ),
         title: TransferAppBarTitle(isMerchant ? title : "Chi tiết giao dịch"),

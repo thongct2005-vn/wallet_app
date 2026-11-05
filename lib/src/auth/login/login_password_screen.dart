@@ -1,10 +1,13 @@
+import 'package:app/src/auth/auth_ui.dart';
 import 'package:app/src/auth/forgot/forgot_phone_screen.dart';
 import 'package:app/src/auth/forgot/forgot_type.dart';
 import 'package:app/src/auth/login/totp_setup_dialog.dart';
 import 'package:app/src/auth/register/otp_screen.dart';
 import 'package:app/src/services/auth_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 
 class LoginPasswordScreen extends StatefulWidget {
   final String? phoneNumber;
@@ -22,13 +25,20 @@ class LoginPasswordScreen extends StatefulWidget {
 }
 
 class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
+  static final List<TextInputFormatter> _digitsOnly = [
+    FilteringTextInputFormatter.digitsOnly,
+  ];
+
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
   final AuthService _authService = AuthService();
-  bool _hasError = false;
-  bool _isHidePassword = true;
-  bool _isLoading = false;
-  String _msg = "";
+
+  final ValueNotifier<String> _errorNotifier = ValueNotifier<String>('');
+  final ValueNotifier<bool> _isHidePasswordNotifier = ValueNotifier<bool>(true);
+  final ValueNotifier<bool> _isLoadingNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _hasFocusNotifier = ValueNotifier<bool>(false);
+
   // Người dùng chọn dùng Google Authenticator ở các lần đăng nhập sau
   bool _useTotp = false;
   // Đã bật Google Authenticator và người dùng muốn quay lại OTP qua email
@@ -39,62 +49,76 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
   @override
   void initState() {
     super.initState();
-    _passwordController.addListener(() {
-      setState(() {
-        if (_hasError) {
-          _hasError = false;
-        }
-      });
-    });
-    _focusNode.addListener(() {
-      setState(() {});
+    _passwordController.addListener(_onPasswordChanged);
+    _focusNode.addListener(_onFocusChanged);
+  }
+
+  void _onPasswordChanged() {
+    if (_errorNotifier.value.isNotEmpty) {
+      _errorNotifier.value = '';
+    }
+  }
+
+  void _onFocusChanged() {
+    final focused = _focusNode.hasFocus;
+    _hasFocusNotifier.value = focused;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final target = (focused ? 52.0 : 0.0).clamp(
+        0.0,
+        _scrollController.position.maxScrollExtent,
+      );
+      if ((_scrollController.offset - target).abs() > 2.0) {
+        _scrollController.animateTo(
+          target,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        );
+      }
     });
   }
 
   @override
   void dispose() {
+    _passwordController.removeListener(_onPasswordChanged);
+    _focusNode.removeListener(_onFocusChanged);
     _passwordController.dispose();
     _focusNode.dispose();
+    _scrollController.dispose();
+    _errorNotifier.dispose();
+    _isHidePasswordNotifier.dispose();
+    _isLoadingNotifier.dispose();
+    _hasFocusNotifier.dispose();
     super.dispose();
   }
 
   Future<void> _handleLogin() async {
-    if (_passwordController.text.isEmpty) {
-      setState(() {
-        _hasError = true;
-        _msg = "Vui lòng nhập mật khẩu";
-      });
+    final password = _passwordController.text;
+    if (password.isEmpty) {
+      _errorNotifier.value = 'Vui lòng nhập mật khẩu';
       return;
     }
-    if (!isValidPassword(_passwordController.text)) {
-      setState(() {
-        _hasError = true;
-        _msg = "Mật khẩu phải có đúng 6 số";
-      });
+    if (!isValidPassword(password)) {
+      _errorNotifier.value = 'Mật khẩu phải có đúng 6 số';
       return;
     }
     if (_useTotp && _totpSetup == null) {
-      setState(() {
-        _hasError = true;
-        _msg = "Vui lòng quét mã QR để liên kết Google Authenticator";
-      });
+      _errorNotifier.value =
+          'Vui lòng quét mã QR để liên kết Google Authenticator';
       return;
     }
 
-    setState(() {
-      _hasError = false;
-      _isLoading = true;
-    });
+    FocusManager.instance.primaryFocus?.unfocus();
+    _errorNotifier.value = '';
+    _isLoadingNotifier.value = true;
 
     final result = await _authService.loginWithPhoneAndPassword(
-      widget.phoneNumber ?? "",
-      _passwordController.text,
+      widget.phoneNumber ?? '',
+      password,
     );
 
     if (!mounted) return;
-    setState(() {
-      _isLoading = false;
-    });
+    _isLoadingNotifier.value = false;
 
     if (result['is_success'] == true) {
       Navigator.push(
@@ -118,16 +142,14 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
         ),
       );
     } else {
-      setState(() {
-        _msg = result['message'] ?? "Đăng nhập thất bại";
-        _hasError = true;
-      });
+      _errorNotifier.value =
+          result['message']?.toString() ?? 'Đăng nhập thất bại';
     }
   }
 
   bool get _optionChecked => widget.isTotpEnabled ? _useEmail : _useTotp;
 
-  void _toggleOption(bool? value) {
+  void _toggleOption([bool? value]) {
     setState(() {
       final next = value ?? !_optionChecked;
       if (widget.isTotpEnabled) {
@@ -141,16 +163,13 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
   Future<void> _openTotpSetup({bool recover = false}) async {
     final password = _passwordController.text;
     if (!isValidPassword(password)) {
-      setState(() {
-        _hasError = true;
-        _msg = "Nhập mật khẩu 6 số trước khi lấy mã QR";
-      });
+      _errorNotifier.value = 'Nhập mật khẩu 6 số trước khi lấy mã QR';
       return;
     }
     FocusManager.instance.primaryFocus?.unfocus();
     final result = await showTotpSetupDialog(
       context,
-      phone: widget.phoneNumber ?? "",
+      phone: widget.phoneNumber ?? '',
       password: password,
       cached: recover ? null : _totpSetup,
       recover: recover,
@@ -168,35 +187,48 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
     required VoidCallback onTap,
   }) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 10, 24, 0),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.pink.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: Colors.pink.withValues(alpha: 0.3),
-              width: 0.5,
+      padding: const EdgeInsets.only(top: 12),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Ink(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: kAuthPinkSoft.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: kAuthPink.withValues(alpha: 0.28)),
             ),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.qr_code_2_rounded, color: Colors.pink, size: 30),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  text,
-                  style: GoogleFonts.roboto(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.pink,
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.qr_code_2_rounded,
+                    color: kAuthPinkDark,
+                    size: 22,
                   ),
                 ),
-              ),
-              Icon(trailingIcon, color: trailingColor, size: 22),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    text,
+                    style: GoogleFonts.roboto(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: kAuthPinkDark,
+                    ),
+                  ),
+                ),
+                Icon(trailingIcon, color: trailingColor, size: 22),
+              ],
+            ),
           ),
         ),
       ),
@@ -205,344 +237,204 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: true,
-      child: GestureDetector(
-        onTap: () {
-          FocusManager.instance.primaryFocus?.unfocus();
+    final phoneDisplay = (widget.phoneNumber ?? '').isNotEmpty
+        ? 'SĐT: ${widget.phoneNumber}'
+        : null;
+
+    return AuthScaffold(
+      appBarTitle: 'Nhập mật khẩu',
+      onBack: () => Navigator.pop(context),
+      scrollController: _scrollController,
+      hasFocusListenable: _hasFocusNotifier,
+      bottomBar: ValueListenableBuilder<bool>(
+        valueListenable: _isLoadingNotifier,
+        builder: (context, isLoading, _) {
+          return AuthPrimaryButton(
+            label: 'Xác nhận',
+            loading: isLoading,
+            onTap: _handleLogin,
+          );
         },
-        child: Scaffold(
-          extendBodyBehindAppBar: true,
-          backgroundColor: Colors.white.withValues(alpha: 0.95),
-          appBar: AppBar(
-            title: Text(
-              "Nhập mật khẩu",
-              style: GoogleFonts.roboto(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            backgroundColor: Colors.transparent,
-            leading: Padding(
-              padding: EdgeInsets.fromLTRB(10, 10, 0, 10),
-              child: Container(
-                height: 40,
-                width: 40,
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    width: 1,
-                    color: Colors.white.withValues(alpha: 0.8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 6),
+          AuthHeroBanner(
+            icon: Iconsax.security,
+            badgeText: phoneDisplay,
+            title: 'Nhập mật khẩu của bạn',
+            subtitle:
+                'Nhập mật khẩu gồm 6 chữ số để tiếp tục đăng nhập vào Ví Mio.',
+          ),
+          const SizedBox(height: 22),
+          RepaintBoundary(
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: authCardDeco(radius: 22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Mật khẩu đăng nhập', style: kAuthSectionLabelStyle),
+                      GestureDetector(
+                        onTap: () {
+                          FocusManager.instance.primaryFocus?.unfocus();
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ForgotPhoneScreen(
+                                type: ForgotType.password,
+                                initialPhone: widget.phoneNumber,
+                              ),
+                            ),
+                          );
+                        },
+                        child: Text(
+                          'Quên mật khẩu?',
+                          style: GoogleFonts.roboto(
+                            fontSize: 13.5,
+                            color: kAuthPinkDark,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.8),
-                ),
-                child: IconButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                  padding: EdgeInsets.zero,
-                  icon: Icon(Icons.arrow_back, size: 20),
-                ),
+                  const SizedBox(height: 10),
+                  ValueListenableBuilder<String>(
+                    valueListenable: _errorNotifier,
+                    builder: (context, err, _) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ValueListenableBuilder<bool>(
+                            valueListenable: _isHidePasswordNotifier,
+                            builder: (context, isHidden, _) {
+                              return AuthTextField(
+                                controller: _passwordController,
+                                focusNode: _focusNode,
+                                hintText: 'Nhập mật khẩu 6 số',
+                                leadingIcon: Icons.lock_outline_rounded,
+                                obscureText: isHidden,
+                                onToggleObscure: () {
+                                  _isHidePasswordNotifier.value = !isHidden;
+                                },
+                                hasError: err.isNotEmpty,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      signed: false,
+                                      decimal: false,
+                                    ),
+                                inputFormatters: _digitsOnly,
+                                maxLength: 6,
+                                onSubmitted: (_) => _handleLogin(),
+                              );
+                            },
+                          ),
+                          if (err.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            AuthErrorBanner(message: err),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
           ),
-          body: Stack(
-            children: [
-              Container(
-                width: double.infinity,
-                height: 500,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.blue.withValues(alpha: 0.25),
-                      Colors.white.withValues(alpha: 0),
-                    ],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
-              ),
-              SafeArea(
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24.0,
-                              ),
-                              child: RichText(
-                                text: TextSpan(
-                                  children: [
-                                    TextSpan(
-                                      text: "Mật khẩu",
-                                      style: GoogleFonts.dancingScript(
-                                        color: Colors.pink,
-                                        fontSize: 35,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    TextSpan(
-                                      text: " của bạn",
-                                      style: TextStyle(
-                                        color: Colors.black,
-                                        fontSize: 25,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 25),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24.0,
-                              ),
-                              child: Container(
-                                height: 55,
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  border: Border.all(
-                                    color: _hasError
-                                        ? Colors.red
-                                        : _focusNode.hasFocus
-                                        ? Colors.pink
-                                        : Colors.grey,
-                                    width: _hasError
-                                        ? 1
-                                        : _focusNode.hasFocus
-                                        ? 1
-                                        : 0.5,
-                                  ),
-                                  borderRadius: BorderRadius.circular(10),
-                                  color: Colors.white,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: TextField(
-                                        textAlign: TextAlign.start,
+          const SizedBox(height: 14),
 
-                                        focusNode: _focusNode,
-                                        controller: _passwordController,
-                                        maxLength: 6,
-                                        keyboardType: TextInputType.number,
-                                        style: TextStyle(fontSize: 20),
-                                        decoration: InputDecoration(
-                                          hintText: "Mật khẩu 6 số",
-                                          hintStyle: GoogleFonts.roboto(
-                                            color: Colors.grey,
-                                          ),
-
-                                          border: InputBorder.none,
-                                          counterText: "",
-                                          contentPadding: EdgeInsets.only(
-                                            left: 10,
-                                            top: 8,
-                                          ),
-                                          suffixIcon: IconButton(
-                                            onPressed: () {
-                                              setState(() {
-                                                _isHidePassword =
-                                                    !_isHidePassword;
-                                              });
-                                            },
-                                            icon: Icon(
-                                              _isHidePassword
-                                                  ? Icons
-                                                        .visibility_off_outlined
-                                                  : Icons.visibility_outlined,
-                                            ),
-                                          ),
-                                        ),
-                                        obscureText: _isHidePassword,
-                                        cursorColor: Colors.pink,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            if (_hasError) ...[
-                              const SizedBox(height: 5),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24.0,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.error_outline_rounded,
-                                      color: Colors.red,
-                                      size: 15,
-                                    ),
-                                    SizedBox(width: 3),
-                                    Text(
-                                      _msg,
-                                      style: GoogleFonts.roboto(
-                                        color: Colors.red,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24.0,
-                                vertical: 8,
-                              ),
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: GestureDetector(
-                                  onTap: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => ForgotPhoneScreen(
-                                        type: ForgotType.password,
-                                        initialPhone: widget.phoneNumber,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    'Quên mật khẩu?',
-                                    style: GoogleFonts.roboto(
-                                      fontSize: 15,
-                                      color: Colors.blue,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            // ----- Google Authenticator -----
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24.0,
-                              ),
-                              child: InkWell(
-                                onTap: () => _toggleOption(null),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    SizedBox(
-                                      height: 24,
-                                      width: 24,
-                                      child: Checkbox(
-                                        value: _optionChecked,
-                                        activeColor: Colors.pink,
-                                        materialTapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                        onChanged: _toggleOption,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        widget.isTotpEnabled
-                                            ? 'Gửi OTP qua email thay cho Google '
-                                                  'Authenticator ở các lần đăng nhập sau'
-                                            : 'Dùng mã Google Authenticator thay cho OTP '
-                                                  'qua email ở các lần đăng nhập sau',
-                                        style: GoogleFonts.roboto(
-                                          fontSize: 14,
-                                          height: 1.4,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            if (widget.isTotpEnabled && _useEmail)
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  56,
-                                  6,
-                                  24,
-                                  0,
-                                ),
-                                child: Text(
-                                  'Lần đăng nhập này bạn vẫn nhập mã Google '
-                                  'Authenticator, từ lần sau sẽ nhận OTP qua email.',
-                                  style: GoogleFonts.roboto(
-                                    fontSize: 12.5,
-                                    height: 1.4,
-                                    color: Colors.black.withValues(alpha: 0.55),
-                                  ),
-                                ),
-                              ),
-                            if (_useTotp && !widget.isTotpEnabled)
-                              _buildQrBox(
-                                text: _totpSetup == null
-                                    ? 'Quét mã QR để liên kết Google Authenticator'
-                                    : 'Đã tạo mã QR, nhấn để xem lại',
-                                trailingIcon: _totpSetup == null
-                                    ? Icons.chevron_right_rounded
-                                    : Icons.check_circle_rounded,
-                                trailingColor: _totpSetup == null
-                                    ? Colors.pink
-                                    : Colors.green,
-                                onTap: _openTotpSetup,
-                              ),
-
-                            if (widget.isTotpEnabled)
-                              _buildQrBox(
-                                text: 'Hiển thị mã QR liên kết Google Authenticator',
-                                trailingIcon: Icons.chevron_right_rounded,
-                                trailingColor: Colors.pink,
-                                onTap: () => _openTotpSetup(recover: true),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(15, 10, 15, 10),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 55,
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : _handleLogin,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.pink,
-                            disabledBackgroundColor: Colors.black.withValues(
-                              alpha: 0.1,
-                            ),
+          // ----- Google Authenticator -----
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: authCardDeco(radius: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                InkWell(
+                  onTap: () => _toggleOption(),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          height: 22,
+                          width: 22,
+                          child: Checkbox(
+                            value: _optionChecked,
+                            activeColor: kAuthPink,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadiusGeometry.circular(10),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            side: const BorderSide(
+                              color: kAuthMuted,
+                              width: 1.4,
+                            ),
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            onChanged: _toggleOption,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            widget.isTotpEnabled
+                                ? 'Gửi OTP qua email thay cho Google Authenticator ở các lần đăng nhập sau'
+                                : 'Dùng mã Google Authenticator thay cho OTP qua email ở các lần đăng nhập sau',
+                            style: GoogleFonts.roboto(
+                              fontSize: 13.5,
+                              height: 1.4,
+                              color: kAuthText,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
-
-                          child: _isLoading
-                              ? SizedBox(
-                                  width: 25,
-                                  height: 25,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : Text(
-                                  "Xác nhận",
-                                  style: GoogleFonts.roboto(
-                                    color: Colors.white,
-                                    fontSize: 25,
-                                  ),
-                                ),
                         ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (widget.isTotpEnabled && _useEmail)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(32, 6, 4, 0),
+                    child: Text(
+                      'Lần đăng nhập này bạn vẫn nhập mã Google Authenticator, từ lần sau sẽ nhận OTP qua email.',
+                      style: GoogleFonts.roboto(
+                        fontSize: 12.5,
+                        height: 1.4,
+                        color: kAuthMuted,
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ],
+                  ),
+                if (_useTotp && !widget.isTotpEnabled)
+                  _buildQrBox(
+                    text: _totpSetup == null
+                        ? 'Quét mã QR để liên kết Google Authenticator'
+                        : 'Đã tạo mã QR, nhấn để xem lại',
+                    trailingIcon: _totpSetup == null
+                        ? Icons.chevron_right_rounded
+                        : Icons.check_circle_rounded,
+                    trailingColor: _totpSetup == null
+                        ? kAuthPinkDark
+                        : kAuthSuccess,
+                    onTap: _openTotpSetup,
+                  ),
+                if (widget.isTotpEnabled)
+                  _buildQrBox(
+                    text: 'Hiển thị mã QR liên kết Google Authenticator',
+                    trailingIcon: Icons.chevron_right_rounded,
+                    trailingColor: kAuthPinkDark,
+                    onTap: () => _openTotpSetup(recover: true),
+                  ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

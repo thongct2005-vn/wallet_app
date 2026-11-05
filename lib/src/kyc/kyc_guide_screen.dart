@@ -360,7 +360,7 @@ class KycGuideScreen extends StatelessWidget {
                   ),
                 ),
 
-                // Nút "Tiếp tục" cố định dưới đáy
+          
                 Container(
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
                   decoration: BoxDecoration(

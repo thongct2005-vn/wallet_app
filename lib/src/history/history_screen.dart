@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:app/core/utils/dialog_utils.dart';
-import 'package:app/core/utils/loading_util.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/date_range_picker_sheet.dart';
 import 'package:app/src/history/transaction_detail_screen.dart';
@@ -31,6 +30,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   final TransactionService _transactionService = TransactionService();
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   Timer? _debounce;
 
   final List<TransactionModel> _allTransactions = [];
@@ -66,12 +66,24 @@ class _HistoryScreenState extends State<HistoryScreen> {
   void dispose() {
     _scrollController.dispose();
     _searchController.dispose();
+    _searchFocusNode.dispose();
     _debounce?.cancel();
     super.dispose();
   }
 
-  Future<void> _fetchMore() async {
-    if (_isLoading || !_hasMore) return;
+  void _unfocusSearch() {
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
+  Future<void> _fetchMore({bool reset = false}) async {
+    if (_isLoading) return;
+    if (reset) {
+      _hasMore = true;
+      _nextCursor = null;
+    } else if (!_hasMore) {
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     final result = await _transactionService.getTransferHistory(
@@ -89,8 +101,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
           .toList();
 
       setState(() {
+        if (reset) {
+          _allTransactions.clear();
+        }
         _allTransactions.addAll(newItems);
-        _filteredTransactions = List.from(_allTransactions);
+        _applyFilter();
         _nextCursor = result['data']['next_cursor']?.toString();
         _hasMore = result['data']['next_cursor'] != null;
       });
@@ -111,22 +126,54 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   void _onSearchChanged(String value) {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), () {
-      setState(() {
-        _searchKeyword = value.trim().toLowerCase();
-        _applyFilter();
-      });
+    _debounce = Timer(const Duration(milliseconds: 350), () {
+      final trimmed = value.trim().toLowerCase();
+      if (_searchKeyword == trimmed) return;
+      _searchKeyword = trimmed;
+      _applyFilter();
+      _fetchMore(reset: true);
     });
+  }
+
+  static String _removeDiacritics(String str) {
+    var withDia = 'áàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ';
+    var noDia   = 'aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyydAAAAAAAAAAAAAAAAAEEEEEEEEEEEIIIIIOOOOOOOOOOOOOOOOOUUUUUUUUUUUYYYYYD';
+    var result = str;
+    for (int i = 0; i < withDia.length; i++) {
+      result = result.replaceAll(withDia[i], noDia[i]);
+    }
+    return result;
   }
 
   void _applyFilter() {
     Iterable<TransactionModel> items = _allTransactions;
 
     if (_searchKeyword.isNotEmpty) {
+      final cleanKeyword = _removeDiacritics(_searchKeyword);
       items = items.where((t) {
         final desc = (t.description ?? '').toLowerCase();
         final name = t.counterpartyName.toLowerCase();
-        return desc.contains(_searchKeyword) || name.contains(_searchKeyword);
+        final bank = t.bankName.toLowerCase();
+        final phone = t.counterpartyPhone.toLowerCase();
+        final idStr = t.id.toString();
+        final orderId = (t.orderId ?? '').toLowerCase();
+
+        String typeDisplay = '';
+        if (t.type == 'TOPUP') {
+          typeDisplay = 'nạp tiền nạp tiền vào ví topup';
+        } else if (t.type == 'WITHDRAW') {
+          typeDisplay = 'rút tiền rút tiền từ ví withdraw';
+        } else if (t.type == 'TRANSFER') {
+          typeDisplay = 'chuyển tiền nhận tiền transfer';
+        } else if (t.type == 'PAYMENT') {
+          typeDisplay = 'thanh toán payment';
+        }
+
+        final combined = '$desc $name $bank $phone $idStr $orderId $typeDisplay';
+        final combinedClean = _removeDiacritics(combined);
+
+        return combined.contains(_searchKeyword) ||
+            combinedClean.contains(cleanKeyword);
       });
     }
 
@@ -172,92 +219,101 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     return PopScope(
       canPop: false,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFFAF6F8),
-        extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          automaticallyImplyLeading: false,
-          actions: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(left: 16, top: 10, bottom: 10),
-                child: Container(
-                  height: 46,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(30),
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: _kPink.withValues(alpha: 0.12),
-                        blurRadius: 14,
-                        offset: const Offset(0, 4),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: _unfocusSearch,
+        child: Scaffold(
+          backgroundColor: const Color(0xFFFAF6F8),
+          extendBodyBehindAppBar: true,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            automaticallyImplyLeading: false,
+            actions: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 16, top: 10, bottom: 10),
+                  child: TextFieldTapRegion(
+                    child: Container(
+                      height: 46,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(30),
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: _kPink.withValues(alpha: 0.12),
+                            blurRadius: 14,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const SizedBox(width: 14),
-                      const Icon(
-                        Iconsax.search_normal_1,
-                        size: 20,
-                        color: _kPink,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          onChanged: _onSearchChanged,
-                          textAlignVertical: TextAlignVertical.center,
-                          cursorColor: _kPink,
-                          style: GoogleFonts.roboto(fontSize: 15),
-                          decoration: InputDecoration(
-                            border: InputBorder.none,
-                            isDense: true,
-                            contentPadding: EdgeInsets.zero,
-                            hintText: "Tìm kiếm giao dịch",
-                            hintStyle: GoogleFonts.roboto(
-                              fontSize: 15,
-                              color: _kMuted,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          const SizedBox(width: 14),
+                          const Icon(
+                            Iconsax.search_normal_1,
+                            size: 20,
+                            color: _kPink,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextField(
+                              controller: _searchController,
+                              focusNode: _searchFocusNode,
+                              onChanged: _onSearchChanged,
+                              onTapOutside: (_) => _unfocusSearch(),
+                              onSubmitted: (_) => _unfocusSearch(),
+                              textInputAction: TextInputAction.search,
+                              textAlignVertical: TextAlignVertical.center,
+                              cursorColor: _kPink,
+                              style: GoogleFonts.roboto(fontSize: 15),
+                              decoration: InputDecoration(
+                                border: InputBorder.none,
+                                isDense: true,
+                                contentPadding: EdgeInsets.zero,
+                                hintText: "Tìm kiếm giao dịch",
+                                hintStyle: GoogleFonts.roboto(
+                                  fontSize: 15,
+                                  color: _kMuted,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      if (_searchKeyword.isNotEmpty)
-                        GestureDetector(
-                          onTap: () {
-                            _searchController.clear();
-                            _onSearchChanged('');
-                          },
-                          child: const Padding(
-                            padding: EdgeInsets.only(right: 12),
-                            child: Icon(
-                              Icons.close,
-                              size: 18,
-                              color: Colors.grey,
+                          if (_searchKeyword.isNotEmpty)
+                            GestureDetector(
+                              onTap: () {
+                                _searchController.clear();
+                                _onSearchChanged('');
+                              },
+                              child: const Padding(
+                                padding: EdgeInsets.only(right: 12),
+                                child: Icon(
+                                  Icons.close,
+                                  size: 18,
+                                  color: Colors.grey,
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                    ],
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-            _appBarCircleButton(
-              icon: Iconsax.filter,
-              tooltip: 'Lọc theo ngày',
-              onPressed: _showDateFilterDialog,
-              padding: const EdgeInsets.only(left: 12),
-            ),
-            _appBarCircleButton(
-              icon: Icons.file_download_outlined,
-              tooltip: 'Xuất Excel',
-              onPressed: _exportExcel,
-              padding: const EdgeInsets.only(left: 8, right: 16),
-            ),
-          ],
-        ),
+              _appBarCircleButton(
+                icon: Iconsax.filter,
+                tooltip: 'Lọc theo ngày',
+                onPressed: _showDateFilterDialog,
+                padding: const EdgeInsets.only(left: 12),
+              ),
+              _appBarCircleButton(
+                icon: Icons.file_download_outlined,
+                tooltip: 'Xuất Excel',
+                onPressed: _exportExcel,
+                padding: const EdgeInsets.only(left: 8, right: 16),
+              ),
+            ],
+          ),
         body: Stack(
           children: [
             Container(
@@ -288,6 +344,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 },
                 child: CustomScrollView(
                   controller: _scrollController,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
                     SliverToBoxAdapter(child: _buildSummaryCard()),
@@ -418,6 +476,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
             ),
           ],
+        ),
         ),
       ),
     );
@@ -597,6 +656,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _showDateFilterDialog() async {
+    _unfocusSearch();
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final oneYearAgo = DateTime(now.year - 1, now.month, now.day);
@@ -616,7 +676,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       setState(() {
         _startDate = result.start;
         _endDate = result.end;
-        _applyFilter();
+        _fetchMore(reset: true);
       });
     }
   }
@@ -624,6 +684,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   // ===== Xuất Excel =====
 
   Future<void> _exportExcel() async {
+    _unfocusSearch();
     if (_isExporting) return;
 
     final now = DateTime.now();
@@ -648,59 +709,47 @@ class _HistoryScreenState extends State<HistoryScreen> {
       context,
       title: 'Xuất file Excel',
       message:
-          'Bạn có muốn gửi file Excel lịch sử giao dịch từ ngày ${fmt.format(range.start)} đến ngày ${fmt.format(range.end)} đến email đã đăng ký của bạn không?',
+          'Bạn có muốn nhận file Excel lịch sử giao dịch từ ngày ${fmt.format(range.start)} đến ngày ${fmt.format(range.end)} qua email đã liên kết không?',
       confirmText: 'Gửi file',
       onConfirm: () => _sendExportEmail(range),
     );
   }
 
-  Future<void> _sendExportEmail(DateTimeRange range) async {
+  void _sendExportEmail(DateTimeRange range) {
     if (!mounted || _isExporting) return;
     _isExporting = true;
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const PopScope(
-        canPop: false,
-        child: Center(child: FireworkStarSpinner()),
-      ),
+    DialogUtils.showNotification(
+      context,
+      title: 'Đã tiếp nhận yêu cầu',
+      message:
+          'Hệ thống sẽ gửi file Excel lịch sử giao dịch qua email đã liên kết của bạn. Vui lòng kiểm tra hộp thư (bao gồm cả mục thư rác).',
     );
 
-    try {
-      final result = await _transactionService.exportHistoryToEmail(
-        startDate: range.start,
-        endDate: range.end,
-      );
-      if (!mounted) return;
-      Navigator.of(context, rootNavigator: true).pop(); // đóng loading
-
-      if (result['is_success'] == true) {
-        final email = result['data']?['email']?.toString();
-        await DialogUtils.showNotification(
-          context,
-          title: 'Đã gửi file Excel',
-          message: email != null && email.isNotEmpty
-              ? 'File lịch sử giao dịch đã được gửi đến email $email. Vui lòng kiểm tra hộp thư (kể cả mục thư rác).'
-              : 'File lịch sử giao dịch đã được gửi đến email đã đăng ký của bạn.',
-        );
-      } else {
-        SnackbarUtils.failure(
-          context,
-          result['message']?.toString() ??
-              'Không gửi được file, vui lòng thử lại',
-        );
-      }
-    } finally {
-      _isExporting = false;
-    }
+    unawaited(
+      _transactionService
+          .exportHistoryToEmail(startDate: range.start, endDate: range.end)
+          .then((result) {
+            if (!mounted) return;
+            if (result['is_success'] != true) {
+              SnackbarUtils.failure(
+                context,
+                result['message']?.toString() ??
+                    'Không gửi được file, vui lòng thử lại',
+              );
+            }
+          })
+          .whenComplete(() {
+            _isExporting = false;
+          }),
+    );
   }
 
   void _clearDateFilter() {
     setState(() {
       _startDate = null;
       _endDate = null;
-      _applyFilter();
+      _fetchMore(reset: true);
     });
   }
 
@@ -785,6 +834,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         children: [
           InkWell(
             onTap: () {
+              _unfocusSearch();
               Navigator.push(
                 context,
                 MaterialPageRoute(

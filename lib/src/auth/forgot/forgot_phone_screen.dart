@@ -1,12 +1,11 @@
-
+import 'package:app/src/auth/auth_ui.dart';
 import 'package:app/src/auth/forgot/forgot_otp_screen.dart';
 import 'package:app/src/auth/forgot/forgot_type.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
 import 'package:app/src/services/forgot_service.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+import 'package:iconsax/iconsax.dart';
 
 class ForgotPhoneScreen extends StatefulWidget {
   final ForgotType type;
@@ -27,28 +26,64 @@ class ForgotPhoneScreen extends StatefulWidget {
 }
 
 class _ForgotPhoneScreenState extends State<ForgotPhoneScreen> {
+  static final RegExp _phoneRegex = RegExp(r'^(0|)[3|5|7|8|9][0-9]{8}$');
+
   final TextEditingController _phoneController = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
   final ForgotService _forgotService = ForgotService();
-  bool _isLoading = false;
-  String _msg = '';
+
+  final ValueNotifier<bool> _isLoadingNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<String> _msgNotifier = ValueNotifier<String>('');
+  final ValueNotifier<bool> _hasFocusNotifier = ValueNotifier<bool>(false);
 
   @override
   void initState() {
     super.initState();
     _phoneController.text = widget.initialPhone ?? '';
-    _phoneController.addListener(() {
-      if (_msg.isNotEmpty) setState(() => _msg = '');
+    _phoneController.addListener(_onPhoneChanged);
+    _focusNode.addListener(_onFocusChanged);
+  }
+
+  void _onPhoneChanged() {
+    if (_msgNotifier.value.isNotEmpty) {
+      _msgNotifier.value = '';
+    }
+  }
+
+  void _onFocusChanged() {
+    final focused = _focusNode.hasFocus;
+    _hasFocusNotifier.value = focused;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final target = (focused ? 48.0 : 0.0).clamp(
+        0.0,
+        _scrollController.position.maxScrollExtent,
+      );
+      if ((_scrollController.offset - target).abs() > 2.0) {
+        _scrollController.animateTo(
+          target,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        );
+      }
     });
   }
 
   @override
   void dispose() {
+    _phoneController.removeListener(_onPhoneChanged);
+    _focusNode.removeListener(_onFocusChanged);
     _phoneController.dispose();
+    _focusNode.dispose();
+    _scrollController.dispose();
+    _isLoadingNotifier.dispose();
+    _msgNotifier.dispose();
+    _hasFocusNotifier.dispose();
     super.dispose();
   }
 
-  bool _isValidPhone(String phone) =>
-      RegExp(r'^(0|)[3|5|7|8|9][0-9]{8}$').hasMatch(phone);
+  bool _isValidPhone(String phone) => _phoneRegex.hasMatch(phone);
 
   void _goBack() {
     if (Navigator.canPop(context)) {
@@ -65,24 +100,25 @@ class _ForgotPhoneScreenState extends State<ForgotPhoneScreen> {
   Future<void> _submit() async {
     final phone = _phoneController.text.trim();
     if (phone.isEmpty) {
-      setState(() => _msg = 'Vui lòng nhập số điện thoại');
+      _msgNotifier.value = 'Vui lòng nhập số điện thoại';
       return;
     }
     if (!_isValidPhone(phone)) {
-      setState(() => _msg = 'Số điện thoại không hợp lệ');
+      _msgNotifier.value = 'Số điện thoại không hợp lệ';
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _msg = '';
-    });
+    FocusManager.instance.primaryFocus?.unfocus();
+    _isLoadingNotifier.value = true;
+    _msgNotifier.value = '';
+
     final result = await _forgotService.request(phone: phone, type: widget.type);
     if (!mounted) return;
-    setState(() => _isLoading = false);
+    _isLoadingNotifier.value = false;
 
     if (result['is_success'] != true) {
-      setState(() => _msg = result['message'] ?? 'Không thể gửi mã OTP');
+      _msgNotifier.value =
+          result['message']?.toString() ?? 'Không thể gửi mã OTP';
       return;
     }
 
@@ -107,142 +143,97 @@ class _ForgotPhoneScreenState extends State<ForgotPhoneScreen> {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _goBack();
       },
-      child: GestureDetector(
-        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-        child: Scaffold(
-          backgroundColor: Colors.white.withValues(alpha: 0.95),
-          appBar: AppBar(
-            title: Text(
-              widget.type.title,
-              style: GoogleFonts.roboto(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-              ),
+      child: AuthScaffold(
+        appBarTitle: widget.type.title,
+        onBack: _goBack,
+        scrollController: _scrollController,
+        hasFocusListenable: _hasFocusNotifier,
+        bottomBar: ValueListenableBuilder<bool>(
+          valueListenable: _isLoadingNotifier,
+          builder: (context, isLoading, _) {
+            return AuthPrimaryButton(
+              label: 'Gửi mã OTP',
+              icon: Iconsax.arrow_right_3,
+              loading: isLoading,
+              onTap: _submit,
+            );
+          },
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 6),
+            AuthHeroBanner(
+              icon: Iconsax.security,
+              badgeText: 'Khôi phục tài khoản',
+              title: 'Đặt lại ${widget.type.label}',
+              subtitle:
+                  'Xác nhận số điện thoại tài khoản để nhận mã OTP qua email đã liên kết, sau đó xác minh nhanh bằng CCCD và khuôn mặt.',
             ),
-            leading: IconButton(
-              onPressed: _goBack,
-              icon: const Icon(Icons.arrow_back, size: 22),
-            ),
-          ),
-          body: SafeArea(
-            child: Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Column(
+            const SizedBox(height: 24),
+            RepaintBoundary(
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: authCardDeco(radius: 22),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Số điện thoại đăng ký',
+                      style: kAuthSectionLabelStyle,
+                    ),
+                    const SizedBox(height: 10),
+                    ValueListenableBuilder<String>(
+                      valueListenable: _msgNotifier,
+                      builder: (context, msg, _) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            AuthPhoneField(
+                              controller: _phoneController,
+                              focusNode: _focusNode,
+                              readOnly: widget.lockPhone,
+                              hasError: msg.isNotEmpty,
+                              onSubmitted: (_) => _submit(),
+                            ),
+                            if (msg.isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              AuthErrorBanner(message: msg),
+                            ],
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const SizedBox(height: 10),
-                        Text(
-                          'Đặt lại ${widget.type.label}',
-                          style: GoogleFonts.roboto(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w600,
+                        const Padding(
+                          padding: EdgeInsets.only(top: 1),
+                          child: Icon(
+                            Iconsax.shield_tick,
+                            size: 16,
+                            color: kAuthPink,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Nhập số điện thoại của tài khoản. Chúng tôi sẽ gửi mã OTP '
-                          'về email đã đăng ký, sau đó bạn cần xác minh bằng CCCD và khuôn mặt.',
-                          style: GoogleFonts.roboto(
-                            fontSize: 14,
-                            height: 1.5,
-                            color: Colors.black.withValues(alpha: 0.6),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Container(
-                          height: 55,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: widget.lockPhone
-                                ? Colors.grey.shade100
-                                : Colors.white,
-                            border: Border.all(
-                              color: _msg.isNotEmpty ? Colors.red : Colors.grey,
-                              width: 0.5,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: TextField(
-                            controller: _phoneController,
-                            readOnly: widget.lockPhone,
-                            keyboardType: TextInputType.phone,
-                            maxLength: 10,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                            ],
-                            style: const TextStyle(fontSize: 20),
-                            cursorColor: Colors.pink,
-                            decoration: const InputDecoration(
-                              hintText: 'Số điện thoại',
-                              border: InputBorder.none,
-                              counterText: '',
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: Text(
+                            'Quy trình khôi phục yêu cầu xác thực sinh trắc học eKYC nhằm bảo vệ an toàn số dư của bạn.',
+                            style: GoogleFonts.roboto(
+                              fontSize: 12.5,
+                              color: kAuthMuted,
+                              height: 1.4,
                             ),
                           ),
                         ),
-                        if (_msg.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.error_outline_rounded,
-                                color: Colors.red,
-                                size: 15,
-                              ),
-                              const SizedBox(width: 3),
-                              Flexible(
-                                child: Text(
-                                  _msg,
-                                  style: GoogleFonts.roboto(color: Colors.red),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
                       ],
                     ),
-                  ),
+                  ],
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(15, 10, 15, 10),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 55,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _submit,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.pink,
-                        disabledBackgroundColor: Colors.black.withValues(
-                          alpha: 0.1,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 25,
-                              width: 25,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Text(
-                              'Gửi mã OTP',
-                              style: GoogleFonts.roboto(
-                                color: Colors.white,
-                                fontSize: 22,
-                              ),
-                            ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

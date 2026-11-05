@@ -189,7 +189,7 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
         elevation: 0,
         centerTitle: true,
         leading: TransferCircleButton(
-          icon: Icons.arrow_back,
+          icon: Icons.arrow_back_ios_new_rounded,
           onPressed: () {
             Navigator.pop(context);
           },
