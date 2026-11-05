@@ -4,6 +4,7 @@ import 'package:app/src/services/payment_service.dart';
 import 'package:app/src/services/wallet_service.dart';
 import 'package:app/src/transfer/amount_input_screen.dart';
 import 'package:app/src/transfer/confirm_tranfer_screen.dart';
+import 'package:app/src/transfer/transfer_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -185,34 +186,20 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        leading: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 10, 0, 10),
-          child: Container(
-            height: 40,
-            width: 40,
-            decoration: BoxDecoration(
-              border: Border.all(
-                width: 1,
-                color: Colors.black.withValues(alpha: 0.8),
-              ),
-              shape: BoxShape.circle,
-              color: Colors.black.withValues(alpha: 0.8),
-            ),
-            child: IconButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              padding: EdgeInsets.zero,
-              icon: const Icon(Icons.arrow_back, size: 20, color: Colors.white),
-            ),
-          ),
+        elevation: 0,
+        centerTitle: true,
+        leading: TransferCircleButton(
+          icon: Icons.arrow_back,
+          onPressed: () {
+            Navigator.pop(context);
+          },
         ),
         title: Text(
           "Quét mã",
           style: GoogleFonts.roboto(
             color: Colors.white,
-            fontSize: 22,
-            fontWeight: FontWeight.w600,
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -220,16 +207,70 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
         children: [
           MobileScanner(controller: _controller, onDetect: _onDetect),
 
+          // Lớp phủ tối, khoét lỗ vuông ở giữa
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(
+                painter: _ScanOverlayPainter(
+                  boxSize: scanBoxSize,
+                  radius: 24,
+                  color: Colors.black.withValues(alpha: 0.55),
+                ),
+              ),
+            ),
+          ),
+
           Center(
             child: SizedBox(
               width: scanBoxSize,
               height: scanBoxSize,
               child: CustomPaint(
                 painter: _CornerPainter(
-                  cornerLength: scanBoxSize * 0.1,
-                  cornerWidth: 6,
-                  color: Colors.pinkAccent,
-                  radius: 0,
+                  cornerLength: scanBoxSize * 0.12,
+                  cornerWidth: 5,
+                  color: kTfPink,
+                  radius: 24,
+                ),
+              ),
+            ),
+          ),
+
+          Positioned(
+            top: size.height / 2 + scanBoxSize / 2 + 24,
+            left: 24,
+            right: 24,
+            child: IgnorePointer(
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.qr_code_scanner,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          "Đưa mã QR vào khung để quét",
+                          style: GoogleFonts.roboto(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -237,6 +278,46 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
         ],
       ),
     );
+  }
+}
+
+// Lớp phủ tối với ô vuông bo góc được khoét ở giữa màn hình
+class _ScanOverlayPainter extends CustomPainter {
+  final double boxSize;
+  final double radius;
+  final Color color;
+
+  _ScanOverlayPainter({
+    required this.boxSize,
+    required this.radius,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final full = Path()..addRect(Offset.zero & size);
+    final hole = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: size.center(Offset.zero),
+            width: boxSize,
+            height: boxSize,
+          ),
+          Radius.circular(radius),
+        ),
+      );
+    canvas.drawPath(
+      Path.combine(PathOperation.difference, full, hole),
+      Paint()..color = color,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ScanOverlayPainter oldDelegate) {
+    return oldDelegate.boxSize != boxSize ||
+        oldDelegate.radius != radius ||
+        oldDelegate.color != color;
   }
 }
 

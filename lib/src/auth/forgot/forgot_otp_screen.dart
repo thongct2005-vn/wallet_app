@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:app/core/utils/dialog_utils.dart';
 import 'package:app/src/auth/forgot/forgot_type.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
-import 'package:app/src/kyc/kyc_front_id_screen.dart';
+import 'package:app/src/kyc/kyc_guide_screen.dart';
 import 'package:app/src/services/forgot_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -136,7 +136,7 @@ class _ForgotOtpScreenState extends State<ForgotOtpScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => KycFrontIdScreen(
+        builder: (_) => KycGuideScreen(
           forgot: ForgotKycArgs(
             type: widget.type,
             kycToken: result['kyc_token'],

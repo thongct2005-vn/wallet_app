@@ -1,5 +1,7 @@
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/dialog_utils.dart';
+import 'package:app/core/widgets/pin_bottomsheet/pin_sheet_common.dart';
+export 'package:app/core/widgets/pin_bottomsheet/pin_sheet_common.dart';
 import 'package:app/main.dart';
 import 'package:app/src/auth/forgot/forgot_phone_screen.dart';
 import 'package:app/src/auth/forgot/forgot_type.dart';
@@ -8,8 +10,20 @@ import 'package:app/src/services/socket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:pinput/pinput.dart';
+
+Future<void> showCheckPinDialog({
+  required BuildContext context,
+  required Future<Map<String, dynamic>> Function(String pin) onCheckPin,
+  required Future<void> Function(String pinToken) onSuccess,
+}) {
+  return showSmoothPinBottomSheet(
+    context: context,
+    builder: (context) => CheckPinBottomSheet(
+      onCheckPin: onCheckPin,
+      onSuccess: onSuccess,
+    ),
+  );
+}
 
 class CheckPinBottomSheet extends StatefulWidget {
   final Future<Map<String, dynamic>> Function(String pin) onCheckPin;
@@ -25,14 +39,29 @@ class CheckPinBottomSheet extends StatefulWidget {
 
 class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
   final TextEditingController _pinController = TextEditingController();
+  final FocusNode _pinFocusNode = FocusNode();
+  final GlobalKey<PinCodeInputPillState> _pinInputKey =
+      GlobalKey<PinCodeInputPillState>();
+
   String _errorMsg = '';
   bool _isLoading = false;
-  bool _isShowPin = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Đợi frame đầu tiên của sheet dựng & cache GPU xong mới mở bàn phím để không bị khựng frame đầu
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _pinInputKey.currentState?.requestKeyboard();
+      }
+    });
+  }
 
   @override
   void dispose() {
-    super.dispose();
     _pinController.dispose();
+    _pinFocusNode.dispose();
+    super.dispose();
   }
 
   Future<bool> _logoutForResetPin() async {
@@ -44,6 +73,7 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
   }
 
   Future<void> _onForgotPin() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final phone = Get.isRegistered<UserController>()
         ? Get.find<UserController>().phone.value
         : '';
@@ -56,7 +86,12 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
       errorMessage: 'Có lỗi khi đăng xuất. Vui lòng thử lại',
       onConfirm: _logoutForResetPin,
     );
-    if (confirmed != true) return;
+    if (confirmed != true) {
+      if (mounted) {
+        _pinInputKey.currentState?.requestKeyboard();
+      }
+      return;
+    }
 
     navigatorKey.currentState?.pushAndRemoveUntil(
       MaterialPageRoute(
@@ -70,252 +105,161 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
     );
   }
 
+  void _onPinChanged(String value) {
+    if (_errorMsg.isNotEmpty && value.isNotEmpty) {
+      setState(() => _errorMsg = '');
+    }
+  }
+
+  Future<void> _onPinCompleted(String pin) async {
+    setState(() {
+      _errorMsg = '';
+      _isLoading = true;
+    });
+    final result = await widget.onCheckPin(pin);
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+    });
+    if (result['is_success'] == true) {
+      if (result['is_correct'] == true) {
+        FocusManager.instance.primaryFocus?.unfocus();
+        Navigator.pop(context);
+        widget.onSuccess(result['pin_token']?.toString() ?? '');
+      } else {
+        final remaining = result['remaining_attempts'];
+        setState(() {
+          _errorMsg = remaining != null
+              ? 'Mã PIN không chính xác. Còn $remaining lần thử.'
+              : 'Mã PIN không chính xác. Vui lòng thử lại.';
+        });
+        _pinController.clear();
+        _pinInputKey.currentState?.requestKeyboard();
+      }
+    } else {
+      setState(() {
+        _errorMsg =
+            result['message']?.toString() ??
+            'Đã có lỗi xảy ra. Vui lòng thử lại.';
+      });
+      _pinController.clear();
+      _pinInputKey.currentState?.requestKeyboard();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final defaultPinTheme = PinTheme(
-      width: 18,
-      height: 18,
-
-      margin: const EdgeInsets.symmetric(horizontal: 1),
-
-      textStyle: GoogleFonts.roboto(
-        fontSize: 15,
-        color: Colors.black,
-        fontWeight: FontWeight.w600,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade400,
-        shape: BoxShape.circle,
-      ),
-    );
-
-    final submittedPinTheme = defaultPinTheme.copyWith(
-      textStyle: const TextStyle(color: Colors.transparent),
-      decoration: const BoxDecoration(
-        color: Colors.black,
-        shape: BoxShape.circle,
-      ),
-    );
-
-    final visiblePinTheme = defaultPinTheme.copyWith(
-      decoration: const BoxDecoration(
-        color: Colors.transparent,
-        shape: BoxShape.circle,
-      ),
-    );
-
-    final isPinComplete = _pinController.text.length == 6;
-    final effectiveFocusedPinTheme = isPinComplete
-        ? (_isShowPin ? visiblePinTheme : submittedPinTheme)
-        : defaultPinTheme;
-
-    return PopScope(
-      canPop: !_isLoading,
-      child: Padding(
-        padding: EdgeInsetsGeometry.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
+    return PinKeyboardInsetPadding(
+      child: PopScope(
+        canPop: !_isLoading,
         child: Stack(
           alignment: Alignment.center,
           children: [
             IgnorePointer(
               ignoring: _isLoading,
-              child: Container(
+              child: DecoratedBox(
                 decoration: const BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(15),
+                  ),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 4,
-                      margin: EdgeInsets.only(top: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-                    SizedBox(
-                      width: double.infinity,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Text(
-                            'Nhập mã PIN xác thực',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.roboto(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Positioned(
-                            right: 15,
-                            child: IconButton(
-                              onPressed: () {
-                                Navigator.pop(context);
-                              },
-                              icon: Icon(
-                                Icons.close,
-                                size: 22,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 15),
-                    Divider(
-                      height: 0.5,
-                      color: Colors.grey.withValues(alpha: 0.5),
-                    ),
-                    Padding(
-                      padding: EdgeInsetsGeometry.fromLTRB(40, 10, 40, 5),
-                      child: Container(
-                        width: double.infinity,
-                        height: 60,
+                child: SafeArea(
+                  top: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(top: 6),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(30),
-                          color: Colors.white,
-                          border: Border.all(
-                            width: 0.5,
-                            color: _errorMsg.isEmpty
-                                ? Colors.grey.withValues(alpha: 0.5)
-                                : Colors.red,
-                          ),
+                          color: Colors.grey.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(10),
                         ),
+                      ),
+                      const SizedBox(height: 15),
+                      SizedBox(
+                        width: double.infinity,
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
-                            Pinput(
-                              closeKeyboardWhenCompleted: false,
-                              showCursor: false,
-                              controller: _pinController,
-                              length: 6,
-                              defaultPinTheme: defaultPinTheme,
-                              focusedPinTheme: effectiveFocusedPinTheme,
-                              submittedPinTheme: _isShowPin
-                                  ? visiblePinTheme
-                                  : submittedPinTheme,
-                              obscureText: !_isShowPin,
-                              obscuringCharacter: '●',
-                              keyboardType: TextInputType.number,
-                              autofocus: true,
-                              onChanged: (value) {
-                                setState(() {});
-                              },
-                              onCompleted: (pin) async {
-                                setState(() {
-                                  _errorMsg = '';
-                                  _isLoading = true;
-                                });
-                                final result = await widget.onCheckPin(
-                                  _pinController.text,
-                                );
-                                if (!context.mounted) return;
-                                setState(() {
-                                  _isLoading = false;
-                                });
-                                if (result['is_success'] == true) {
-                                  if (result['is_correct'] == true) {
-                                    Navigator.pop(context);
-                                    widget.onSuccess(
-                                      result['pin_token']?.toString() ?? '',
-                                    );
-                                  } else {
-                                    final remaining =
-                                        result['remaining_attempts'];
-                                    setState(() {
-                                      _errorMsg = remaining != null
-                                          ? 'Mã PIN không chính xác. Còn $remaining lần thử.'
-                                          : 'Mã PIN không chính xác. Vui lòng thử lại.';
-                                      _pinController.clear();
-                                    });
-                                  }
-                                } else {
-                                  setState(() {
-                                    _errorMsg =
-                                        result['message']?.toString() ??
-                                        'Đã có lỗi xảy ra. Vui lòng thử lại.';
-                                    _pinController.clear();
-                                  });
-                                }
-                              },
+                            Text(
+                              'Nhập mã PIN xác thực',
+                              textAlign: TextAlign.center,
+                              style: PinSheetStyles.title,
                             ),
-
                             Positioned(
-                              right: 5,
-                              child: _pinController.text.isEmpty
-                                  ? const SizedBox.shrink()
-                                  : IconButton(
-                                      onPressed: () {
-                                        setState(() {
-                                          _isShowPin = !_isShowPin;
-                                        });
-                                      },
-                                      icon: Icon(
-                                        _isShowPin
-                                            ? Icons.visibility_outlined
-                                            : Icons.visibility_off_outlined,
-                                        size: 20,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                    ),
+                              right: 15,
+                              child: IconButton(
+                                onPressed: () {
+                                  FocusManager.instance.primaryFocus?.unfocus();
+                                  Navigator.pop(context);
+                                },
+                                icon: const Icon(
+                                  Icons.close,
+                                  size: 22,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                    SizedBox(
-                      height: 30,
-                      child: Text(
-                        _errorMsg,
-                        style: GoogleFonts.roboto(
-                          color: Colors.red,
-                          fontSize: 12,
+                      const SizedBox(height: 15),
+                      Divider(
+                        height: 0.5,
+                        color: Colors.grey.withValues(alpha: 0.5),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(40, 10, 40, 5),
+                        child: PinCodeInputPill(
+                          key: _pinInputKey,
+                          controller: _pinController,
+                          focusNode: _pinFocusNode,
+                          hasError: _errorMsg.isNotEmpty,
+                          onChanged: _onPinChanged,
+                          onCompleted: _onPinCompleted,
                         ),
                       ),
-                    ),
-                    GestureDetector(
-                      onTap: _isLoading ? null : _onForgotPin,
-
-                      child: Text(
-                        "Quên mã PIN?",
-                        style: GoogleFonts.roboto(
-                          fontSize: 15,
-                          color: Colors.blue,
-                          fontWeight: FontWeight.w500,
+                      SizedBox(
+                        height: 30,
+                        child: Text(_errorMsg, style: PinSheetStyles.error),
+                      ),
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _isLoading ? null : _onForgotPin,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                          child: Text(
+                            "Quên mã PIN?",
+                            style: PinSheetStyles.forgot,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 15),
-
-                    const SizedBox(height: 15),
-                  ],
+                      const SizedBox(height: 20),
+                    ],
+                  ),
                 ),
               ),
             ),
             if (_isLoading)
               Positioned.fill(
-                child: Container(
-                  color: Colors.transparent,
-                  child: Center(
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade400,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 3,
-                      ),
+                child: Center(
+                  child: Container(
+                    width: 50,
+                    height: 50,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade400,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 3,
                     ),
                   ),
                 ),

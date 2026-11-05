@@ -4,7 +4,7 @@ import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
 import 'package:app/src/auth/login/totp_confirm_dialog.dart';
 import 'package:app/src/home/home_screen.dart';
-import 'package:app/src/kyc/kyc_front_id_screen.dart';
+import 'package:app/src/kyc/kyc_guide_screen.dart';
 import 'package:app/src/services/app_data_service.dart';
 import 'package:app/src/services/auth_service.dart';
 import 'package:app/src/services/kyc.service.dart';
@@ -604,7 +604,7 @@ class _OtpScreenState extends State<OtpScreen> {
 
     final Widget next = userKYC['data']['is_kyc']
         ? HomeScreen()
-        : KycFrontIdScreen();
+        : const KycGuideScreen();
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => next),

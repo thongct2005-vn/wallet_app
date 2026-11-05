@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/src/auth/forgot/forgot_type.dart';
 import 'package:app/src/kyc/kyc_face.screen.dart';
+import 'package:app/src/kyc/kyc_ui.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -57,38 +58,68 @@ class _KycBackIdScreenState extends State<KycBackIdScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isPreview = _capturedImage != null;
+
     return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: Text(
-          'Chụp mặt sau CCCD',
-          style: GoogleFonts.roboto(color: Colors.white, fontSize: 18),
-        ),
+      backgroundColor: kKycDarkBg,
+      body: Column(
+        children: [
+          KycCameraTopBar(
+            currentStep: 2,
+            title: isPreview ? 'Kiểm tra mặt sau' : 'Chụp mặt sau CCCD',
+            onBack: () {
+              if (isPreview) {
+                _retake();
+              } else {
+                Navigator.pop(context);
+              }
+            },
+          ),
+          Expanded(
+            child: isPreview ? _buildPreview() : _buildCameraView(),
+          ),
+        ],
       ),
-      body: _capturedImage != null ? _buildPreview() : _buildCameraView(),
+    );
+  }
+
+  Widget _buildLoadingCamera() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularProgressIndicator(
+            color: kKycPinkLight,
+            strokeWidth: 2.8,
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Đang khởi tạo máy ảnh...',
+            style: GoogleFonts.roboto(
+              color: Colors.white.withValues(alpha: 0.72),
+              fontSize: 13.5,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildCameraView() {
     if (_controller == null || _initFuture == null) {
-      return const Center(child: CircularProgressIndicator(color: Colors.pink));
+      return _buildLoadingCamera();
     }
     return FutureBuilder(
       future: _initFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(
-            child: CircularProgressIndicator(color: Colors.pink),
-          );
+          return _buildLoadingCamera();
         }
         return Stack(
           fit: StackFit.expand,
           children: [
             Container(
-              color: Colors.black,
+              color: kKycDarkBg,
               child: Center(
                 child: AspectRatio(
                   aspectRatio: 1 / _controller!.value.aspectRatio,
@@ -96,14 +127,36 @@ class _KycBackIdScreenState extends State<KycBackIdScreen> {
                 ),
               ),
             ),
-
-            _buildOverlayFrame(),
-           
+            const KycIdScannerOverlay(
+              badgeIcon: Iconsax.card_send,
+              badgeLabel: 'Mặt sau CCCD / CMND',
+              instruction: 'Đặt mặt sau giấy tờ nằm gọn trong khung',
+              subInstruction:
+                  'Đảm bảo rõ nét vùng chip điện tử, mã MRZ và ngày cấp',
+            ),
             Positioned(
               left: 0,
               right: 0,
-              bottom: 50,
-              child: _buildBottomControls(),
+              bottom: 0,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [
+                      kKycDarkBg.withValues(alpha: 0.9),
+                      kKycDarkBg.withValues(alpha: 0.0),
+                    ],
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 24),
+                  child: KycShutterButton(
+                    isCapturing: _isCapturing,
+                    onTap: _capture,
+                  ),
+                ),
+              ),
             ),
           ],
         );
@@ -111,119 +164,15 @@ class _KycBackIdScreenState extends State<KycBackIdScreen> {
     );
   }
 
-  Widget _buildOverlayFrame() {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        ColorFiltered(
-          colorFilter: ColorFilter.mode(
-            Colors.black.withValues(alpha: 0.7),
-            BlendMode.srcOut,
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Container(
-                decoration: const BoxDecoration(color: Colors.transparent),
-              ),
-              Center(
-                child: AspectRatio(
-                  aspectRatio: 1.586,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 24),
-                    decoration: BoxDecoration(
-                      color: Colors.black,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Center(
-          child: AspectRatio(
-            aspectRatio: 1.586,
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.pinkAccent, width: 2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBottomControls() {
-    return Center(
-      child: GestureDetector(
-        onTap: _isCapturing ? null : _capture,
-        child: Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 4),
-          ),
-          child: _isCapturing
-              ? const Padding(
-                  padding: EdgeInsets.all(20),
-                  child: CircularProgressIndicator(color: Colors.white),
-                )
-              : Container(
-                  margin: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.pinkAccent,
-                  ),
-                ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildPreview() {
-    return Column(
-      children: [
-        Expanded(child: Image.file(_capturedImage!, fit: BoxFit.contain)),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _retake,
-                  icon: const Icon(Iconsax.refresh, color: Colors.white),
-                  label: Text(
-                    'Chụp lại',
-                    style: GoogleFonts.roboto(color: Colors.white),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.white),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _confirm,
-                  icon: const Icon(Iconsax.tick_circle),
-                  label: Text('Xác nhận', style: GoogleFonts.roboto()),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.pinkAccent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+    return KycPhotoPreviewView(
+      imageFile: _capturedImage!,
+      previewLabel: 'Mặt sau CCCD',
+      qualityHint:
+          'Kiểm tra vùng chip điện tử, dòng mã nhận dạng và ngày cấp hiển thị sắc nét, không bị mờ.',
+      confirmLabel: 'Tiếp tục',
+      onRetake: _retake,
+      onConfirm: _confirm,
     );
   }
 

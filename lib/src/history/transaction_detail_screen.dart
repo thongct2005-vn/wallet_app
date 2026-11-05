@@ -4,6 +4,7 @@ import 'package:app/src/history/transaction_model.dart';
 import 'package:app/src/home/home_screen.dart';
 import 'package:app/src/topup_withdraw/topup_withdraw_screen.dart';
 import 'package:app/src/transfer/amount_input_screen.dart';
+import 'package:app/src/transfer/transfer_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -46,340 +47,264 @@ class TransactionDetailScreen extends StatelessWidget {
     final bool isTransfer = transactionModel.type == "TRANSFER";
 
     return Scaffold(
-      backgroundColor: Colors.white.withValues(alpha: 0.95),
+      backgroundColor: kTfBg,
       extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        leading: TransferCircleButton(
+          icon: Icons.arrow_back,
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: TransferAppBarTitle(isMerchant ? title : "Chi tiết giao dịch"),
+        actions: [
+          TransferCircleButton(
+            icon: Iconsax.home_2,
+            padding: const EdgeInsets.only(right: 16, top: 8, bottom: 8),
+            onPressed: () {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const HomeScreen()),
+                (r) => false,
+              );
+            },
+          ),
+        ],
+      ),
       body: Stack(
         children: [
-          Container(
-            height: 500,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.pink.shade200.withValues(alpha: 0.75),
-                  Colors.white.withValues(alpha: 0.0),
-                ],
-              ),
-            ),
-          ),
+          const TransferHeaderGradient(),
           SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 5, 15, 20),
-                  child: Row(
-                    children: [
-                      Container(
-                        height: 30,
-                        width: 30,
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            width: 1,
-                            color: Colors.white.withValues(alpha: 0.8),
-                          ),
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.8),
-                        ),
-                        child: IconButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                          },
-                          padding: EdgeInsets.zero,
-                          icon: const Icon(Icons.arrow_back, size: 20),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          isMerchant ? title : "Chi Tiết Giao Dịch",
-                          style: GoogleFonts.roboto(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Container(
-                        height: 30,
-                        width: 30,
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            width: 1,
-                            color: Colors.white.withValues(alpha: 0.8),
-                          ),
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.8),
-                        ),
-                        child: IconButton(
-                          onPressed: () {
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const HomeScreen(),
-                              ),
-                              (r) => false,
-                            );
-                          },
-                          padding: EdgeInsets.zero,
-                          icon: const Icon(Iconsax.home_2, size: 20),
-                        ),
-                      ),
-                    ],
-                  ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(18, 18, 18, 22),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: kTfPink.withValues(alpha: 0.12),
+                      blurRadius: 26,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
                 ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(15),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(15),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.04),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SnakeBorderCard(
-                                borderRadius: 14,
-                                borderWidth: 1.5,
-                                child: Container(
-                                  padding: const EdgeInsets.all(16),
-                                  color: Colors.white,
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 44,
-                                        height: 44,
-                                        decoration: BoxDecoration(
-                                          color: iconColor.withValues(
-                                            alpha: 0.1,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                        child: Icon(
-                                          icon,
-                                          color: iconColor,
-                                          size: 25,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              title.toUpperCase(),
-                                              style: GoogleFonts.roboto(
-                                                fontSize: 16,
-                                                color: Colors.black54,
-                                                letterSpacing: 0.5,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              amount,
-                                              style: GoogleFonts.roboto(
-                                                fontSize: 28,
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.black54,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                              _infoRow(
-                                "Trạng thái",
-                                null,
-                                trailingWidget: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.lightGreenAccent.withValues(
-                                      alpha: 0.3,
-                                    ),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    status,
-                                    style: GoogleFonts.roboto(
-                                      color: Colors.green,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              _infoRow("Thời gian", time),
-                              _infoRow(
-                                "Mã giao dịch",
-                                null,
-                                trailingWidget: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      transactionCode,
-                                      style: GoogleFonts.roboto(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.black87,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Icon(
-                                      Iconsax.copy,
-                                      size: 18,
-                                      color: Colors.pink.shade300,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              if (isTransfer) ...[
-                                _infoRow("Ví Mio", walletName),
-                                _infoRow(
-                                  "Số điện thoại",
-                                  transactionModel.counterpartyPhone,
-                                ),
-                              ] else if (isMerchant) ...[
-                                _infoRow(
-                                  "Cửa hàng",
-                                  transactionModel.counterpartyName,
-                                ),
-                                _infoRow(
-                                  "Nội dung",
-                                  transactionModel.description ?? '',
-                                ),
-                                _infoRow(
-                                  "Mã đơn",
-                                  transactionModel.orderId ?? transactionCode,
-                                ),
-                              ] else ...[
-                                _infoRow("Tài khoản/thẻ", walletName),
-                              ],
-                              _infoRow("Tổng phí", feeText, isLast: true),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 15),
-                        Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SnakeBorderCard(
+                      borderRadius: 16,
+                      borderWidth: 1.5,
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        color: Colors.white,
+                        child: Row(
                           children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () {},
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 10,
-                                  ),
-                                  side: BorderSide(color: Colors.pink.shade200),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                                child: Text(
-                                  "Liên hệ CSKH",
-                                  style: GoogleFonts.roboto(
-                                    color: Colors.pink,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 18,
-                                  ),
-                                ),
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: iconColor.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(14),
                               ),
+                              child: Icon(icon, color: iconColor, size: 26),
                             ),
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 12),
                             Expanded(
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  if (textBtn == "Chuyển thêm" ||
-                                      textBtn == "Chuyển lại") {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => AmountInputScreen(
-                                          receiverPhone: transactionModel.counterpartyPhone,
-                                          receiverFullName: transactionModel.counterpartyName,
-                                          receiverId: transactionModel.counterpartyId,
-                                        ),
-                                      ),
-                                    );
-                                  } else if (textBtn == "Nạp thêm") {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            TopUpWithdrawScreen(
-                                              walletBalance:
-                                                  userController.balance.value,
-                                              isTopUpTab: true,
-                                            ),
-                                      ),
-                                    );
-                                  } else if (textBtn == "Rút thêm") {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            TopUpWithdrawScreen(
-                                              walletBalance:
-                                                  userController.balance.value,
-                                              isTopUpTab: false,
-                                            ),
-                                      ),
-                                    );
-                                  } else if (textBtn == "Chia tiền") {
-                                    // Không cần xử lý logic, để cân đối giao diện
-                                  }
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.pinkAccent,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 10,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title.toUpperCase(),
+                                    style: GoogleFonts.roboto(
+                                      fontSize: 13,
+                                      color: kTfMuted,
+                                      letterSpacing: 0.5,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                                  const SizedBox(height: 4),
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      amount,
+                                      style: GoogleFonts.roboto(
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.w900,
+                                        color: kTfText,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                                child: Text(
-                                  textBtn,
-                                  style: GoogleFonts.roboto(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 18,
-                                  ),
-                                ),
+                                ],
                               ),
                             ),
                           ],
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    const TransferDashedDivider(),
+                    const SizedBox(height: 6),
+                    _infoRow(
+                      "Trạng thái",
+                      null,
+                      trailingWidget: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: kTfSuccess.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          status,
+                          style: GoogleFonts.roboto(
+                            color: kTfSuccess,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
+                    _infoRow("Thời gian", time),
+                    _infoRow(
+                      "Mã giao dịch",
+                      null,
+                      trailingWidget: Flexible(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                transactionCode,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.roboto(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: kTfPinkDark,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            const Icon(Iconsax.copy, size: 18, color: kTfPink),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (isTransfer) ...[
+                      _infoRow("Ví Mio", walletName),
+                      _infoRow(
+                        "Số điện thoại",
+                        transactionModel.counterpartyPhone,
+                      ),
+                    ] else if (isMerchant) ...[
+                      _infoRow("Cửa hàng", transactionModel.counterpartyName),
+                      _infoRow("Nội dung", transactionModel.description ?? ''),
+                      _infoRow(
+                        "Mã đơn",
+                        transactionModel.orderId ?? transactionCode,
+                      ),
+                    ] else ...[
+                      _infoRow("Tài khoản/thẻ", walletName),
+                    ],
+                    _infoRow("Tổng phí", feeText, isLast: true),
+                    const SizedBox(height: 22),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () {},
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: kTfPink, width: 1.5),
+                              padding: const EdgeInsets.symmetric(vertical: 15),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: Text(
+                              "Liên hệ CSKH",
+                              style: GoogleFonts.roboto(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: kTfPink,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              if (textBtn == "Chuyển thêm" ||
+                                  textBtn == "Chuyển lại") {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => AmountInputScreen(
+                                      receiverPhone:
+                                          transactionModel.counterpartyPhone,
+                                      receiverFullName:
+                                          transactionModel.counterpartyName,
+                                      receiverId:
+                                          transactionModel.counterpartyId,
+                                    ),
+                                  ),
+                                );
+                              } else if (textBtn == "Nạp thêm") {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => TopUpWithdrawScreen(
+                                      walletBalance:
+                                          userController.balance.value,
+                                      isTopUpTab: true,
+                                    ),
+                                  ),
+                                );
+                              } else if (textBtn == "Rút thêm") {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => TopUpWithdrawScreen(
+                                      walletBalance:
+                                          userController.balance.value,
+                                      isTopUpTab: false,
+                                    ),
+                                  ),
+                                );
+                              } else if (textBtn == "Chia tiền") {
+                                // Không cần xử lý logic, để cân đối giao diện
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: kTfPink,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(vertical: 15),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: Text(
+                              textBtn,
+                              style: GoogleFonts.roboto(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ],
@@ -393,39 +318,30 @@ class TransactionDetailScreen extends StatelessWidget {
     Widget? trailingWidget,
     bool isLast = false,
   }) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                label,
-                style: GoogleFonts.roboto(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w400,
-                  color: Colors.black54,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: GoogleFonts.roboto(fontSize: 15, color: kTfMuted)),
+          const SizedBox(width: 16),
+          trailingWidget ??
+              Flexible(
+                child: Text(
+                  value ?? '',
+                  textAlign: TextAlign.end,
+                  style: GoogleFonts.roboto(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: kTfText,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              trailingWidget ??
-                  Flexible(
-                    child: Text(
-                      value ?? '',
-                      textAlign: TextAlign.end,
-                      style: GoogleFonts.roboto(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.black,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

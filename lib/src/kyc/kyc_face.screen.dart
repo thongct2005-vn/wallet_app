@@ -1,16 +1,19 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/src/auth/forgot/forgot_new_secret_screen.dart';
 import 'package:app/src/auth/forgot/forgot_type.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
 import 'package:app/src/kyc/kyc_result.dart';
+import 'package:app/src/kyc/kyc_ui.dart';
 import 'package:app/src/services/forgot_service.dart';
 import 'package:app/src/services/kyc.service.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:iconsax/iconsax.dart';
@@ -33,7 +36,9 @@ class KycFaceScreen extends StatefulWidget {
 }
 
 class _KycFaceScreenState extends State<KycFaceScreen> {
-  final UserController _userController = UserController();
+  final UserController _userController = Get.isRegistered<UserController>()
+      ? Get.find<UserController>()
+      : Get.put(UserController());
   final KYCService _kycService = KYCService();
   final ForgotService _forgotService = ForgotService();
   CameraController? _controller;
@@ -214,8 +219,8 @@ class _KycFaceScreenState extends State<KycFaceScreen> {
 
     final faceWidthRatio = box.width / imageSize.width;
 
-    final minRatio = 0.45;
-    final maxRatio = 0.75;
+    const minRatio = 0.45;
+    const maxRatio = 0.75;
 
     final tooSmall = faceWidthRatio < minRatio;
     final tooBig = faceWidthRatio > maxRatio;
@@ -235,16 +240,19 @@ class _KycFaceScreenState extends State<KycFaceScreen> {
   }
 
   void _updateStatus({required bool centered, required String text}) {
-    if (_statusText != text) {
-      setState(() => _statusText = text);
-    }
+    final statusChanged = _statusText != text;
 
     if (centered && !_faceCentered) {
       _faceCentered = true;
+      _statusText = text;
       _startCountdown();
     } else if (!centered && _faceCentered) {
       _faceCentered = false;
+      _statusText = text;
       _cancelCountdown();
+      if (statusChanged && mounted) setState(() {});
+    } else if (statusChanged) {
+      setState(() => _statusText = text);
     }
   }
 
@@ -315,22 +323,34 @@ class _KycFaceScreenState extends State<KycFaceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isPreview = _capturedImage != null;
+
     return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: Text(
-          'Chụp ảnh khuôn mặt',
-          style: GoogleFonts.roboto(color: Colors.white, fontSize: 18),
-        ),
-      ),
+      backgroundColor: kKycDarkBg,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          _capturedImage != null ? _buildPreview() : _buildCameraView(),
-
+          Column(
+            children: [
+              KycCameraTopBar(
+                currentStep: 3,
+                title: isPreview
+                    ? 'Kiểm tra khuôn mặt'
+                    : 'Xác thực khuôn mặt',
+                onBack: () {
+                  if (_isVerifying) return;
+                  if (isPreview) {
+                    _retake();
+                  } else {
+                    Navigator.pop(context);
+                  }
+                },
+              ),
+              Expanded(
+                child: isPreview ? _buildPreview() : _buildCameraView(),
+              ),
+            ],
+          ),
           if (_isVerifying) _buildLoadingOverlay(),
         ],
       ),
@@ -447,15 +467,17 @@ class _KycFaceScreenState extends State<KycFaceScreen> {
         _capturedImage!,
       );
       if (!mounted) return;
-      if(result['is_success']){
-        _userController.setUserFullName(newFullName: result['data']['full_name']?? 'Không rõ tên');
+      if (result['is_success'] == true) {
+        _userController.setUserFullName(
+          newFullName: result['data']?['full_name'] ?? 'Không rõ tên',
+        );
       }
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
           builder: (_) => KycResultScreen(
-            isSuccess: result['is_success'],
-            msg: result['message'],
+            isSuccess: result['is_success'] == true,
+            msg: result['message'] ?? '',
           ),
         ),
         (r) => false,
@@ -472,61 +494,65 @@ class _KycFaceScreenState extends State<KycFaceScreen> {
 
   Widget _buildLoadingOverlay() {
     return Container(
-      color: Colors.black.withValues(alpha: 0.85),
+      color: Colors.black.withValues(alpha: 0.72),
       child: Center(
         child: Container(
-          width: 280,
-          padding: const EdgeInsets.all(24),
+          width: 300,
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
           decoration: BoxDecoration(
-            color: const Color(0xFF1A1A1A),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.pinkAccent, width: 1.5),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.pinkAccent.withValues(alpha: 0.3),
-                blurRadius: 20,
-                spreadRadius: 2,
+                color: kKycPink.withValues(alpha: 0.28),
+                blurRadius: 28,
+                offset: const Offset(0, 12),
               ),
             ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
-                Iconsax.scan_barcode,
-                color: Colors.pinkAccent,
-                size: 40,
+              Container(
+                width: 68,
+                height: 68,
+                decoration: const BoxDecoration(
+                  color: kKycPinkSoft,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Iconsax.scan_barcode,
+                  color: kKycPinkDark,
+                  size: 34,
+                ),
               ),
-              const SizedBox(height: 16),
-
+              const SizedBox(height: 18),
               Text(
-                'ĐANG XÁC THỰC',
+                'Đang xác thực danh tính',
+                textAlign: TextAlign.center,
                 style: GoogleFonts.roboto(
-                  color: Colors.pinkAccent,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 2,
+                  color: kKycText,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Hệ thống đang đối chiếu giấy tờ và khuôn mặt.\nVui lòng giữ kết nối và không thoát ứng dụng.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.roboto(
+                  color: kKycMuted,
+                  fontSize: 13,
+                  height: 1.45,
                 ),
               ),
               const SizedBox(height: 20),
-
               ClipRRect(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(99),
                 child: const LinearProgressIndicator(
-                  backgroundColor: Colors.black,
-                  color: Colors.pinkAccent,
-                  minHeight: 8,
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              Text(
-                'Hệ thống đang đồng bộ dữ liệu...\nVui lòng không thoát ứng dụng.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.roboto(
-                  color: Colors.white70,
-                  fontSize: 12,
-                  height: 1.5,
+                  backgroundColor: kKycPinkSoft,
+                  color: kKycPink,
+                  minHeight: 7,
                 ),
               ),
             ],
@@ -536,17 +562,37 @@ class _KycFaceScreenState extends State<KycFaceScreen> {
     );
   }
 
+  Widget _buildLoadingCamera() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularProgressIndicator(
+            color: kKycPinkLight,
+            strokeWidth: 2.8,
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Đang khởi tạo camera trước...',
+            style: GoogleFonts.roboto(
+              color: Colors.white.withValues(alpha: 0.72),
+              fontSize: 13.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCameraView() {
     if (_controller == null || _initFuture == null) {
-      return const Center(child: CircularProgressIndicator(color: Colors.pink));
+      return _buildLoadingCamera();
     }
     return FutureBuilder(
       future: _initFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(
-            child: CircularProgressIndicator(color: Colors.pink),
-          );
+          return _buildLoadingCamera();
         }
         return LayoutBuilder(
           builder: (context, constraints) {
@@ -562,7 +608,7 @@ class _KycFaceScreenState extends State<KycFaceScreen> {
               fit: StackFit.expand,
               children: [
                 Container(
-                  color: Colors.black,
+                  color: kKycDarkBg,
                   child: Center(
                     child: AspectRatio(
                       aspectRatio: 1 / _controller!.value.aspectRatio,
@@ -570,19 +616,18 @@ class _KycFaceScreenState extends State<KycFaceScreen> {
                     ),
                   ),
                 ),
-
                 _buildOvalOverlay(size),
                 Positioned(
                   left: 24,
                   right: 24,
-                  top: (ovalTop - 64).clamp(16, size.height),
+                  top: (ovalTop - 62).clamp(12.0, size.height),
                   child: _buildStatusBanner(),
                 ),
                 Positioned(
-                  left: 0,
-                  right: 0,
-                  top: ovalBottom + 16,
-                  child: _buildCountdown(),
+                  left: 24,
+                  right: 24,
+                  top: ovalBottom + 22,
+                  child: _buildBottomGuidance(),
                 ),
               ],
             );
@@ -593,56 +638,139 @@ class _KycFaceScreenState extends State<KycFaceScreen> {
   }
 
   Widget _buildStatusBanner() {
+    final accent = _faceCentered ? kKycSuccessBright : kKycPinkLight;
     return Center(
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
-        child: Container(
-          key: ValueKey(_statusText),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.55),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            _statusText,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.roboto(
-              color: _faceCentered ? Colors.greenAccent : Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: kKycDarkCard.withValues(alpha: 0.88),
+          borderRadius: BorderRadius.circular(99),
+          border: Border.all(color: accent.withValues(alpha: 0.55)),
+          boxShadow: [
+            BoxShadow(
+              color: accent.withValues(alpha: 0.2),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
             ),
+          ],
+        ),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          child: Row(
+            key: ValueKey('$_faceCentered-$_statusText'),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _faceCentered ? Iconsax.tick_circle : Iconsax.scan,
+                size: 17,
+                color: accent,
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  _statusText,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.roboto(
+                    color: _faceCentered ? kKycSuccessBright : Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildCountdown() {
-    if (_countdown == null) return const SizedBox.shrink();
-    return Center(
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
-        transitionBuilder: (child, anim) =>
-            ScaleTransition(scale: anim, child: child),
-        child: Container(
-          key: ValueKey(_countdown),
-          width: 56,
-          height: 56,
-          alignment: Alignment.center,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.pinkAccent,
-          ),
-          child: Text(
-            '$_countdown',
-            style: GoogleFonts.roboto(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
+  Widget _buildBottomGuidance() {
+    if (_countdown != null) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            transitionBuilder: (child, anim) =>
+                ScaleTransition(scale: anim, child: child),
+            child: Container(
+              key: ValueKey(_countdown),
+              width: 64,
+              height: 64,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [kKycSuccessBright, kKycSuccess],
+                ),
+                border: Border.all(color: Colors.white, width: 2.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: kKycSuccessBright.withValues(alpha: 0.45),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Text(
+                '$_countdown',
+                style: GoogleFonts.roboto(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
           ),
+          const SizedBox(height: 10),
+          Text(
+            'Giữ nguyên tư thế để chụp tự động...',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.roboto(
+              color: Colors.white.withValues(alpha: 0.88),
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Hệ thống sẽ tự động chụp khi khuôn mặt khớp khung hình',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.roboto(
+            color: Colors.white.withValues(alpha: 0.76),
+            fontSize: 13,
+          ),
         ),
-      ),
+        const SizedBox(height: 14),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          runSpacing: 8,
+          children: const [
+            _FaceHintChip(
+              icon: Icons.visibility_outlined,
+              label: 'Nhìn thẳng',
+            ),
+            _FaceHintChip(
+              icon: Icons.wb_sunny_outlined,
+              label: 'Đủ sáng',
+            ),
+            _FaceHintChip(
+              icon: Iconsax.user,
+              label: 'Không che mặt',
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -650,7 +778,7 @@ class _KycFaceScreenState extends State<KycFaceScreen> {
     final ovalWidth = size.width * _ovalWidthRatio;
     final ovalHeight = size.height * _ovalHeightRatio;
     final centerY = size.height * _ovalCenterYRatio;
-    final borderColor = _faceCentered ? Colors.greenAccent : Colors.pinkAccent;
+    final borderColor = _faceCentered ? kKycSuccessBright : kKycPinkLight;
 
     return CustomPaint(
       size: size,
@@ -659,54 +787,55 @@ class _KycFaceScreenState extends State<KycFaceScreen> {
         ovalHeight: ovalHeight,
         centerY: centerY,
         borderColor: borderColor,
+        isCentered: _faceCentered,
       ),
     );
   }
 
   Widget _buildPreview() {
-    return Column(
-      children: [
-        Expanded(
-          child: Transform.scale(
-            scaleX: -1,
-            child: Image.file(_capturedImage!, fit: BoxFit.contain),
+    return KycPhotoPreviewView(
+      imageFile: _capturedImage!,
+      mirrorHorizontal: true,
+      previewLabel: 'Ảnh khuôn mặt',
+      qualityHint:
+          'Đảm bảo khuôn mặt rõ nét, mắt mở tự nhiên và không bị bóng tối che khuất trước khi gửi.',
+      confirmLabel: 'Gửi xác thực',
+      onRetake: _retake,
+      onConfirm: _confirm,
+    );
+  }
+}
+
+class _FaceHintChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _FaceHintChip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: kKycPinkLight),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: GoogleFonts.roboto(
+              color: Colors.white.withValues(alpha: 0.88),
+              fontSize: 11.5,
+              fontWeight: FontWeight.w500,
+            ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _retake,
-                  icon: const Icon(Iconsax.refresh, color: Colors.white),
-                  label: Text(
-                    'Chụp lại',
-                    style: GoogleFonts.roboto(color: Colors.white),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.white),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _confirm,
-                  icon: const Icon(Iconsax.tick_circle),
-                  label: Text('Xác nhận', style: GoogleFonts.roboto()),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.pinkAccent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -716,12 +845,14 @@ class _OvalOverlayPainter extends CustomPainter {
   final double ovalHeight;
   final double centerY;
   final Color borderColor;
+  final bool isCentered;
 
   _OvalOverlayPainter({
     required this.ovalWidth,
     required this.ovalHeight,
     required this.centerY,
     required this.borderColor,
+    required this.isCentered,
   });
 
   @override
@@ -744,16 +875,45 @@ class _OvalOverlayPainter extends CustomPainter {
 
     canvas.drawPath(
       maskPath,
-      Paint()..color = Colors.black.withValues(alpha: 0.7),
+      Paint()..color = kKycDarkBg.withValues(alpha: 0.78),
     );
 
+    // Vầng sáng dịu quanh khung oval
+    canvas.drawOval(
+      ovalRect,
+      Paint()
+        ..color = borderColor.withValues(alpha: isCentered ? 0.45 : 0.3)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 9
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
+    );
+
+    // Viền chính của khung oval
     canvas.drawOval(
       ovalRect,
       Paint()
         ..color = borderColor
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 3,
+        ..strokeWidth = 3.2,
     );
+
+    // 4 cung định vị bên ngoài tạo cảm giác quét sinh trắc học
+    final outerArcRect = ovalRect.inflate(9);
+    final arcPaint = Paint()
+      ..color = borderColor.withValues(alpha: 0.6)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+
+    const sweep = math.pi / 5;
+    for (final startAngle in [
+      -math.pi * 0.85,
+      -math.pi * 0.35,
+      math.pi * 0.15,
+      math.pi * 0.65,
+    ]) {
+      canvas.drawArc(outerArcRect, startAngle, sweep, false, arcPaint);
+    }
   }
 
   @override
@@ -761,6 +921,7 @@ class _OvalOverlayPainter extends CustomPainter {
     return oldDelegate.ovalWidth != ovalWidth ||
         oldDelegate.ovalHeight != ovalHeight ||
         oldDelegate.centerY != centerY ||
-        oldDelegate.borderColor != borderColor;
+        oldDelegate.borderColor != borderColor ||
+        oldDelegate.isCentered != isCentered;
   }
 }

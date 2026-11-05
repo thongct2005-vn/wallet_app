@@ -1,5 +1,6 @@
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/format_utils.dart';
+import 'package:app/core/utils/icon_expand_route.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/create_pin_bottom_sheet.dart';
 import 'package:app/src/history/history_screen.dart';
@@ -46,6 +47,9 @@ class _HomeScreenState extends State<HomeScreen> {
   final AppDataService _appDataService = AppDataService();
   final UserController _userController = Get.find<UserController>();
   final BankService _bankService = BankService();
+  final GlobalKey _topUpIconKey = GlobalKey();
+  final GlobalKey _withdrawIconKey = GlobalKey();
+  final GlobalKey _transferIconKey = GlobalKey();
   String _fullName = '';
   bool _isHidenWalletBalance = false;
   String _balance = '0';
@@ -73,11 +77,12 @@ class _HomeScreenState extends State<HomeScreen> {
       const ProfileScreen(),
     ];
 
-    return PopScope(
-      canPop: false,
-      child: Scaffold(
-        extendBodyBehindAppBar: true,
-        resizeToAvoidBottomInset: false,
+    return FreezePinMediaQuery(
+      child: PopScope(
+        canPop: false,
+        child: Scaffold(
+          extendBodyBehindAppBar: true,
+          resizeToAvoidBottomInset: false,
         appBar: _selectedIndex == 0
             ? PreferredSize(
                 preferredSize: const Size.fromHeight(80),
@@ -207,6 +212,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -481,41 +487,65 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Row(
         children: [
           Expanded(
-            child: _buildQuickAction(Iconsax.wallet_add, "Nạp tiền", () {
-              if (!_hasPin) {
-                _showCreatePinDialog(context);
-                return;
-              }
-              _getBankLinkStatus(true);
-            }),
+            child: _buildQuickAction(
+              _topUpIconKey,
+              Iconsax.wallet_add,
+              "Nạp tiền",
+              () {
+                if (!_hasPin) {
+                  _showCreatePinDialog(context);
+                  return;
+                }
+                _getBankLinkStatus(true);
+              },
+            ),
           ),
           Expanded(
-            child: _buildQuickAction(Iconsax.wallet_minus, "Rút tiền", () {
-              if (!_hasPin) {
-                _showCreatePinDialog(context);
-                return;
-              }
-              _getBankLinkStatus(false);
-            }),
+            child: _buildQuickAction(
+              _withdrawIconKey,
+              Iconsax.wallet_minus,
+              "Rút tiền",
+              () {
+                if (!_hasPin) {
+                  _showCreatePinDialog(context);
+                  return;
+                }
+                _getBankLinkStatus(false);
+              },
+            ),
           ),
           Expanded(
-            child: _buildQuickAction(Iconsax.money_send, "Chuyển tiền", () {
-              if (!_hasPin) {
-                _showCreatePinDialog(context);
-                return;
-              }
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => ContactListScreen()),
-              );
-            }),
+            child: _buildQuickAction(
+              _transferIconKey,
+              Iconsax.money_send,
+              "Chuyển tiền",
+              () {
+                if (!_hasPin) {
+                  _showCreatePinDialog(context);
+                  return;
+                }
+                Navigator.push(
+                  context,
+                  IconExpandRoute(
+                    iconKey: _transferIconKey,
+                    icon: Iconsax.money_send,
+                    builder: (context) => const ContactListScreen(),
+                  ),
+                );
+              },
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildQuickAction(IconData icon, String text, VoidCallback onTap) {
+  Widget _buildQuickAction(
+    GlobalKey iconKey,
+    IconData icon,
+    String text,
+    VoidCallback onTap,
+  ) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -525,6 +555,7 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
+              key: iconKey,
               width: 56,
               height: 56,
               decoration: BoxDecoration(
@@ -647,10 +678,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showCreatePinDialog(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+    showSmoothPinBottomSheet(context: context,
       builder: (context) {
         return CreatePinBottomSheet(
           onCreatePin: (pin) async {
@@ -699,21 +727,29 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _getBankLinkStatus(bool isTopUpTab) async {
     if (_isCheckingBank) return; // tránh bấm nhiều lần khi đang chờ
     setState(() => _isCheckingBank = true);
+    final targetKey = isTopUpTab ? _topUpIconKey : _withdrawIconKey;
+    final targetIcon = isTopUpTab ? Iconsax.wallet_add : Iconsax.wallet_minus;
     try {
       final result = await _bankService.getBankLinkStatus();
       if (!mounted) return;
       if (result['data']['has_linked_account']) {
         Navigator.push(
           context,
-          TopUpWithdrawScreen.route(
-            walletBalance: _balance,
-            isTopUpTab: isTopUpTab,
+          IconExpandRoute(
+            iconKey: targetKey,
+            icon: targetIcon,
+            builder: (context) => TopUpWithdrawScreen(
+              walletBalance: _balance,
+              isTopUpTab: isTopUpTab,
+            ),
           ),
         );
       } else {
         Navigator.push(
           context,
-          MaterialPageRoute(
+          IconExpandRoute(
+            iconKey: targetKey,
+            icon: targetIcon,
             builder: (context) =>
                 LinkBankScreen(bankList: result['data']['available_banks']),
           ),

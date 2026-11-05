@@ -1,7 +1,7 @@
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/dialog_utils.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
-import 'package:app/src/kyc/kyc_front_id_screen.dart';
+import 'package:app/src/kyc/kyc_guide_screen.dart';
 import 'package:app/src/services/auth_service.dart';
 import 'package:app/src/services/socket_service.dart';
 import 'package:flutter/material.dart';
@@ -377,7 +377,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => const KycFrontIdScreen(isUpdate: true),
+            builder: (_) => const KycGuideScreen(isUpdate: true),
           ),
         );
       },

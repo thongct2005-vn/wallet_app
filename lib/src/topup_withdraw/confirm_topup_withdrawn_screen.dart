@@ -76,114 +76,131 @@ class _ConfirmTopUpWithdrawScreenState
       orElse: () => {'bank_name': ''},
     );
 
-    return PopScope(
-      canPop: !_isProcessing,
-      child: Scaffold(
-        backgroundColor: _kBg,
-        extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          centerTitle: true,
-          leading: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 0, 8),
-            child: Container(
-              height: 40,
-              width: 40,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: _kPink.withValues(alpha: 0.14),
-                    blurRadius: 14,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+    return FreezePinMediaQuery(
+      child: PopScope(
+        canPop: !_isProcessing,
+        child: Scaffold(
+          backgroundColor: _kBg,
+          extendBodyBehindAppBar: true,
+          resizeToAvoidBottomInset: false,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            centerTitle: true,
+            leading: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 0, 8),
+              child: Container(
+                height: 40,
+                width: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: _kPink.withValues(alpha: 0.14),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: _isProcessing ? null : () => Navigator.pop(context),
+                  icon: const Icon(Icons.arrow_back, size: 20, color: _kText),
+                ),
               ),
-              child: IconButton(
-                padding: EdgeInsets.zero,
-                onPressed: _isProcessing ? null : () => Navigator.pop(context),
-                icon: const Icon(Icons.arrow_back, size: 20, color: _kText),
+            ),
+            title: Text(
+              "Thanh toán an toàn",
+              style: GoogleFonts.roboto(
+                fontSize: 19,
+                fontWeight: FontWeight.w700,
+                color: _kText,
               ),
             ),
           ),
-          title: Text(
-            "Thanh toán an toàn",
-            style: GoogleFonts.roboto(
-              fontSize: 19,
-              fontWeight: FontWeight.w700,
-              color: _kText,
-            ),
-          ),
-        ),
-        body: !isLoadingLinkedBanks
-            ? Stack(
-                children: [
-                  Container(
-                    height: 380,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          _kPink.withValues(alpha: 0.24),
-                          _kPinkLight.withValues(alpha: 0.08),
-                          Colors.white.withValues(alpha: 0.0),
+          body: !isLoadingLinkedBanks
+              ? Stack(
+                  children: [
+                    RepaintBoundary(
+                      child: Container(
+                        height: 380,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              _kPink.withValues(alpha: 0.24),
+                              _kPinkLight.withValues(alpha: 0.08),
+                              Colors.white.withValues(alpha: 0.0),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    SafeArea(
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: RepaintBoundary(
+                              child: SingleChildScrollView(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  12,
+                                  16,
+                                  16,
+                                ),
+                                child: Column(
+                                  children: [
+                                    _buildContainerTopUpInfo(
+                                      context,
+                                      selectedBank,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    _buildContainerBankList(context),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          RepaintBoundary(
+                            child: _buildContainerConfirmButton(context),
+                          ),
                         ],
                       ),
                     ),
-                  ),
-                  SafeArea(
-                    child: Column(
-                      children: [
-                        Expanded(
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                            child: Column(
-                              children: [
-                                _buildContainerTopUpInfo(context, selectedBank),
-                                const SizedBox(height: 16),
-                                _buildContainerBankList(context),
-                              ],
-                            ),
-                          ),
-                        ),
-                        _buildContainerConfirmButton(context),
-                      ],
-                    ),
-                  ),
-                  if (_isProcessing)
-                    Positioned.fill(
-                      child: Container(
-                        color: Colors.transparent,
-                        child: Center(
-                          child: Container(
-                            width: 50,
-                            height: 50,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade400,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 3,
+                    if (_isProcessing)
+                      Positioned.fill(
+                        child: Container(
+                          color: Colors.transparent,
+                          child: Center(
+                            child: Container(
+                              width: 50,
+                              height: 50,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade400,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 3,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                ],
-              )
-            : Center(
-                child: FireworkStarSpinner(
-                  size: 70,
-                  color: Colors.pinkAccent,
-                  starCount: 8,
+                  ],
+                )
+              : Center(
+                  child: FireworkStarSpinner(
+                    size: 70,
+                    color: Colors.pinkAccent,
+                    starCount: 8,
+                  ),
                 ),
-              ),
+        ),
       ),
     );
   }
@@ -567,10 +584,8 @@ class _ConfirmTopUpWithdrawScreenState
   }
 
   void _showCheckPinDialog(BuildContext context) {
-    showModalBottomSheet(
+    showSmoothPinBottomSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (context) {
         return CheckPinBottomSheet(
           onCheckPin: (pin) async {
@@ -617,7 +632,7 @@ class _ConfirmTopUpWithdrawScreenState
               idempotencyKey,
               pinToken,
             );
-    
+
       setState(() {
         _isProcessing = false;
       });

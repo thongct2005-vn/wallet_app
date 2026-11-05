@@ -1,7 +1,7 @@
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
 import 'package:app/src/home/home_screen.dart';
-import 'package:app/src/kyc/kyc_front_id_screen.dart';
+import 'package:app/src/kyc/kyc_guide_screen.dart';
 import 'package:app/src/services/app_data_service.dart';
 import 'package:app/src/services/kyc.service.dart';
 import 'package:app/src/services/notification_service.dart';
@@ -101,7 +101,7 @@ class _SplashScreenState extends State<SplashScreen> {
       if (!userKYC['data']['is_kyc']) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => KycFrontIdScreen()),
+          MaterialPageRoute(builder: (context) => const KycGuideScreen()),
         );
       }
       else {
