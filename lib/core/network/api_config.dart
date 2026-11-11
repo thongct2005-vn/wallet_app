@@ -29,6 +29,10 @@ class ApiConfig {
   static const String getWalletBalance = '$baseUrl/wallet/balance';
   static const String checkTransfer = '$baseUrl/wallet/check-transfer';
   static const String checkPin = '$baseUrl/wallet/check-pin';
+  static const String verifyPinChallenge =
+      '$baseUrl/wallet/verify-pin-challenge';
+  static const String resendPinChallenge =
+      '$baseUrl/wallet/resend-pin-challenge';
 
   static const String findUser = '$baseUrl/user/find-user';
   static const String checkContact = '$baseUrl/user/check-contact';

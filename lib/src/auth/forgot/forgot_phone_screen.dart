@@ -153,7 +153,6 @@ class _ForgotPhoneScreenState extends State<ForgotPhoneScreen> {
           builder: (context, isLoading, _) {
             return AuthPrimaryButton(
               label: 'Gửi mã OTP',
-              icon: Iconsax.arrow_right_3,
               loading: isLoading,
               onTap: _submit,
             );

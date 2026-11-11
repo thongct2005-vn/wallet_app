@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/dialog_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/pin_sheet_common.dart';
@@ -7,6 +8,7 @@ import 'package:app/src/auth/forgot/forgot_phone_screen.dart';
 import 'package:app/src/auth/forgot/forgot_type.dart';
 import 'package:app/src/services/auth_service.dart';
 import 'package:app/src/services/socket_service.dart';
+import 'package:app/src/services/wallet_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get/get.dart';
@@ -46,6 +48,15 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
   String _errorMsg = '';
   bool _isLoading = false;
 
+  // Trạng thái thử thách bảo mật bổ sung (Step-Up OTP Challenge) khi điểm rủi ro cao
+  bool _isChallengeStep = false;
+  String _challengeToken = '';
+  String _otpMethod = 'email';
+  String _maskedEmail = '';
+  int _resendCountdown = 0;
+  Timer? _resendTimer;
+  final WalletService _walletService = WalletService();
+
   @override
   void initState() {
     super.initState();
@@ -59,9 +70,49 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
 
   @override
   void dispose() {
+    _resendTimer?.cancel();
     _pinController.dispose();
     _pinFocusNode.dispose();
     super.dispose();
+  }
+
+  void _startResendTimer([int seconds = 60]) {
+    _resendTimer?.cancel();
+    setState(() => _resendCountdown = seconds);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_resendCountdown <= 1) {
+        timer.cancel();
+        setState(() => _resendCountdown = 0);
+      } else {
+        setState(() => _resendCountdown -= 1);
+      }
+    });
+  }
+
+  Future<void> _onResendChallengeOtp() async {
+    if (_isLoading || _resendCountdown > 0 || _challengeToken.isEmpty) return;
+    setState(() {
+      _errorMsg = '';
+      _isLoading = true;
+    });
+    final res = await _walletService.resendPinChallenge(
+      challengeToken: _challengeToken,
+    );
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    if (res['is_success'] == true) {
+      _startResendTimer(60);
+    } else {
+      setState(() {
+        _errorMsg =
+            res['message']?.toString() ?? 'Không thể gửi lại mã xác thực.';
+      });
+    }
+    _pinInputKey.currentState?.requestKeyboard();
   }
 
   Future<bool> _logoutForResetPin() async {
@@ -116,6 +167,31 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
       _errorMsg = '';
       _isLoading = true;
     });
+
+    if (_isChallengeStep) {
+      final challengeRes = await _walletService.verifyPinChallenge(
+        challengeToken: _challengeToken,
+        otp: pin,
+      );
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      if (challengeRes['is_success'] == true &&
+          challengeRes['is_correct'] == true) {
+        FocusManager.instance.primaryFocus?.unfocus();
+        Navigator.pop(context);
+        widget.onSuccess(challengeRes['pin_token']?.toString() ?? '');
+      } else {
+        setState(() {
+          _errorMsg =
+              challengeRes['message']?.toString() ??
+              'Mã xác thực không chính xác. Vui lòng thử lại.';
+        });
+        _pinController.clear();
+        _pinInputKey.currentState?.requestKeyboard();
+      }
+      return;
+    }
+
     final result = await widget.onCheckPin(pin);
     if (!mounted) return;
     setState(() {
@@ -123,6 +199,21 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
     });
     if (result['is_success'] == true) {
       if (result['is_correct'] == true) {
+        if (result['challenge_required'] == true) {
+          setState(() {
+            _isChallengeStep = true;
+            _challengeToken = result['challenge_token']?.toString() ?? '';
+            _otpMethod = result['otp_method']?.toString() ?? 'email';
+            _maskedEmail = result['masked_email']?.toString() ?? '';
+            _errorMsg = '';
+          });
+          _pinController.clear();
+          if (_otpMethod == 'email') {
+            _startResendTimer(60);
+          }
+          _pinInputKey.currentState?.requestKeyboard();
+          return;
+        }
         FocusManager.instance.primaryFocus?.unfocus();
         Navigator.pop(context);
         widget.onSuccess(result['pin_token']?.toString() ?? '');
@@ -185,7 +276,9 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
                           alignment: Alignment.center,
                           children: [
                             Text(
-                              'Nhập mã PIN xác thực',
+                              _isChallengeStep
+                                  ? 'Xác thực bảo mật bổ sung'
+                                  : 'Nhập mã PIN xác thực',
                               textAlign: TextAlign.center,
                               style: PinSheetStyles.title,
                             ),
@@ -211,6 +304,34 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
                         height: 0.5,
                         color: Colors.grey.withValues(alpha: 0.5),
                       ),
+                      if (_isChallengeStep)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 12, 24, 2),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: Colors.orange.withValues(alpha: 0.35),
+                              ),
+                            ),
+                            child: Text(
+                              _otpMethod == 'totp'
+                                  ? 'Phát hiện dấu hiệu bất thường. Vui lòng nhập mã 6 số từ ứng dụng Google Authenticator.'
+                                  : 'Phát hiện dấu hiệu bất thường. Vui lòng nhập mã OTP 6 số đã gửi tới email $_maskedEmail.',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF8D4E00),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(40, 10, 40, 5),
                         child: PinCodeInputPill(
@@ -226,20 +347,44 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
                         height: 30,
                         child: Text(_errorMsg, style: PinSheetStyles.error),
                       ),
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: _isLoading ? null : _onForgotPin,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 4,
+                      if (!_isChallengeStep)
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _isLoading ? null : _onForgotPin,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            child: Text(
+                              "Quên mã PIN?",
+                              style: PinSheetStyles.forgot,
+                            ),
                           ),
-                          child: Text(
-                            "Quên mã PIN?",
-                            style: PinSheetStyles.forgot,
+                        )
+                      else if (_otpMethod == 'email')
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: (_isLoading || _resendCountdown > 0)
+                              ? null
+                              : _onResendChallengeOtp,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            child: Text(
+                              _resendCountdown > 0
+                                  ? "Gửi lại mã OTP (${_resendCountdown}s)"
+                                  : "Gửi lại mã OTP",
+                              style: PinSheetStyles.forgot.copyWith(
+                                color: _resendCountdown > 0
+                                    ? Colors.grey
+                                    : null,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
                       const SizedBox(height: 20),
                     ],
                   ),

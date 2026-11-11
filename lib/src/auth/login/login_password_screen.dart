@@ -131,6 +131,7 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
             otpToken: result['otp_token'],
             // Tài khoản đã bật Google Authenticator thì nhập mã từ ứng dụng
             isTotp: result['otp_method'] == 'totp',
+            requireCccdLast4: result['require_cccd_last4'] == true,
             // Đã quét QR: sau khi đăng nhập sẽ nhập mã đầu tiên để bật
             enableTotpAfterLogin:
                 _useTotp &&

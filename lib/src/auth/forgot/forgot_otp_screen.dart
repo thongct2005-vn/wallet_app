@@ -188,7 +188,6 @@ class _ForgotOtpScreenState extends State<ForgotOtpScreen>
         builder: (context, isLoading, _) {
           return AuthPrimaryButton(
             label: 'Xác nhận',
-            icon: Iconsax.tick_circle,
             loading: isLoading,
             onTap: _verify,
           );

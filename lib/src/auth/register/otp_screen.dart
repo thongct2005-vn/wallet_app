@@ -14,6 +14,7 @@ import 'package:app/src/services/otp_service.dart';
 import 'package:app/src/services/socket_service.dart';
 import 'package:app/src/services/user_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
@@ -36,6 +37,9 @@ class OtpScreen extends StatefulWidget {
 
   /// true: sau khi đăng nhập xong, tắt Google Authenticator (quay về OTP email)
   final bool disableTotpAfterLogin;
+
+  /// true: phát hiện rủi ro khi đăng nhập, yêu cầu nhập thêm 4 số cuối CCCD
+  final bool requireCccdLast4;
   const OtpScreen({
     super.key,
     this.phoneNumber,
@@ -46,6 +50,7 @@ class OtpScreen extends StatefulWidget {
     this.isTotp = false,
     this.enableTotpAfterLogin = false,
     this.disableTotpAfterLogin = false,
+    this.requireCccdLast4 = false,
   });
 
   @override
@@ -55,6 +60,8 @@ class OtpScreen extends StatefulWidget {
 class _OtpScreenState extends State<OtpScreen> with SmoothAutoFocusMixin {
   final TextEditingController _otpController = TextEditingController();
   final FocusNode _otpFocusNode = FocusNode();
+  final TextEditingController _cccdController = TextEditingController();
+  final FocusNode _cccdFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
 
   final OtpService _otpService = OtpService();
@@ -81,19 +88,29 @@ class _OtpScreenState extends State<OtpScreen> with SmoothAutoFocusMixin {
   void initState() {
     super.initState();
     _otpFocusNode.addListener(_onFocusChanged);
+    _cccdFocusNode.addListener(_onFocusChanged);
+    _cccdController.addListener(() {
+      if (_msgNotifier.value.isNotEmpty && _cccdController.text.isNotEmpty) {
+        _msgNotifier.value = '';
+      }
+    });
     if (!widget.isTotp) _startCountdown();
   }
 
   void _onFocusChanged() {
-    _hasFocusNotifier.value = _otpFocusNode.hasFocus;
+    _hasFocusNotifier.value =
+        _otpFocusNode.hasFocus || _cccdFocusNode.hasFocus;
   }
 
   @override
   void dispose() {
     _timer?.cancel();
     _otpFocusNode.removeListener(_onFocusChanged);
+    _cccdFocusNode.removeListener(_onFocusChanged);
     _otpController.dispose();
     _otpFocusNode.dispose();
+    _cccdController.dispose();
+    _cccdFocusNode.dispose();
     _scrollController.dispose();
     _isLoadingNotifier.dispose();
     _isResendingNotifier.dispose();
@@ -153,8 +170,18 @@ class _OtpScreenState extends State<OtpScreen> with SmoothAutoFocusMixin {
     final code = _otpController.text.trim();
 
     if (code.length != _otpLength) {
-      _msgNotifier.value = 'Vui lòng nhập đủ $_otpLength số';
+      _msgNotifier.value = 'Vui lòng nhập đủ $_otpLength số OTP';
       return;
+    }
+
+    if (widget.isLogin == true && widget.requireCccdLast4) {
+      final cccdLast4 = _cccdController.text.trim();
+      if (cccdLast4.length != 4) {
+        _msgNotifier.value =
+            'Vui lòng nhập đủ 4 số cuối CCCD để xác minh bảo mật';
+        requestKeyboardFocus(_cccdFocusNode);
+        return;
+      }
     }
 
     FocusManager.instance.primaryFocus?.unfocus();
@@ -172,6 +199,7 @@ class _OtpScreenState extends State<OtpScreen> with SmoothAutoFocusMixin {
     final result = await _authService.verifyLoginOtp(
       widget.otpToken ?? '',
       code,
+      cccdLast4: widget.requireCccdLast4 ? _cccdController.text.trim() : null,
     );
 
     if (!mounted) return;
@@ -334,8 +362,71 @@ class _OtpScreenState extends State<OtpScreen> with SmoothAutoFocusMixin {
                               _msgNotifier.value = '';
                             }
                           },
-                          onCompleted: (_) => _handleVerify(),
+                          onCompleted: (_) {
+                            if (widget.isLogin == true &&
+                                widget.requireCccdLast4 &&
+                                _cccdController.text.trim().length != 4) {
+                              requestKeyboardFocus(_cccdFocusNode);
+                              return;
+                            }
+                            _handleVerify();
+                          },
                         ),
+                        if (widget.isLogin == true &&
+                            widget.requireCccdLast4) ...[
+                          const SizedBox(height: 18),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: Colors.orange.withValues(alpha: 0.35),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Xác minh bảo mật bổ sung',
+                                  style: GoogleFonts.roboto(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF8D4E00),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Phát hiện dấu hiệu bất thường. Vui lòng nhập thêm 4 số cuối của CCCD đã đăng ký.',
+                                  style: GoogleFonts.roboto(
+                                    fontSize: 12.5,
+                                    color: const Color(0xFF8D4E00),
+                                    height: 1.35,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                AuthTextField(
+                                  controller: _cccdController,
+                                  focusNode: _cccdFocusNode,
+                                  hintText: 'Nhập 4 số cuối CCCD',
+                                  leadingIcon: Iconsax.card,
+                                  hasError: msg.isNotEmpty,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        signed: false,
+                                        decimal: false,
+                                      ),
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                  ],
+                                  maxLength: 4,
+                                  onSubmitted: (_) => _handleVerify(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         if (msg.isNotEmpty) ...[
                           const SizedBox(height: 14),
                           AuthErrorBanner(message: msg),

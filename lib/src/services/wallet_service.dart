@@ -2,6 +2,7 @@ import 'package:app/core/network/api_client.dart';
 import 'package:app/core/network/api_config.dart';
 import 'package:app/core/network/api_error_handler.dart';
 import 'package:app/core/utils/format_utils.dart';
+import 'package:dio/dio.dart';
 
 class WalletService {
   final api = ApiClient().dio;
@@ -62,7 +63,51 @@ class WalletService {
         'is_correct': data['is_correct'],
         'pin_token': data['pin_token'],
         'remaining_attempts': data['remaining_attempts'],
+        'challenge_required': data['challenge_required'] == true,
+        'challenge_token': data['challenge_token'],
+        'otp_method': data['otp_method'],
+        'masked_email': data['masked_email'],
         'is_success': true,
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> verifyPinChallenge({
+    required String challengeToken,
+    required String otp,
+  }) async {
+    try {
+      final result = await api.post(
+        ApiConfig.verifyPinChallenge,
+        data: {'otp': otp},
+        options: Options(headers: {'x-otp-token': challengeToken}),
+      );
+      final data = result.data['data'];
+      return {
+        'is_success': true,
+        'is_correct': data['is_correct'],
+        'pin_token': data['pin_token'],
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> resendPinChallenge({
+    required String challengeToken,
+  }) async {
+    try {
+      final result = await api.post(
+        ApiConfig.resendPinChallenge,
+        options: Options(headers: {'x-otp-token': challengeToken}),
+      );
+      final data = result.data['data'];
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'masked_email': data?['masked_email'],
       };
     } catch (e) {
       return ApiErrorHandler.handleError(e);
