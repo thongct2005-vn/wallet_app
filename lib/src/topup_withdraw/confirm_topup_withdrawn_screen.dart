@@ -59,6 +59,8 @@ class _ConfirmTopUpWithdrawScreenState
   late String idempotencyKey;
   String? _selectedBankId;
   bool isLoadingLinkedBanks = false;
+  bool _isLoadingFeePreview = false;
+  Map<String, dynamic>? _feePreview;
 
   @override
   void initState() {
@@ -67,6 +69,26 @@ class _ConfirmTopUpWithdrawScreenState
     if (widget.linkedBanks.isNotEmpty) {
       _selectedBankId = widget.linkedBanks.first['id'];
     }
+    _loadFeePreview();
+  }
+
+  Future<void> _loadFeePreview() async {
+    final numAmount = FormatUtils.formatAmountToNum(widget.amount);
+    if (numAmount <= 0) return;
+    if (mounted) {
+      setState(() => _isLoadingFeePreview = true);
+    }
+    final res = await _transactionService.previewFee(
+      transactionType: widget.isTopUpTab ? 'TOPUP' : 'WITHDRAW',
+      amount: numAmount,
+    );
+    if (!mounted) return;
+    setState(() {
+      _isLoadingFeePreview = false;
+      if (res['is_success'] == true && res['data'] is Map) {
+        _feePreview = Map<String, dynamic>.from(res['data'] as Map);
+      }
+    });
   }
 
   @override
@@ -254,8 +276,25 @@ class _ConfirmTopUpWithdrawScreenState
                 '${FormatUtils.formatDisplayNumber(FormatUtils.formatAmountToNum(widget.amount))}đ',
             bold: true,
           ),
-          if (!widget.isTopUpTab) ...[
-            _buildInfoRow(label: 'Phí giao dịch', value: 'Miễn phí'),
+          _buildInfoRow(
+            label: 'Phí giao dịch',
+            value: _isLoadingFeePreview
+                ? 'Đang tính...'
+                : ((_feePreview?['fee_amount'] as num?) ?? 0) > 0
+                ? '${FormatUtils.formatDisplayNumber((_feePreview?['fee_amount'] as num?) ?? 0)}đ'
+                : 'Miễn phí (0đ)',
+          ),
+          if (!widget.isTopUpTab &&
+              _feePreview?['withdraw_quota'] is Map &&
+              (((_feePreview?['withdraw_quota'] as Map)['quota_per_month']
+                          as num?) ??
+                      0) >
+                  0) ...[
+            _buildInfoRow(
+              label: 'Hạn mức rút MP còn lại',
+              value:
+                  '${FormatUtils.formatDisplayNumber(((_feePreview!['withdraw_quota'] as Map)['remaining_after'] as num?) ?? ((_feePreview!['withdraw_quota'] as Map)['remaining_before'] as num?) ?? 0)}đ',
+            ),
           ],
         ],
       ),
@@ -471,6 +510,11 @@ class _ConfirmTopUpWithdrawScreenState
   }
 
   Widget _buildContainerConfirmButton(BuildContext context) {
+    final baseAmount = FormatUtils.formatAmountToNum(widget.amount);
+    final feeAmount = (_feePreview?['fee_amount'] as num?) ?? 0;
+    final totalAmount = widget.isTopUpTab
+        ? baseAmount
+        : (baseAmount + feeAmount);
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -494,7 +538,9 @@ class _ConfirmTopUpWithdrawScreenState
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
-                  "Tổng tiền",
+                  !widget.isTopUpTab && feeAmount > 0
+                      ? "Tổng trừ ví"
+                      : "Tổng tiền",
                   style: GoogleFonts.roboto(
                     fontSize: 16,
                     color: _kMuted,
@@ -505,7 +551,7 @@ class _ConfirmTopUpWithdrawScreenState
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
-                      '${FormatUtils.formatDisplayNumber(FormatUtils.formatAmountToNum(widget.amount))}đ',
+                      '${FormatUtils.formatDisplayNumber(totalAmount)}đ',
                       style: GoogleFonts.roboto(
                         fontSize: 30,
                         fontWeight: FontWeight.w800,

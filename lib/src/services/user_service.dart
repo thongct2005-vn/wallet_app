@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/network/api_error_handler.dart';
+import 'package:app/core/utils/format_utils.dart';
 import 'package:crypto/crypto.dart';
 import 'package:app/core/network/api_client.dart';
 import 'package:app/core/network/api_config.dart';
@@ -68,10 +69,10 @@ class UserService {
               RegExp(r'\D'),
               '',
             );
-            if (rawPhone.startsWith('84')) {
+            if (rawPhone.length == 11 && rawPhone.startsWith('84')) {
               rawPhone = '0${rawPhone.substring(2)}';
             }
-            if (rawPhone.length == 10) {
+            if (FormatUtils.isValidPhone(rawPhone)) {
               phoneNumbers.add(rawPhone);
             }
           }

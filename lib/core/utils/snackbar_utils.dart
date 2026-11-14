@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-enum SnackbarType { success, failure, info }
+enum SnackbarType { success, failure, info, developing }
 
 class SnackbarUtils {
   SnackbarUtils._();
@@ -18,11 +18,26 @@ class SnackbarUtils {
     _show(context, title: title ?? 'Thông báo', message: message, type: SnackbarType.info);
   }
 
+  static void developing(
+    BuildContext context, {
+    String message = 'Tính năng đang phát triển',
+    String? title,
+  }) {
+    _show(
+      context,
+      title: title ?? 'Thông báo',
+      message: message,
+      type: SnackbarType.developing,
+      duration: const Duration(seconds: 3),
+    );
+  }
+
   static void _show(
     BuildContext context, {
     required String title,
     required String message,
     required SnackbarType type,
+    Duration duration = const Duration(seconds: 10),
   }) {
     final config = _configFor(type);
 
@@ -38,7 +53,7 @@ class SnackbarUtils {
           borderRadius: BorderRadius.circular(14),
           side: BorderSide(color: config.accent, width: 0),
         ),
-        duration: const Duration(seconds: 10),
+        duration: duration,
         content: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -104,6 +119,13 @@ class SnackbarUtils {
           foreground: const Color(0xFF1D4ED8),
           accent: const Color(0xFF3B82F6),
           icon: Icons.info_rounded,
+        );
+      case SnackbarType.developing:
+        return _SnackConfig(
+          background: const Color(0xFFFDF2F6),
+          foreground: const Color(0xFFC2185B),
+          accent: const Color(0xFFEC407A),
+          icon: Icons.rocket_launch_rounded,
         );
     }
   }

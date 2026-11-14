@@ -44,7 +44,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
   double _totalIncome = 0;
   double _totalExpense = 0;
   bool _isExporting = false;
-  static const int _exportMaxDays = 31; // khớp EXPORT.MAX_DAYS ở backend
 
   @override
   void initState() {
@@ -696,11 +695,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
       confirmText: 'Tiếp tục',
       firstDate: DateTime(now.year - 1, now.month, now.day),
       lastDate: today,
-      maxDays: _exportMaxDays,
-      initialRange: DateTimeRange(
-        start: DateTime(today.year, today.month, today.day - 29),
-        end: today,
-      ),
+      initialRange: _startDate != null && _endDate != null
+          ? DateTimeRange(start: _startDate!, end: _endDate!)
+          : DateTimeRange(
+              start: DateTime(today.year, today.month, 1),
+              end: today,
+            ),
     );
     if (range == null || !mounted) return;
 

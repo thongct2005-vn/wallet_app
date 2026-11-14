@@ -44,6 +44,7 @@ class ApiConfig {
   static const String topup = '$baseUrl/transaction/topup';
   static const String withdraw = '$baseUrl/transaction/withdraw';
   static const String payment = '$baseUrl/transaction/qr-payment';
+  static const String previewFee = '$baseUrl/transaction/preview-fee';
   static const String history = '$baseUrl/transaction/history';
   static const String historySummary = '$baseUrl/transaction/summary';
   static const String historyExportEmail =

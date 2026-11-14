@@ -105,6 +105,34 @@ class TransactionService {
     }
   }
 
+  Future<Map<String, dynamic>> previewFee({
+    required String transactionType,
+    required num amount,
+    String? merchantUserId,
+    String? referenceCode,
+  }) async {
+    try {
+      final result = await api.post(
+        ApiConfig.previewFee,
+        data: {
+          'transaction_type': transactionType,
+          'amount': amount.round(),
+          if (merchantUserId != null && merchantUserId.isNotEmpty)
+            'merchant_user_id': merchantUserId,
+          if (referenceCode != null && referenceCode.isNotEmpty)
+            'reference_code': referenceCode,
+        },
+      );
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'data': result.data['data'],
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
+
   Future<Map<String, dynamic>> getTransferHistory(
     String? cursorId,
     int? limit, {

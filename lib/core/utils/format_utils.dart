@@ -33,6 +33,11 @@ class FormatUtils {
     return formattedDate;
   }
 
+  static final RegExp _phoneRegex = RegExp(r'^(03|05|07|08|09)\d{8}$');
+
+  /// Kiểm tra SĐT Việt Nam hợp lệ (10 chữ số, đầu 03, 05, 07, 08, 09).
+  static bool isValidPhone(String phone) => _phoneRegex.hasMatch(phone);
+
   static String formatAvatar(String fullName) {
     if (fullName.trim().isEmpty) return '?';
     List<String> words = fullName.trim().split(RegExp(r'\s+'));

@@ -1,4 +1,5 @@
 import 'package:app/core/controller/user_controller.dart';
+import 'package:app/core/utils/format_utils.dart';
 import 'package:app/src/services/user_service.dart';
 import 'package:app/src/transfer/amount_input_screen.dart';
 import 'package:app/src/transfer/transfer_ui.dart';
@@ -23,8 +24,7 @@ class _ContactListScreenState extends State<ContactListScreen> {
   List<dynamic> _filteredUsers = [];
   bool _permanentlyDenied = false;
 
-  // Tìm người dùng ngoài danh bạ khi nhập đủ 10 số điện thoại
-  static final RegExp _phoneRegex = RegExp(r'^0\d{9}$');
+  // Tìm người dùng ngoài danh bạ khi nhập đủ 10 số điện thoại hợp lệ
   bool _isFinding = false;
   int _findSeq = 0;
   String _findPhone = '';
@@ -143,7 +143,7 @@ class _ContactListScreenState extends State<ContactListScreen> {
               ? const Center(child: CircularProgressIndicator(color: kTfPink))
               : _errMsg.isNotEmpty
               ? _buildErrorState()
-              : _filteredUsers.isEmpty && _phoneRegex.hasMatch(_query)
+              : _filteredUsers.isEmpty && FormatUtils.isValidPhone(_query)
               ? _buildFindResult()
               : _filteredUsers.isEmpty
               ? _buildEmptyState('Không tìm thấy người dùng này')
@@ -393,7 +393,7 @@ class _ContactListScreenState extends State<ContactListScreen> {
     _filterUsers();
     final seq = ++_findSeq;
     final query = _query;
-    if (!_phoneRegex.hasMatch(query) || _filteredUsers.isNotEmpty) {
+    if (!FormatUtils.isValidPhone(query) || _filteredUsers.isNotEmpty) {
       setState(() {
         _isFinding = false;
         _foundUser = null;

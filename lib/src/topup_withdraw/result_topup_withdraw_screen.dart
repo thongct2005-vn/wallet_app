@@ -178,6 +178,13 @@ class _ResultWithdrawScreenState extends State<ResultTopupWithdrawScreen> {
                             ),
                             const SizedBox(height: 16),
                             _buildInfoRow("Thời gian thanh toán", createdAt),
+                            if ((num.tryParse(data['feeAmount']?.toString() ?? '0') ?? 0) > 0) ...[
+                              const SizedBox(height: 16),
+                              _buildInfoRow(
+                                "Phí giao dịch",
+                                "${FormatUtils.formatDisplayNumber(num.tryParse(data['feeAmount'].toString()) ?? 0)}đ",
+                              ),
+                            ],
 
                             const SizedBox(height: 26),
 

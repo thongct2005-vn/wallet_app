@@ -6,6 +6,7 @@ import 'package:app/core/widgets/pin_bottomsheet/create_pin_bottom_sheet.dart';
 import 'package:app/src/history/history_screen.dart';
 import 'package:app/src/link_bank/link_bank_screen.dart';
 import 'package:app/src/profile/profile_screen.dart';
+import 'package:app/src/promotion/promotion_screen.dart';
 import 'package:app/src/qr/qr_main_screen.dart';
 import 'package:app/src/services/app_data_service.dart';
 import 'package:app/src/services/bank_service.dart';
@@ -72,7 +73,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final List<Widget> pages = [
       _buildHomeContent(context),
-      const Center(child: Text("Ưu đãi")),
+      const PromotionScreen(),
       const HistoryScreen(),
       const ProfileScreen(),
     ];
@@ -198,7 +199,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildNavItem(Iconsax.home_2, "Trang chủ", 0),
-                    _buildNavItem(Iconsax.discount_shape, "Ưu đãi", 1),
+                    _buildNavItem(Iconsax.gift, "Ưu đãi", 1),
                   ],
                 ),
                 Row(
@@ -234,27 +235,37 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 22),
             _buildSectionTitle("Ưu đãi dành cho bạn"),
             const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              height: 150,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.12),
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(22),
-                child: Image.asset('assets/uu_dai.jpg', fit: BoxFit.cover),
+            GestureDetector(
+              onTap: () => _showDevelopingNotification(context),
+              child: Container(
+                width: double.infinity,
+                height: 150,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.12),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(22),
+                  child: Image.asset('assets/uu_dai.jpg', fit: BoxFit.cover),
+                ),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  void _showDevelopingNotification(BuildContext context) {
+    SnackbarUtils.developing(
+      context,
+      message: 'Tính năng đang phát triển',
     );
   }
 
@@ -280,12 +291,15 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         const Spacer(),
         if (action != null)
-          Text(
-            action,
-            style: GoogleFonts.roboto(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: _kPink,
+          GestureDetector(
+            onTap: () => _showDevelopingNotification(context),
+            child: Text(
+              action,
+              style: GoogleFonts.roboto(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: _kPink,
+              ),
             ),
           ),
       ],
@@ -363,7 +377,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             child: IconButton(
-              onPressed: () {},
+              onPressed: () => _showDevelopingNotification(context),
               icon: const Icon(Iconsax.notification, color: _kText, size: 24),
             ),
           ),
@@ -627,27 +641,31 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildUtilIcon(BuildContext context, IconData icon, String text) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          height: 54,
-          width: 54,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            color: _kPink.withValues(alpha: 0.09),
+    return InkWell(
+      onTap: () => _showDevelopingNotification(context),
+      borderRadius: BorderRadius.circular(18),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            height: 54,
+            width: 54,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              color: _kPink.withValues(alpha: 0.09),
+            ),
+            child: Icon(icon, color: _kPink, size: 26),
           ),
-          child: Icon(icon, color: _kPink, size: 26),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          text,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.roboto(fontSize: 12.5, color: _kText),
-          textAlign: TextAlign.center,
-        ),
-      ],
+          const SizedBox(height: 6),
+          Text(
+            text,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.roboto(fontSize: 12.5, color: _kText),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 
@@ -656,6 +674,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return MaterialButton(
       minWidth: 80,
       onPressed: () {
+        FocusManager.instance.primaryFocus?.unfocus();
         setState(() {
           _selectedIndex = index;
         });

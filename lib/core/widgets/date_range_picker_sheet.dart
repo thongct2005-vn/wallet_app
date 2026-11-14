@@ -82,6 +82,17 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
           .inDays +
       1;
 
+  static DateTime _subtractMonthsClamped(DateTime date, int months) {
+    final targetFirst = DateTime(date.year, date.month - months, 1);
+    final lastDayOfMonth = DateTime(
+      targetFirst.year,
+      targetFirst.month + 1,
+      0,
+    ).day;
+    final clampedDay = date.day < lastDayOfMonth ? date.day : lastDayOfMonth;
+    return DateTime(targetFirst.year, targetFirst.month, clampedDay);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -149,14 +160,26 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
     if (today.isAfter(_last)) today = _last;
 
     final raw = <_Preset>[
-      _Preset('7 ngày qua', DateTime(today.year, today.month, today.day - 6), today),
-      _Preset('30 ngày qua', DateTime(today.year, today.month, today.day - 29), today),
+      _Preset('Hôm nay', today, today),
+      _Preset(
+        '3 ngày qua',
+        DateTime(today.year, today.month, today.day - 2),
+        today,
+      ),
+      _Preset(
+        '7 ngày qua',
+        DateTime(today.year, today.month, today.day - 6),
+        today,
+      ),
       _Preset('Tháng này', DateTime(today.year, today.month, 1), today),
       _Preset(
         'Tháng trước',
         DateTime(today.year, today.month - 1, 1),
         DateTime(today.year, today.month, 0),
       ),
+      _Preset('3 tháng', _subtractMonthsClamped(today, 3), today),
+      _Preset('6 tháng', _subtractMonthsClamped(today, 6), today),
+      _Preset('1 năm', _subtractMonthsClamped(today, 12), today),
     ];
 
     final result = <_Preset>[];

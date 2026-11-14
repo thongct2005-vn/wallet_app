@@ -1,4 +1,5 @@
 import 'package:app/core/utils/dialog_utils.dart';
+import 'package:app/core/utils/format_utils.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/src/auth/auth_ui.dart';
 import 'package:app/src/auth/register/register_email.dart';
@@ -27,8 +28,6 @@ class LoginPhoneScreen extends StatefulWidget {
 }
 
 class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
-  static final RegExp _phoneRegex = RegExp(r'^(0|)[3|5|7|8|9][0-9]{8}$');
-
   final TextEditingController _phoneController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
@@ -112,7 +111,7 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
       _errorNotifier.value = 'Vui lòng nhập số điện thoại';
       return;
     }
-    if (!_isValidPhoneNumber(phone)) {
+    if (!FormatUtils.isValidPhone(phone)) {
       _errorNotifier.value = 'Số điện thoại không hợp lệ';
       return;
     }
@@ -263,10 +262,5 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
         ),
       ),
     );
-  }
-
-  bool _isValidPhoneNumber(String phone) {
-    if (phone.isEmpty) return false;
-    return _phoneRegex.hasMatch(phone);
   }
 }

@@ -42,6 +42,8 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
   final WalletService _walletService = WalletService();
   final TransactionService _transactionService = TransactionService();
   bool _isProcessingTransfer = false;
+  bool _isLoadingFeePreview = false;
+  Map<String, dynamic>? _feePreview;
   final Uuid _uuid = const Uuid();
   late final String idempotencyKey;
 
@@ -49,6 +51,32 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
   void initState() {
     super.initState();
     idempotencyKey = _uuid.v7();
+    _loadFeePreview();
+  }
+
+  Future<void> _loadFeePreview() async {
+    final numAmount = FormatUtils.formatAmountToNum(widget.amount ?? '0');
+    if (numAmount <= 0) return;
+    if (mounted) {
+      setState(() => _isLoadingFeePreview = true);
+    }
+    final isQrPayment =
+        widget.referenceCode != null && widget.referenceCode!.isNotEmpty;
+    final res = await _transactionService.previewFee(
+      transactionType: widget.isMerchant || isQrPayment
+          ? 'QR_PAYMENT'
+          : 'TRANSFER',
+      amount: numAmount,
+      merchantUserId: widget.isMerchant ? widget.receiverId : null,
+      referenceCode: widget.referenceCode,
+    );
+    if (!mounted) return;
+    setState(() {
+      _isLoadingFeePreview = false;
+      if (res['is_success'] == true && res['data'] is Map) {
+        _feePreview = Map<String, dynamic>.from(res['data'] as Map);
+      }
+    });
   }
 
   @override
@@ -191,6 +219,16 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
             value: '${widget.amount}đ',
             bold: true,
             valueColor: kTfPinkDark,
+          ),
+          _buildInfoRow(
+            label: 'Phí giao dịch',
+            value: _isLoadingFeePreview
+                ? 'Đang tính...'
+                : (!widget.isMerchant &&
+                      _feePreview?['fee_payer']?.toString() == 'SENDER' &&
+                      ((_feePreview?['fee_amount'] as num?) ?? 0) > 0)
+                ? '${FormatUtils.formatDisplayNumber((_feePreview?['fee_amount'] as num?) ?? 0)}đ'
+                : 'Miễn phí (0đ)',
           ),
           _buildInfoRow(
             label: widget.isMerchant ? 'Cửa hàng' : 'Người nhận',
@@ -358,6 +396,18 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
   }
 
   Widget _buildContainerConfirmButton(BuildContext context) {
+    final baseAmount = FormatUtils.formatAmountToNum(widget.amount ?? '0');
+    final isSenderPayer =
+        !widget.isMerchant &&
+        _feePreview?['fee_payer']?.toString() == 'SENDER';
+    final payerFee = isSenderPayer
+        ? ((_feePreview?['fee_amount'] as num?) ?? 0)
+        : 0;
+    final totalPay = isSenderPayer
+        ? ((_feePreview?['total_debit_from_payer'] as num?) ??
+              (baseAmount + payerFee))
+        : baseAmount;
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -389,7 +439,7 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
-                      '${widget.amount ?? '0'}đ',
+                      '${FormatUtils.formatDisplayNumber(totalPay)}đ',
                       style: GoogleFonts.roboto(
                         fontSize: 30,
                         fontWeight: FontWeight.w800,

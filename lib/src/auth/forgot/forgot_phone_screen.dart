@@ -1,3 +1,4 @@
+import 'package:app/core/utils/format_utils.dart';
 import 'package:app/src/auth/auth_ui.dart';
 import 'package:app/src/auth/forgot/forgot_otp_screen.dart';
 import 'package:app/src/auth/forgot/forgot_type.dart';
@@ -26,8 +27,6 @@ class ForgotPhoneScreen extends StatefulWidget {
 }
 
 class _ForgotPhoneScreenState extends State<ForgotPhoneScreen> {
-  static final RegExp _phoneRegex = RegExp(r'^(0|)[3|5|7|8|9][0-9]{8}$');
-
   final TextEditingController _phoneController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
@@ -83,8 +82,6 @@ class _ForgotPhoneScreenState extends State<ForgotPhoneScreen> {
     super.dispose();
   }
 
-  bool _isValidPhone(String phone) => _phoneRegex.hasMatch(phone);
-
   void _goBack() {
     if (Navigator.canPop(context)) {
       Navigator.pop(context);
@@ -103,7 +100,7 @@ class _ForgotPhoneScreenState extends State<ForgotPhoneScreen> {
       _msgNotifier.value = 'Vui lòng nhập số điện thoại';
       return;
     }
-    if (!_isValidPhone(phone)) {
+    if (!FormatUtils.isValidPhone(phone)) {
       _msgNotifier.value = 'Số điện thoại không hợp lệ';
       return;
     }

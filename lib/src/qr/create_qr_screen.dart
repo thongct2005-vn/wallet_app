@@ -1,9 +1,15 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/format_utils.dart';
+import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/pin_sheet_common.dart';
 import 'package:app/src/services/payment_service.dart';
 import 'package:app/src/transfer/transfer_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -81,6 +87,11 @@ class _CreateQRScreenState extends State<CreateQRScreen> {
     CurrencyFormatter(),
   ];
 
+  static const MethodChannel _galleryChannel = MethodChannel(
+    'com.example.app/gallery',
+  );
+
+  final GlobalKey _qrBoundaryKey = GlobalKey();
   final PaymentService _paymentService = PaymentService();
   final TextEditingController _textController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
@@ -104,6 +115,7 @@ class _CreateQRScreenState extends State<CreateQRScreen> {
   String? _avatar = '';
   int? _amount = 0;
   String? _description = '';
+  bool _isSavingQr = false;
 
   @override
   void initState() {
@@ -246,29 +258,30 @@ class _CreateQRScreenState extends State<CreateQRScreen> {
         children: [
           Text("Mio", style: _mioBrandStyle),
           const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: [
-                BoxShadow(
-                  color: kTfPink.withValues(alpha: 0.12),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: _qrData.isEmpty
-                ? const SizedBox(
-                    width: 220,
-                    height: 220,
-                    child: Center(
-                      child: CircularProgressIndicator(color: kTfPink),
-                    ),
-                  )
-                : RepaintBoundary(
-                    child: Stack(
+          RepaintBoundary(
+            key: _qrBoundaryKey,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: kTfPink.withValues(alpha: 0.12),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: _qrData.isEmpty
+                  ? const SizedBox(
+                      width: 220,
+                      height: 220,
+                      child: Center(
+                        child: CircularProgressIndicator(color: kTfPink),
+                      ),
+                    )
+                  : Stack(
                       alignment: Alignment.center,
                       children: [
                         QrImageView(
@@ -292,12 +305,15 @@ class _CreateQRScreenState extends State<CreateQRScreen> {
                               shape: BoxShape.circle,
                               color: kTfPink.withValues(alpha: 0.12),
                             ),
-                            child: Text(_avatar ?? '?', style: _avatarTextStyle),
+                            child: Text(
+                              _avatar ?? '?',
+                              style: _avatarTextStyle,
+                            ),
                           ),
                         ),
                       ],
                     ),
-                  ),
+            ),
           ),
           const SizedBox(height: 14),
           GestureDetector(
@@ -347,32 +363,117 @@ class _CreateQRScreenState extends State<CreateQRScreen> {
     );
   }
 
+  void _showDevelopingNotification() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    SnackbarUtils.developing(
+      context,
+      message: 'Tính năng đang phát triển',
+    );
+  }
+
+  Future<void> _downloadQrCode() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (_isSavingQr) return;
+    if (_qrData.isEmpty) {
+      SnackbarUtils.failure(context, 'Mã QR chưa sẵn sàng để tải xuống');
+      return;
+    }
+
+    _isSavingQr = true;
+    try {
+      final boundary =
+          _qrBoundaryKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
+      if (boundary == null) {
+        if (mounted) {
+          SnackbarUtils.failure(context, 'Không thể tạo ảnh mã QR');
+        }
+        return;
+      }
+
+      final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      final ByteData? byteData = await image.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+      image.dispose();
+
+      if (byteData == null) {
+        if (mounted) {
+          SnackbarUtils.failure(context, 'Không thể xuất ảnh mã QR');
+        }
+        return;
+      }
+
+      final Uint8List pngBytes = byteData.buffer.asUint8List();
+      final String fileName =
+          'mio_qr_${DateTime.now().millisecondsSinceEpoch}.png';
+
+      try {
+        await _galleryChannel.invokeMethod<String>('saveImage', {
+          'bytes': pngBytes,
+          'fileName': fileName,
+        });
+      } on MissingPluginException {
+        final dir = Directory('/storage/emulated/0/Download');
+        final targetDir = await dir.exists()
+            ? dir
+            : Directory.systemTemp;
+        final file = File('${targetDir.path}/$fileName');
+        await file.writeAsBytes(pngBytes, flush: true);
+      }
+
+      if (mounted) {
+        SnackbarUtils.success(context, 'Đã tải mã QR về máy');
+      }
+    } catch (_) {
+      if (mounted) {
+        SnackbarUtils.failure(
+          context,
+          'Không thể lưu mã QR. Vui lòng thử lại',
+        );
+      }
+    } finally {
+      _isSavingQr = false;
+    }
+  }
+
   Widget _buildActionRow() {
-    Widget item(IconData icon, String label) {
+    Widget item(IconData icon, String label, VoidCallback onTap) {
       return Expanded(
-        child: Column(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: kTfPink.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: Icon(icon, color: kTfPink, size: 22),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(15),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Column(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: kTfPink.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Icon(icon, color: kTfPink, size: 22),
+                ),
+                const SizedBox(height: 6),
+                Text(label, style: _actionLabelStyle),
+              ],
             ),
-            const SizedBox(height: 6),
-            Text(label, style: _actionLabelStyle),
-          ],
+          ),
         ),
       );
     }
 
     return Row(
       children: [
-        item(Icons.download_outlined, "Tải xuống"),
-        item(Icons.settings_outlined, "Tùy chỉnh"),
-        item(Icons.share_outlined, "Chia sẻ"),
+        item(Icons.download_outlined, "Tải xuống", _downloadQrCode),
+        item(
+          Icons.settings_outlined,
+          "Tùy chỉnh",
+          _showDevelopingNotification,
+        ),
+        item(Icons.share_outlined, "Chia sẻ", _showDevelopingNotification),
       ],
     );
   }
