@@ -1,6 +1,7 @@
 import 'package:app/src/auth/auth_ui.dart';
 import 'package:app/src/auth/forgot/forgot_type.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
+import 'package:app/src/services/biometric_service.dart';
 import 'package:app/src/services/forgot_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -134,6 +135,13 @@ class _ForgotNewSecretScreenState extends State<ForgotNewSecretScreen>
     _isLoadingNotifier.value = false;
 
     if (result['is_success'] == true) {
+      if (widget.type == ForgotType.pin) {
+        await BiometricService().updatePinIfEnabled(
+          value,
+          phoneOverride: widget.phone,
+        );
+      }
+      if (!mounted) return;
       _toLogin(
         'Đặt lại ${widget.type.label} thành công. Vui lòng đăng nhập lại.',
       );

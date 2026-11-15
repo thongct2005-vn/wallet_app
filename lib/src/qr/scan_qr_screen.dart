@@ -1,6 +1,7 @@
 import 'package:app/core/utils/dialog_utils.dart';
 import 'package:app/core/utils/format_utils.dart';
 import 'package:app/src/services/payment_service.dart';
+import 'package:app/src/services/postpaid_service.dart';
 import 'package:app/src/services/wallet_service.dart';
 import 'package:app/src/transfer/amount_input_screen.dart';
 import 'package:app/src/transfer/confirm_tranfer_screen.dart';
@@ -152,28 +153,49 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
 
     if (check['is_success'] != true) {
       _showError("Hệ thống đang bảo trì. Vui lòng thử lại sau");
-    } else if (check['is_eligible'] != true) {
-      _showError("Số dư trong ví không đủ");
-    } else {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ConfirmTranferScreen(
-            receiverId: receiverId,
-            receiverName: receiverFullName,
-            receiverPhone: receiverPhone,
-            amount: FormatUtils.formatDisplayNumber(
-              FormatUtils.formatAmountToNum(amount),
-            ),
-            description: description,
-            walletBalance: check['wallet_balance'],
-            referenceCode: qrData,
-            isMerchant: isMerchant,
-            orderId: orderId,
-          ),
-        ),
-      ).then((_) => _resumeScan());
+      return;
     }
+
+    String initialFundingSource = 'MAIN_WALLET';
+    if (check['is_eligible'] != true) {
+      final needed = FormatUtils.formatAmountToNum(amount);
+      final ppRes = await PostpaidService().getWallet();
+      if (!mounted) return;
+      final ppData = ppRes['is_success'] == true && ppRes['data'] is Map
+          ? ppRes['data'] as Map
+          : null;
+      final canUsePostpaid =
+          ppData != null &&
+          ppData['activated'] == true &&
+          ppData['status'] == 'ACTIVE' &&
+          (num.tryParse(ppData['available_limit']?.toString() ?? '0') ?? 0) >=
+              needed;
+      if (!canUsePostpaid) {
+        _showError("Số dư trong ví không đủ");
+        return;
+      }
+      initialFundingSource = 'POSTPAID';
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ConfirmTranferScreen(
+          receiverId: receiverId,
+          receiverName: receiverFullName,
+          receiverPhone: receiverPhone,
+          amount: FormatUtils.formatDisplayNumber(
+            FormatUtils.formatAmountToNum(amount),
+          ),
+          description: description,
+          walletBalance: check['wallet_balance'],
+          referenceCode: qrData,
+          isMerchant: isMerchant,
+          orderId: orderId,
+          initialFundingSource: initialFundingSource,
+        ),
+      ),
+    ).then((_) => _resumeScan());
   }
 
   @override

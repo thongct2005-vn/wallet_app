@@ -34,10 +34,23 @@ class ApiConfig {
   static const String resendPinChallenge =
       '$baseUrl/wallet/resend-pin-challenge';
 
+  // POSTPAID WALLET (VÍ TRẢ SAU)
+  static const String postpaidInfo = '$baseUrl/postpaid/info';
+  static const String postpaidWallet = '$baseUrl/postpaid/wallet';
+  static const String postpaidActivate = '$baseUrl/postpaid/activate';
+  static const String postpaidEntries = '$baseUrl/postpaid/entries';
+  static const String postpaidRepay = '$baseUrl/postpaid/repay';
+
   static const String findUser = '$baseUrl/user/find-user';
   static const String checkContact = '$baseUrl/user/check-contact';
   static const String checkPinStatus = '$baseUrl/user/pin-status';
   static const String createPin = '$baseUrl/user/create-pin';
+  static const String verifyPin = '$baseUrl/user/verify-pin';
+  static const String changePin = '$baseUrl/user/change-pin';
+  static const String verifyPassword = '$baseUrl/user/verify-password';
+  static const String changePassword = '$baseUrl/user/change-password';
+  static const String userLimits = '$baseUrl/user/limits';
+  static const String resetUserLimit = '$baseUrl/user/limits/reset';
   static const String updateFcmToken = '$baseUrl/user/fcm-token';
 
   static const String transfer = '$baseUrl/transaction/transfer';
@@ -59,6 +72,9 @@ class ApiConfig {
 
   static const String getBankLinkStatus = '$baseUrl/bank/status';
   static const String linkBankAccount = '$baseUrl/bank/link';
+  static const String enableBankShowBalance = '$baseUrl/bank/show-balance';
+  static const String hideBankBalance = '$baseUrl/bank/hide-balance';
+  static const String unlinkBankAccount = '$baseUrl/bank/unlink';
 
   static const String forgotRequest = '$baseUrl/user/forgot/request';
   static const String forgotResendOtp = '$baseUrl/user/forgot/resend-otp';

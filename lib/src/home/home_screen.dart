@@ -5,6 +5,7 @@ import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/create_pin_bottom_sheet.dart';
 import 'package:app/src/history/history_screen.dart';
 import 'package:app/src/link_bank/link_bank_screen.dart';
+import 'package:app/src/postpaid/postpaid_screen.dart';
 import 'package:app/src/profile/profile_screen.dart';
 import 'package:app/src/promotion/promotion_screen.dart';
 import 'package:app/src/qr/qr_main_screen.dart';
@@ -51,6 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey _topUpIconKey = GlobalKey();
   final GlobalKey _withdrawIconKey = GlobalKey();
   final GlobalKey _transferIconKey = GlobalKey();
+  final GlobalKey _postpaidIconKey = GlobalKey();
   String _fullName = '';
   bool _isHidenWalletBalance = false;
   String _balance = '0';
@@ -549,6 +551,23 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
+          Expanded(
+            child: _buildQuickAction(
+              _postpaidIconKey,
+              Icons.credit_score_rounded,
+              "Ví trả sau",
+              () {
+                Navigator.push(
+                  context,
+                  IconExpandRoute(
+                    iconKey: _postpaidIconKey,
+                    icon: Icons.credit_score_rounded,
+                    builder: (context) => const PostpaidScreen(),
+                  ),
+                );
+              },
+            ),
+          ),
         ],
       ),
     );
@@ -605,19 +624,59 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildUtilList(BuildContext context) {
-    final items = <MapEntry<IconData, String>>[
-      const MapEntry(Iconsax.mobile, "Điện thoại"),
-      const MapEntry(Iconsax.scan_barcode, "Thanh toán QR"),
-      const MapEntry(Iconsax.flash, "Điện"),
-      const MapEntry(Iconsax.card, "Thẻ cào"),
-      const MapEntry(Icons.water_drop_outlined, "Nước"),
-      const MapEntry(Iconsax.airplane, "Vé máy bay"),
-      const MapEntry(Iconsax.wifi, "Internet"),
-      const MapEntry(Iconsax.more_square, "Xem thêm"),
+    const items = <_HomeUtilItem>[
+      _HomeUtilItem(
+        icon: Icons.smartphone_rounded,
+        label: "Điện thoại",
+        accent: Color(0xFFE11D48),
+        gradient: [Color(0xFFF43F5E), Color(0xFFE11D48)],
+      ),
+      _HomeUtilItem(
+        icon: Icons.pie_chart_rounded,
+        label: "Quản lý chi tiêu",
+        accent: Color(0xFF4F46E5),
+        gradient: [Color(0xFF6366F1), Color(0xFF4338CA)],
+      ),
+      _HomeUtilItem(
+        icon: Icons.bolt_rounded,
+        label: "Điện",
+        accent: Color(0xFFD97706),
+        gradient: [Color(0xFFFBBF24), Color(0xFFD97706)],
+      ),
+      _HomeUtilItem(
+        icon: Icons.credit_card_rounded,
+        label: "Thẻ cào",
+        accent: Color(0xFFEA580C),
+        gradient: [Color(0xFFFB923C), Color(0xFFEA580C)],
+      ),
+      _HomeUtilItem(
+        icon: Icons.water_drop_rounded,
+        label: "Nước",
+        accent: Color(0xFF0284C7),
+        gradient: [Color(0xFF38BDF8), Color(0xFF0284C7)],
+      ),
+      _HomeUtilItem(
+        icon: Icons.flight_rounded,
+        label: "Vé máy bay",
+        accent: Color(0xFF7C3AED),
+        gradient: [Color(0xFFA78BFA), Color(0xFF7C3AED)],
+      ),
+      _HomeUtilItem(
+        icon: Icons.wifi_rounded,
+        label: "Internet",
+        accent: Color(0xFF059669),
+        gradient: [Color(0xFF34D399), Color(0xFF059669)],
+      ),
+      _HomeUtilItem(
+        icon: Icons.grid_view_rounded,
+        label: "Xem thêm",
+        accent: Color(0xFF64748B),
+        gradient: [Color(0xFF94A3B8), Color(0xFF64748B)],
+      ),
     ];
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 16, 14, 8),
+      padding: const EdgeInsets.fromLTRB(14, 16, 14, 10),
       decoration: _cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -628,11 +687,11 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisCount: 4,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 4,
-            crossAxisSpacing: 4,
-            childAspectRatio: 0.85,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 6,
+            childAspectRatio: 0.84,
             children: [
-              for (final e in items) _buildUtilIcon(context, e.key, e.value),
+              for (final item in items) _buildUtilIcon(context, item),
             ],
           ),
         ],
@@ -640,31 +699,68 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildUtilIcon(BuildContext context, IconData icon, String text) {
+  Widget _buildUtilIcon(BuildContext context, _HomeUtilItem item) {
     return InkWell(
       onTap: () => _showDevelopingNotification(context),
       borderRadius: BorderRadius.circular(18),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            height: 54,
-            width: 54,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              color: _kPink.withValues(alpha: 0.09),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              height: 52,
+              width: 52,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(17),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: item.gradient,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: item.accent.withValues(alpha: 0.25),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Stack(
+                children: [
+                  Positioned(
+                    top: -8,
+                    right: -8,
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.16),
+                      ),
+                    ),
+                  ),
+                  Center(
+                    child: Icon(item.icon, color: Colors.white, size: 24),
+                  ),
+                ],
+              ),
             ),
-            child: Icon(icon, color: _kPink, size: 26),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            text,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.roboto(fontSize: 12.5, color: _kText),
-            textAlign: TextAlign.center,
-          ),
-        ],
+            const SizedBox(height: 7),
+            Text(
+              item.label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.roboto(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+                height: 1.2,
+                color: _kText,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -785,4 +881,18 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) setState(() => _isCheckingBank = false);
     }
   }
+}
+
+class _HomeUtilItem {
+  final IconData icon;
+  final String label;
+  final Color accent;
+  final List<Color> gradient;
+
+  const _HomeUtilItem({
+    required this.icon,
+    required this.label,
+    required this.accent,
+    required this.gradient,
+  });
 }

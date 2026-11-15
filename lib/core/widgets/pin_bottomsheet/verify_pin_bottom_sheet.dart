@@ -7,6 +7,7 @@ import 'package:app/main.dart';
 import 'package:app/src/auth/forgot/forgot_phone_screen.dart';
 import 'package:app/src/auth/forgot/forgot_type.dart';
 import 'package:app/src/services/auth_service.dart';
+import 'package:app/src/services/biometric_service.dart';
 import 'package:app/src/services/socket_service.dart';
 import 'package:app/src/services/wallet_service.dart';
 import 'package:flutter/material.dart';
@@ -17,12 +18,16 @@ Future<void> showCheckPinDialog({
   required BuildContext context,
   required Future<Map<String, dynamic>> Function(String pin) onCheckPin,
   required Future<void> Function(String pinToken) onSuccess,
+  bool allowBiometric = true,
+  String? customTitle,
 }) {
   return showSmoothPinBottomSheet(
     context: context,
     builder: (context) => CheckPinBottomSheet(
       onCheckPin: onCheckPin,
       onSuccess: onSuccess,
+      allowBiometric: allowBiometric,
+      customTitle: customTitle,
     ),
   );
 }
@@ -30,10 +35,14 @@ Future<void> showCheckPinDialog({
 class CheckPinBottomSheet extends StatefulWidget {
   final Future<Map<String, dynamic>> Function(String pin) onCheckPin;
   final Future<void> Function(String pinToken) onSuccess;
+  final bool allowBiometric;
+  final String? customTitle;
   const CheckPinBottomSheet({
     super.key,
     required this.onCheckPin,
     required this.onSuccess,
+    this.allowBiometric = true,
+    this.customTitle,
   });
   @override
   State<CheckPinBottomSheet> createState() => _CheckPinBottomSheetState();
@@ -47,6 +56,7 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
 
   String _errorMsg = '';
   bool _isLoading = false;
+  bool _canUseBiometric = false;
 
   // Trạng thái thử thách bảo mật bổ sung (Step-Up OTP Challenge) khi điểm rủi ro cao
   bool _isChallengeStep = false;
@@ -56,16 +66,53 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
   int _resendCountdown = 0;
   Timer? _resendTimer;
   final WalletService _walletService = WalletService();
+  final BiometricService _biometricService = BiometricService();
 
   @override
   void initState() {
     super.initState();
-    // Đợi frame đầu tiên của sheet dựng & cache GPU xong mới mở bàn phím để không bị khựng frame đầu
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _pinInputKey.currentState?.requestKeyboard();
-      }
+      _initPinOrBiometric();
     });
+  }
+
+  Future<void> _initPinOrBiometric() async {
+    if (!mounted) return;
+    if (widget.allowBiometric) {
+      final enabled = await _biometricService.isEnabled();
+      final available = enabled && await _biometricService.isBiometricAvailable();
+      if (!mounted) return;
+      if (available) {
+        setState(() => _canUseBiometric = true);
+        await _triggerBiometricAuth();
+        return;
+      }
+    }
+    if (mounted) {
+      _pinInputKey.currentState?.requestKeyboard();
+    }
+  }
+
+  Future<void> _triggerBiometricAuth() async {
+    if (_isLoading || _isChallengeStep) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    final storedPin = await _biometricService.getStoredPin();
+    if (!mounted) return;
+    if (storedPin == null || storedPin.length != 6) {
+      setState(() => _canUseBiometric = false);
+      _pinInputKey.currentState?.requestKeyboard();
+      return;
+    }
+
+    final authRes = await _biometricService.authenticate(
+      reason: 'Đặt vân tay để xác thực giao dịch Ví Mio',
+    );
+    if (!mounted) return;
+    if (authRes.isSuccess) {
+      await _onPinCompleted(storedPin);
+    } else {
+      _pinInputKey.currentState?.requestKeyboard();
+    }
   }
 
   @override
@@ -278,7 +325,7 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
                             Text(
                               _isChallengeStep
                                   ? 'Xác thực bảo mật bổ sung'
-                                  : 'Nhập mã PIN xác thực',
+                                  : (widget.customTitle ?? 'Nhập mã PIN xác thực'),
                               textAlign: TextAlign.center,
                               style: PinSheetStyles.title,
                             ),
@@ -348,19 +395,61 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
                         child: Text(_errorMsg, style: PinSheetStyles.error),
                       ),
                       if (!_isChallengeStep)
-                        GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: _isLoading ? null : _onForgotPin,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 4,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: _isLoading ? null : _onForgotPin,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 4,
+                                ),
+                                child: Text(
+                                  "Quên mã PIN?",
+                                  style: PinSheetStyles.forgot,
+                                ),
+                              ),
                             ),
-                            child: Text(
-                              "Quên mã PIN?",
-                              style: PinSheetStyles.forgot,
-                            ),
-                          ),
+                            if (_canUseBiometric) ...[
+                              Container(
+                                width: 1,
+                                height: 14,
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                ),
+                                color: Colors.grey.shade300,
+                              ),
+                              GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: _isLoading ? null : _triggerBiometricAuth,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 4,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.fingerprint_rounded,
+                                        size: 18,
+                                        color: Color(0xFFD81B60),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        "Dùng vân tay",
+                                        style: PinSheetStyles.forgot.copyWith(
+                                          color: const Color(0xFFD81B60),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         )
                       else if (_otpMethod == 'email')
                         GestureDetector(

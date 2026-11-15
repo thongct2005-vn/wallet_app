@@ -5,13 +5,13 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileOutputStream
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private val galleryChannel = "com.example.app/gallery"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -87,27 +87,45 @@ class MainActivity : FlutterActivity() {
         setHighRefreshRate()
     }
 
+    override fun onResume() {
+        super.onResume()
+        setHighRefreshRate()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            setHighRefreshRate()
+        }
+    }
+
     private fun setHighRefreshRate() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val currentDisplay = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 display
             } else {
                 @Suppress("DEPRECATION")
                 windowManager.defaultDisplay
             }
-            val modes = display?.supportedModes ?: return
-            val currentMode = display.mode
+            val modes = currentDisplay?.supportedModes ?: return
+            val currentMode = currentDisplay.mode
             val highestMode = modes
                 .filter {
                     it.physicalWidth == currentMode.physicalWidth &&
                         it.physicalHeight == currentMode.physicalHeight
                 }
                 .maxByOrNull { it.refreshRate }
+                ?: modes.maxByOrNull { it.refreshRate }
 
             highestMode?.let {
                 val layoutParams = window.attributes
-                layoutParams.preferredDisplayModeId = it.modeId
-                window.attributes = layoutParams
+                if (layoutParams.preferredDisplayModeId != it.modeId ||
+                    layoutParams.preferredRefreshRate != it.refreshRate
+                ) {
+                    layoutParams.preferredDisplayModeId = it.modeId
+                    layoutParams.preferredRefreshRate = it.refreshRate
+                    window.attributes = layoutParams
+                }
             }
         }
     }

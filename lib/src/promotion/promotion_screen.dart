@@ -86,6 +86,37 @@ class _PromotionScreenState extends State<PromotionScreen> {
     ),
   ];
 
+  static const List<PromotionItemData> _hotMovieTickets = [
+    PromotionItemData(
+      name: 'Công Viên Khủng Long',
+      imagePath: 'assets/cong-vien-khung-long.jpg',
+      discountPercent: 10,
+      originalPrice: '110.000đ',
+      discountedPrice: '99.000đ',
+    ),
+    PromotionItemData(
+      name: 'Godzilla',
+      imagePath: 'assets/godzilla-movie.jpg',
+      discountPercent: 15,
+      originalPrice: '120.000đ',
+      discountedPrice: '102.000đ',
+    ),
+    PromotionItemData(
+      name: 'King Kong',
+      imagePath: 'assets/king-kong.jpg',
+      discountPercent: 5,
+      originalPrice: '100.000đ',
+      discountedPrice: '95.000đ',
+    ),
+    PromotionItemData(
+      name: 'Venom',
+      imagePath: 'assets/vemon-movie.jpg',
+      discountPercent: 10,
+      originalPrice: '120.000đ',
+      discountedPrice: '108.000đ',
+    ),
+  ];
+
   static const List<PromotionItemData> _drinkItems = [
     PromotionItemData(
       name: 'Matcha Latte',
@@ -114,6 +145,37 @@ class _PromotionScreenState extends State<PromotionScreen> {
       discountPercent: 15,
       originalPrice: '60.000đ',
       discountedPrice: '51.000đ',
+    ),
+  ];
+
+  static const List<PromotionItemData> _foodItems = [
+    PromotionItemData(
+      name: 'Bún Bò Huế',
+      imagePath: 'assets/bun-bo-hue.jpg',
+      discountPercent: 10,
+      originalPrice: '55.000đ',
+      discountedPrice: '49.500đ',
+    ),
+    PromotionItemData(
+      name: 'Gà Rán KFC',
+      imagePath: 'assets/gan-ran-kfc.jpg',
+      discountPercent: 15,
+      originalPrice: '90.000đ',
+      discountedPrice: '76.500đ',
+    ),
+    PromotionItemData(
+      name: 'Mì Cay',
+      imagePath: 'assets/mi-cay.jpg',
+      discountPercent: 10,
+      originalPrice: '60.000đ',
+      discountedPrice: '54.000đ',
+    ),
+    PromotionItemData(
+      name: 'Pizza',
+      imagePath: 'assets/pizza.jpg',
+      discountPercent: 15,
+      originalPrice: '140.000đ',
+      discountedPrice: '119.000đ',
     ),
   ];
 
@@ -220,17 +282,31 @@ class _PromotionScreenState extends State<PromotionScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildSectionTitle('Đặt vé'),
+                      _buildSectionTitle('Anime movie'),
                       const SizedBox(height: 10),
                       _buildHorizontalPromoList(
                         items: _movieTickets,
                         buttonLabel: 'Đặt vé',
                       ),
                       const SizedBox(height: 22),
-                      _buildSectionTitle('Ăn uống'),
+                      _buildSectionTitle('Phim bom tấn'),
+                      const SizedBox(height: 10),
+                      _buildHorizontalPromoList(
+                        items: _hotMovieTickets,
+                        buttonLabel: 'Đặt vé',
+                      ),
+                      const SizedBox(height: 22),
+                      _buildSectionTitle('Nước uống'),
                       const SizedBox(height: 10),
                       _buildHorizontalPromoList(
                         items: _drinkItems,
+                        buttonLabel: 'Mua ngay',
+                      ),
+                      const SizedBox(height: 22),
+                      _buildSectionTitle('Đồ ăn'),
+                      const SizedBox(height: 10),
+                      _buildHorizontalPromoList(
+                        items: _foodItems,
                         buttonLabel: 'Mua ngay',
                       ),
                       const SizedBox(height: 22),

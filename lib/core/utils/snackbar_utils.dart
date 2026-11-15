@@ -6,6 +6,10 @@ enum SnackbarType { success, failure, info, developing }
 class SnackbarUtils {
   SnackbarUtils._();
 
+  static String? _activeKey;
+  static ScaffoldFeatureController<SnackBar, SnackBarClosedReason>?
+      _activeController;
+
   static void success(BuildContext context, String message, {String? title}) {
     _show(context, title: title ?? 'Thành công', message: message, type: SnackbarType.success);
   }
@@ -39,10 +43,21 @@ class SnackbarUtils {
     required SnackbarType type,
     Duration duration = const Duration(seconds: 10),
   }) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+
+    final key = '${type.name}|$title|$message';
+    if (_activeKey == key && _activeController != null) {
+      return;
+    }
+
     final config = _configFor(type);
 
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.clearSnackBars();
+    _activeKey = key;
+    late final ScaffoldFeatureController<SnackBar, SnackBarClosedReason>
+        controller;
+    controller = messenger.showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
         backgroundColor: config.background,
@@ -95,6 +110,13 @@ class SnackbarUtils {
         ),
       ),
     );
+    _activeController = controller;
+    controller.closed.whenComplete(() {
+      if (_activeController == controller) {
+        _activeController = null;
+        _activeKey = null;
+      }
+    });
   }
 
   static _SnackConfig _configFor(SnackbarType type) {

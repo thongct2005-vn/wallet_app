@@ -57,6 +57,7 @@ class _ConfirmTopUpWithdrawScreenState
   // Mã idempotency gắn với đúng một giao dịch (số tiền + ngân hàng). Đổi ngân
   // hàng thì phải tạo mã mới, nếu không server báo "Mã đã được sử dụng với dữ liệu khác"
   late String idempotencyKey;
+  late List<dynamic> _linkedBanks;
   String? _selectedBankId;
   bool isLoadingLinkedBanks = false;
   bool _isLoadingFeePreview = false;
@@ -66,8 +67,9 @@ class _ConfirmTopUpWithdrawScreenState
   void initState() {
     super.initState();
     idempotencyKey = _uuid.v7();
-    if (widget.linkedBanks.isNotEmpty) {
-      _selectedBankId = widget.linkedBanks.first['id'];
+    _linkedBanks = List<dynamic>.from(widget.linkedBanks);
+    if (_linkedBanks.isNotEmpty) {
+      _selectedBankId = _linkedBanks.first['id'];
     }
     _loadFeePreview();
   }
@@ -93,7 +95,7 @@ class _ConfirmTopUpWithdrawScreenState
 
   @override
   Widget build(BuildContext context) {
-    final selectedBank = widget.linkedBanks.firstWhere(
+    final selectedBank = _linkedBanks.firstWhere(
       (b) => b['id'] == _selectedBankId,
       orElse: () => {'bank_name': ''},
     );
@@ -270,6 +272,13 @@ class _ConfirmTopUpWithdrawScreenState
             label: widget.isTopUpTab ? 'Nguồn tiền' : 'Rút về NH liên kết',
             value: selectedBank['bank_name'] ?? '',
           ),
+          if (selectedBank['is_show_balance'] == true &&
+              selectedBank['balance'] != null)
+            _buildInfoRow(
+              label: 'Số dư ngân hàng',
+              value:
+                  '${FormatUtils.formatDisplayNumber(FormatUtils.formatAmountToNum(selectedBank['balance'].toString()))}đ',
+            ),
           _buildInfoRow(
             label: 'Số tiền',
             value:
@@ -357,8 +366,8 @@ class _ConfirmTopUpWithdrawScreenState
               ),
             ),
           ),
-          for (final bank in widget.linkedBanks) ...[
-            _buildBankOption(bank),
+          for (final bank in _linkedBanks) ...[
+            _buildBankOption(Map<String, dynamic>.from(bank as Map)),
             const SizedBox(height: 10),
           ],
           const SizedBox(height: 4),
@@ -373,8 +382,8 @@ class _ConfirmTopUpWithdrawScreenState
                 isLoadingLinkedBanks = false;
               });
               if (!context.mounted) return;
-              if (result['is_success']) {
-                Navigator.push(
+              if (result['is_success'] == true) {
+                await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => LinkBankScreen(
@@ -382,6 +391,20 @@ class _ConfirmTopUpWithdrawScreenState
                     ),
                   ),
                 );
+                if (!mounted) return;
+                final refreshed = await _getLinkedBanks();
+                if (!mounted) return;
+                if (refreshed['is_success'] == true &&
+                    refreshed['data'] is Map) {
+                  setState(() {
+                    _linkedBanks = List<dynamic>.from(
+                      (refreshed['data']['linked_accounts'] as List?) ?? [],
+                    );
+                    if (_selectedBankId == null && _linkedBanks.isNotEmpty) {
+                      _selectedBankId = _linkedBanks.first['id'];
+                    }
+                  });
+                }
               } else {
                 SnackbarUtils.failure(context, result['message']);
               }
@@ -472,13 +495,30 @@ class _ConfirmTopUpWithdrawScreenState
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                bank['bank_name'] ?? '',
-                style: GoogleFonts.roboto(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: _kText,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    bank['bank_name'] ?? '',
+                    style: GoogleFonts.roboto(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: _kText,
+                    ),
+                  ),
+                  if (bank['is_show_balance'] == true &&
+                      bank['balance'] != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      'Số dư: ${FormatUtils.formatDisplayNumber(FormatUtils.formatAmountToNum(bank['balance'].toString()))}đ',
+                      style: GoogleFonts.roboto(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF1B7A3D),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
             Container(

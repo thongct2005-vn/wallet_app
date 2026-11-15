@@ -24,13 +24,15 @@ class FormatUtils {
     return amountNum;
   }
 
+  static final DateFormat _dateTimeFmt = DateFormat('HH:mm - dd/MM/yyyy');
+
+  static String formatDateTime(DateTime parsedDate) {
+    final date = parsedDate.toUtc().add(const Duration(hours: 7));
+    return _dateTimeFmt.format(date);
+  }
+
   static String formatCustomDateTime(String timeString) {
-    DateTime parsedDate = DateTime.parse(timeString);
-
-    DateTime date = parsedDate.toUtc().add(const Duration(hours: 7));
-    String formattedDate = DateFormat('HH:mm - dd/MM/yyyy').format(date);
-
-    return formattedDate;
+    return formatDateTime(DateTime.parse(timeString));
   }
 
   static final RegExp _phoneRegex = RegExp(r'^(03|05|07|08|09)\d{8}$');

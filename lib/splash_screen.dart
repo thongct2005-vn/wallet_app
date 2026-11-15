@@ -46,7 +46,7 @@ class _SplashScreenState extends State<SplashScreen> {
             children: [
               Text(
                 "Mio",
-                style: GoogleFonts.baloo2(
+                style: GoogleFonts.roboto(
                   fontSize: 70,
                   fontWeight: FontWeight.w800,
                   color: Colors.white,
@@ -55,7 +55,7 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
               Text(
                 "Mobile Money",
-                style: GoogleFonts.baloo2(
+                style: GoogleFonts.roboto(
                   fontSize: 20,
                   fontWeight: FontWeight.w500,
                   color: Colors.white,

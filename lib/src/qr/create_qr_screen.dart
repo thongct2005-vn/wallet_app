@@ -1,14 +1,13 @@
 import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/format_utils.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/pin_sheet_common.dart';
+import 'package:app/src/qr/qr_download_card.dart';
 import 'package:app/src/services/payment_service.dart';
 import 'package:app/src/transfer/transfer_ui.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -33,10 +32,10 @@ class _CreateQRScreenState extends State<CreateQRScreen> {
     fontWeight: FontWeight.w800,
     color: Colors.grey.withValues(alpha: 0.4),
   );
-  static final TextStyle _mioBrandStyle = GoogleFonts.baloo2(
+  static final TextStyle _mioBrandStyle = GoogleFonts.roboto(
     color: kTfPink,
-    fontWeight: FontWeight.w700,
-    fontSize: 26,
+    fontWeight: FontWeight.w800,
+    fontSize: 24,
   );
   static final TextStyle _avatarTextStyle = GoogleFonts.roboto(
     color: kTfPinkDark,
@@ -91,7 +90,6 @@ class _CreateQRScreenState extends State<CreateQRScreen> {
     'com.example.app/gallery',
   );
 
-  final GlobalKey _qrBoundaryKey = GlobalKey();
   final PaymentService _paymentService = PaymentService();
   final TextEditingController _textController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
@@ -258,10 +256,8 @@ class _CreateQRScreenState extends State<CreateQRScreen> {
         children: [
           Text("Mio", style: _mioBrandStyle),
           const SizedBox(height: 8),
-          RepaintBoundary(
-            key: _qrBoundaryKey,
-            child: Container(
-              padding: const EdgeInsets.all(12),
+          Container(
+            padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(18),
@@ -313,7 +309,6 @@ class _CreateQRScreenState extends State<CreateQRScreen> {
                         ),
                       ],
                     ),
-            ),
           ),
           const SizedBox(height: 14),
           GestureDetector(
@@ -381,30 +376,26 @@ class _CreateQRScreenState extends State<CreateQRScreen> {
 
     _isSavingQr = true;
     try {
-      final boundary =
-          _qrBoundaryKey.currentContext?.findRenderObject()
-              as RenderRepaintBoundary?;
-      if (boundary == null) {
+      final exportWidget = QrDownloadCard(
+        qrData: _qrData,
+        fullName: _fullName ?? '',
+        phone: _phone ?? '',
+        avatarText: _avatar ?? '?',
+        amount: _amount,
+        description: _description,
+      );
+      final Uint8List? pngBytes = await captureQrExportPng(
+        context,
+        exportWidget,
+      );
+
+      if (pngBytes == null) {
         if (mounted) {
           SnackbarUtils.failure(context, 'Không thể tạo ảnh mã QR');
         }
         return;
       }
 
-      final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-      final ByteData? byteData = await image.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-      image.dispose();
-
-      if (byteData == null) {
-        if (mounted) {
-          SnackbarUtils.failure(context, 'Không thể xuất ảnh mã QR');
-        }
-        return;
-      }
-
-      final Uint8List pngBytes = byteData.buffer.asUint8List();
       final String fileName =
           'mio_qr_${DateTime.now().millisecondsSinceEpoch}.png';
 

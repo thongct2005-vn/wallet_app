@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -25,6 +26,10 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final robotoTextTheme = GoogleFonts.robotoTextTheme(
+      ThemeData.light().textTheme,
+    );
+
     return MaterialApp(
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
@@ -40,11 +45,44 @@ class MainApp extends StatelessWidget {
       navigatorKey: navigatorKey,
       theme: ThemeData(
         scaffoldBackgroundColor: Colors.white.withValues(alpha: 0.95),
-        appBarTheme: const AppBarTheme(
+        textTheme: robotoTextTheme,
+        primaryTextTheme: robotoTextTheme,
+        inputDecorationTheme: InputDecorationTheme(
+          labelStyle: GoogleFonts.roboto(),
+          floatingLabelStyle: GoogleFonts.roboto(),
+          hintStyle: GoogleFonts.roboto(),
+          errorStyle: GoogleFonts.roboto(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w500,
+          ),
+          helperStyle: GoogleFonts.roboto(),
+          suffixStyle: GoogleFonts.roboto(),
+          prefixStyle: GoogleFonts.roboto(),
+        ),
+        snackBarTheme: SnackBarThemeData(
+          contentTextStyle: GoogleFonts.roboto(fontSize: 14),
+        ),
+        dialogTheme: DialogThemeData(
+          titleTextStyle: GoogleFonts.roboto(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: Colors.black87,
+          ),
+          contentTextStyle: GoogleFonts.roboto(
+            fontSize: 15,
+            color: Colors.black87,
+          ),
+        ),
+        appBarTheme: AppBarTheme(
           backgroundColor: Colors.transparent,
           surfaceTintColor: Colors.transparent,
           scrolledUnderElevation: 0,
           elevation: 0,
+          titleTextStyle: GoogleFonts.roboto(
+            fontSize: 19,
+            fontWeight: FontWeight.w700,
+            color: Colors.black87,
+          ),
         ),
       ),
       home: const SplashScreen(),

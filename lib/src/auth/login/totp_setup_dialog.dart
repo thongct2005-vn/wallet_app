@@ -265,9 +265,10 @@ class _TotpSetupDialogState extends State<_TotpSetupDialog> {
                       Expanded(
                         child: SelectableText(
                           _groupSecret(_data!['secret']!),
-                          style: GoogleFonts.robotoMono(
+                          style: GoogleFonts.roboto(
                             fontSize: 13.5,
                             fontWeight: FontWeight.w600,
+                            letterSpacing: 0.6,
                             color: kAuthText,
                           ),
                         ),

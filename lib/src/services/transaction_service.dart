@@ -85,12 +85,16 @@ class TransactionService {
   Future<Map<String, dynamic>> processQRPayment(
     String referenceCode,
     String idempotencyKey,
-    String pinToken,
-  ) async {
+    String pinToken, {
+    String fundingSource = 'MAIN_WALLET',
+  }) async {
     try {
       final result = await api.post(
         ApiConfig.payment,
-        data: {'reference_code': referenceCode},
+        data: {
+          'reference_code': referenceCode,
+          if (fundingSource == 'POSTPAID') 'funding_source': 'POSTPAID',
+        },
         options: Options(
           headers: {'idempotency-key': idempotencyKey, 'x-pin-token': pinToken},
         ),
@@ -137,6 +141,8 @@ class TransactionService {
     String? cursorId,
     int? limit, {
     String? keyword,
+    String? transactionType,
+    String? direction,
     DateTime? startDate,
     DateTime? endDate,
   }) async {
@@ -147,6 +153,10 @@ class TransactionService {
           'cursor_id': cursorId,
           'limit': limit,
           if (keyword != null && keyword.isNotEmpty) 'keyword': keyword,
+          if (transactionType != null && transactionType.isNotEmpty)
+            'transaction_type': transactionType,
+          if (direction != null && direction.isNotEmpty)
+            'direction': direction,
           if (startDate != null) 'start_date': _dateOnly(startDate),
           if (endDate != null) 'end_date': _dateOnly(endDate),
         },

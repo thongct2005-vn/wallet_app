@@ -5,6 +5,7 @@ import 'package:app/src/transfer/transfer_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:app/src/services/postpaid_service.dart';
 import 'package:app/src/services/wallet_service.dart';
 
 class AmountInputScreen extends StatefulWidget {
@@ -735,17 +736,47 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                         _isLoadingNotifier.value = true;
                         final result = await _walletService
                             .checkTransferEligibility(_amountController.text);
-                        _isLoadingNotifier.value = false;
+                        String initialFundingSource = 'MAIN_WALLET';
                         if (result['is_success']) {
+                          _walletBalance = result['wallet_balance'];
                           if (!result['is_eligible']) {
-                            _msgNotifier.value = 'Số dư trong ví không đủ';
-                          } else {
-                            _walletBalance = result['wallet_balance'];
+                            final isQr =
+                                widget.referenceCode != null &&
+                                widget.referenceCode!.isNotEmpty;
+                            bool canUsePostpaid = false;
+                            if (isQr) {
+                              final ppRes = await PostpaidService().getWallet();
+                              final ppData =
+                                  ppRes['is_success'] == true &&
+                                      ppRes['data'] is Map
+                                  ? ppRes['data'] as Map
+                                  : null;
+                              final needed = FormatUtils.formatAmountToNum(
+                                _amountController.text,
+                              );
+                              canUsePostpaid =
+                                  ppData != null &&
+                                  ppData['activated'] == true &&
+                                  ppData['status'] == 'ACTIVE' &&
+                                  (num.tryParse(
+                                            ppData['available_limit']
+                                                    ?.toString() ??
+                                                '0',
+                                          ) ??
+                                          0) >=
+                                      needed;
+                            }
+                            if (canUsePostpaid) {
+                              initialFundingSource = 'POSTPAID';
+                            } else {
+                              _msgNotifier.value = 'Số dư trong ví không đủ';
+                            }
                           }
                         } else {
                           _msgNotifier.value =
                               'Hệ thống đang bảo trì. Vui lòng thử lại sau';
                         }
+                        _isLoadingNotifier.value = false;
                         if (!context.mounted) return;
                         if (_msgNotifier.value.isEmpty) {
                           Navigator.push(
@@ -761,6 +792,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                                 referenceCode: widget.referenceCode,
                                 isMerchant: widget.isMerchant,
                                 orderId: widget.orderId,
+                                initialFundingSource: initialFundingSource,
                               ),
                             ),
                           );

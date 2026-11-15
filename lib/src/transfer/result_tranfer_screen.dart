@@ -118,10 +118,19 @@ class _ResultTranferScreenState extends State<ResultTranferScreen> {
                             const SizedBox(height: 16),
                             TransferInfoRow(
                               label: "Dịch vụ/ Cửa hàng",
-                              value: widget.isMerchant
+                              value: data['fundingSource'] == 'POSTPAID'
+                                  ? "Thanh toán qua Ví trả sau"
+                                  : widget.isMerchant
                                   ? "Thanh toán qua Mio"
                                   : "Chuyển tiền qua Mio",
                             ),
+                            if (data['fundingSource'] == 'POSTPAID' &&
+                                data['postpaidAvailableAfter'] != null)
+                              TransferInfoRow(
+                                label: "Hạn mức còn lại",
+                                value:
+                                    "${FormatUtils.formatDisplayNumber(num.tryParse(data['postpaidAvailableAfter'].toString()) ?? 0)}đ",
+                              ),
                             const SizedBox(height: 16),
                             TransferInfoRow(
                               label: "Giao dịch",

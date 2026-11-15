@@ -1,14 +1,17 @@
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/dialog_utils.dart';
+import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
 import 'package:app/src/kyc/kyc_guide_screen.dart';
+import 'package:app/src/link_bank/manage_linked_banks_screen.dart';
+import 'package:app/src/profile/security_screen.dart';
+import 'package:app/src/profile/transaction_limits_screen.dart';
 import 'package:app/src/services/auth_service.dart';
 import 'package:app/src/services/socket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:iconsax/iconsax.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -64,7 +67,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Iconsax.call, color: _pink, size: 17),
+                  const Icon(Icons.phone_rounded, color: _pink, size: 16),
                   const SizedBox(width: 6),
                   Text(
                     _userController.phone.value,
@@ -82,39 +85,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _buildGroup([
               _buildItem(
                 context,
-                Iconsax.user,
-                Colors.pink.withValues(alpha: 0.12),
-                Colors.pinkAccent,
+                Icons.person_rounded,
+                const [Color(0xFFF472B6), Color(0xFFDB2777)],
+                const Color(0xFFDB2777),
                 "Thông tin cá nhân",
                 "Cập nhật thông tin cá nhân của bạn",
                 () => _showConfirmUpdateKyc(context),
               ),
               _buildItem(
                 context,
-                Iconsax.shield_tick,
-                Colors.purple.withValues(alpha: 0.12),
-                Colors.purple,
+                Icons.verified_user_rounded,
+                const [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+                const Color(0xFF7C3AED),
                 "Bảo mật",
-                "Mật khẩu, PIN",
-                () {},
+                "Mật khẩu, PIN, vân tay",
+                () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SecurityScreen(),
+                    ),
+                  );
+                },
               ),
               _buildItem(
                 context,
-                Iconsax.bank,
-                Colors.blue.withValues(alpha: 0.12),
-                Colors.blue,
+                Icons.account_balance_rounded,
+                const [Color(0xFF38BDF8), Color(0xFF0284C7)],
+                const Color(0xFF0284C7),
                 "Ngân hàng liên kết",
                 "Quản lý các ngân hàng liên kết với ví",
-                () {},
+                () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ManageLinkedBanksScreen(),
+                    ),
+                  );
+                },
               ),
               _buildItem(
                 context,
-                Iconsax.chart_2,
-                Colors.green.withValues(alpha: 0.12),
-                Colors.green,
+                Icons.bar_chart_rounded,
+                const [Color(0xFF34D399), Color(0xFF059669)],
+                const Color(0xFF059669),
                 "Hạn mức",
                 "Xem hạn mức và sức chứa của ví",
-                () {},
+                () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const TransactionLimitsScreen(),
+                    ),
+                  );
+                },
               ),
             ]),
             const SizedBox(height: 18),
@@ -122,34 +146,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _buildGroup([
               _buildItem(
                 context,
-                Iconsax.notification,
-                Colors.amber.withValues(alpha: 0.18),
-                Colors.amber.shade800,
+                Icons.notifications_rounded,
+                const [Color(0xFFFBBF24), Color(0xFFD97706)],
+                const Color(0xFFD97706),
                 "Thông báo",
                 "Quản lý các thông báo và cập nhật",
-                () {},
+                () => SnackbarUtils.developing(context),
               ),
               _buildItem(
                 context,
-                Iconsax.message_question,
-                Colors.blueGrey.withValues(alpha: 0.14),
-                Colors.blueGrey,
+                Icons.support_agent_rounded,
+                const [Color(0xFF818CF8), Color(0xFF4F46E5)],
+                const Color(0xFF4F46E5),
                 "Hỗ trợ",
                 "Nhận trợ giúp và liên hệ để được hỗ trợ",
-                () {},
+                () => SnackbarUtils.developing(context),
               ),
             ]),
             const SizedBox(height: 18),
             _buildGroup([
               _buildItem(
                 context,
-                Iconsax.logout,
-                Colors.red.withValues(alpha: 0.12),
-                Colors.red,
+                Icons.logout_rounded,
+                const [Color(0xFFF87171), Color(0xFFDC2626)],
+                const Color(0xFFDC2626),
                 "Đăng xuất",
                 "Đăng xuất khỏi tài khoản",
                 () => _showConfirmLogout(context),
-                titleColor: Colors.red.shade600,
+                titleColor: const Color(0xFFDC2626),
                 showChevron: false,
               ),
             ]),
@@ -238,7 +262,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       width: 96,
                       height: 96,
                       color: _pink.withValues(alpha: 0.12),
-                      child: const Icon(Iconsax.user, color: _pink, size: 40),
+                      child: const Icon(
+                        Icons.person_rounded,
+                        color: _pink,
+                        size: 40,
+                      ),
                     ),
                   ),
                 ),
@@ -310,8 +338,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildItem(
     BuildContext context,
     IconData icon,
-    Color color,
-    Color iconColor,
+    List<Color> gradientColors,
+    Color accentColor,
     String title,
     String description,
     VoidCallback? onTap, {
@@ -329,9 +357,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
               height: 44,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(14),
-                color: color,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: gradientColors,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: accentColor.withValues(alpha: 0.24),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
-              child: Icon(icon, color: iconColor, size: 24),
+              child: Stack(
+                children: [
+                  Positioned(
+                    top: -6,
+                    right: -6,
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.16),
+                      ),
+                    ),
+                  ),
+                  Center(
+                    child: Icon(icon, color: Colors.white, size: 21),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -359,7 +416,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             if (showChevron)
-              const Icon(Iconsax.arrow_right_3, color: _muted, size: 18),
+              Container(
+                width: 26,
+                height: 26,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF6F1F4),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.chevron_right_rounded,
+                  color: _muted,
+                  size: 18,
+                ),
+              ),
           ],
         ),
       ),

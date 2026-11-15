@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 import 'package:app/core/controller/user_controller.dart';
+import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/src/history/transaction_model.dart';
 import 'package:app/src/home/home_screen.dart';
+import 'package:app/src/postpaid/postpaid_screen.dart';
 import 'package:app/src/topup_withdraw/topup_withdraw_screen.dart';
 import 'package:app/src/transfer/amount_input_screen.dart';
 import 'package:app/src/transfer/transfer_ui.dart';
@@ -43,7 +45,12 @@ class TransactionDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final UserController userController = Get.find<UserController>();
-    final bool isMerchant = transactionModel.type == "PAYMENT";
+    final bool isPostpaidRepay =
+        transactionModel.fundingSource == 'POSTPAID' &&
+        (transactionModel.postpaidAction == 'REPAY_PRINCIPAL' ||
+            transactionModel.postpaidAction == 'REPAY_LATE_FEE');
+    final bool isMerchant =
+        transactionModel.type == "PAYMENT" && !isPostpaidRepay;
     final bool isTransfer = transactionModel.type == "TRANSFER";
 
     return Scaffold(
@@ -57,7 +64,9 @@ class TransactionDetailScreen extends StatelessWidget {
           icon: Icons.arrow_back_ios_new_rounded,
           onPressed: () => Navigator.pop(context),
         ),
-        title: TransferAppBarTitle(isMerchant ? title : "Chi tiết giao dịch"),
+        title: TransferAppBarTitle(
+          (isMerchant || isPostpaidRepay) ? title : "Chi tiết giao dịch",
+        ),
         actions: [
           TransferCircleButton(
             icon: Iconsax.home_2,
@@ -110,7 +119,9 @@ class TransactionDetailScreen extends StatelessWidget {
                                 color: iconColor.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(14),
                               ),
-                              child: Icon(icon, color: iconColor, size: 26),
+                              child: Center(
+                                child: Icon(icon, color: iconColor, size: 26),
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -199,10 +210,16 @@ class TransactionDetailScreen extends StatelessWidget {
                     ),
                     if (isTransfer) ...[
                       _infoRow("Ví Mio", walletName),
-                      _infoRow(
-                        "Số điện thoại",
-                        transactionModel.counterpartyPhone,
-                      ),
+                      if (transactionModel.counterpartyPhone.isNotEmpty)
+                        _infoRow(
+                          "Số điện thoại",
+                          transactionModel.counterpartyPhone,
+                        ),
+                    ] else if (isPostpaidRepay) ...[
+                      _infoRow("Nguồn thanh toán", walletName),
+                      _infoRow("Dịch vụ", transactionModel.counterpartyName),
+                      if ((transactionModel.description ?? '').trim().isNotEmpty)
+                        _infoRow("Nội dung", transactionModel.description!),
                     ] else if (isMerchant) ...[
                       _infoRow("Cửa hàng", transactionModel.counterpartyName),
                       _infoRow("Nội dung", transactionModel.description ?? ''),
@@ -219,7 +236,12 @@ class TransactionDetailScreen extends StatelessWidget {
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () {},
+                            onPressed: () {
+                              SnackbarUtils.developing(
+                                context,
+                                message: 'Tính năng đang phát triển',
+                              );
+                            },
                             style: OutlinedButton.styleFrom(
                               side: const BorderSide(color: kTfPink, width: 1.5),
                               padding: const EdgeInsets.symmetric(vertical: 15),
@@ -279,7 +301,17 @@ class TransactionDetailScreen extends StatelessWidget {
                                   ),
                                 );
                               } else if (textBtn == "Chia tiền") {
-                                // Không cần xử lý logic, để cân đối giao diện
+                                SnackbarUtils.developing(
+                                  context,
+                                  message: 'Tính năng đang phát triển',
+                                );
+                              } else if (textBtn == "Quản lý ví") {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const PostpaidScreen(),
+                                  ),
+                                );
                               }
                             },
                             style: ElevatedButton.styleFrom(
