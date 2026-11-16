@@ -49,9 +49,13 @@ class TransactionDetailScreen extends StatelessWidget {
         transactionModel.fundingSource == 'POSTPAID' &&
         (transactionModel.postpaidAction == 'REPAY_PRINCIPAL' ||
             transactionModel.postpaidAction == 'REPAY_LATE_FEE');
+    final bool isPostpaidRefund =
+        transactionModel.fundingSource == 'POSTPAID' &&
+        transactionModel.postpaidAction == 'REFUND';
     final bool isMerchant =
         transactionModel.type == "PAYMENT" && !isPostpaidRepay;
-    final bool isTransfer = transactionModel.type == "TRANSFER";
+    final bool isTransfer =
+        transactionModel.type == "TRANSFER" && !isPostpaidRefund;
 
     return Scaffold(
       backgroundColor: kTfBg,
@@ -65,7 +69,9 @@ class TransactionDetailScreen extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: TransferAppBarTitle(
-          (isMerchant || isPostpaidRepay) ? title : "Chi tiết giao dịch",
+          (isMerchant || isPostpaidRepay || isPostpaidRefund)
+              ? title
+              : "Chi tiết giao dịch",
         ),
         actions: [
           TransferCircleButton(
@@ -215,6 +221,13 @@ class TransactionDetailScreen extends StatelessWidget {
                           "Số điện thoại",
                           transactionModel.counterpartyPhone,
                         ),
+                    ] else if (isPostpaidRefund) ...[
+                      _infoRow("Tài khoản hoàn", walletName),
+                      _infoRow("Cửa hàng", transactionModel.counterpartyName),
+                      if ((transactionModel.description ?? '').trim().isNotEmpty)
+                        _infoRow("Nội dung", transactionModel.description!),
+                      if ((transactionModel.orderId ?? '').trim().isNotEmpty)
+                        _infoRow("Mã đơn", transactionModel.orderId!),
                     ] else if (isPostpaidRepay) ...[
                       _infoRow("Nguồn thanh toán", walletName),
                       _infoRow("Dịch vụ", transactionModel.counterpartyName),
@@ -259,79 +272,81 @@ class TransactionDetailScreen extends StatelessWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              if (textBtn == "Chuyển thêm" ||
-                                  textBtn == "Chuyển lại") {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => AmountInputScreen(
-                                      receiverPhone:
-                                          transactionModel.counterpartyPhone,
-                                      receiverFullName:
-                                          transactionModel.counterpartyName,
-                                      receiverId:
-                                          transactionModel.counterpartyId,
+                        if (textBtn.trim().isNotEmpty) ...[
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                if (textBtn == "Chuyển thêm" ||
+                                    textBtn == "Chuyển lại") {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => AmountInputScreen(
+                                        receiverPhone:
+                                            transactionModel.counterpartyPhone,
+                                        receiverFullName:
+                                            transactionModel.counterpartyName,
+                                        receiverId:
+                                            transactionModel.counterpartyId,
+                                      ),
                                     ),
-                                  ),
-                                );
-                              } else if (textBtn == "Nạp thêm") {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => TopUpWithdrawScreen(
-                                      walletBalance:
-                                          userController.balance.value,
-                                      isTopUpTab: true,
+                                  );
+                                } else if (textBtn == "Nạp thêm") {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => TopUpWithdrawScreen(
+                                        walletBalance:
+                                            userController.balance.value,
+                                        isTopUpTab: true,
+                                      ),
                                     ),
-                                  ),
-                                );
-                              } else if (textBtn == "Rút thêm") {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => TopUpWithdrawScreen(
-                                      walletBalance:
-                                          userController.balance.value,
-                                      isTopUpTab: false,
+                                  );
+                                } else if (textBtn == "Rút thêm") {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => TopUpWithdrawScreen(
+                                        walletBalance:
+                                            userController.balance.value,
+                                        isTopUpTab: false,
+                                      ),
                                     ),
-                                  ),
-                                );
-                              } else if (textBtn == "Chia tiền") {
-                                SnackbarUtils.developing(
-                                  context,
-                                  message: 'Tính năng đang phát triển',
-                                );
-                              } else if (textBtn == "Quản lý ví") {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const PostpaidScreen(),
-                                  ),
-                                );
-                              }
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: kTfPink,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(vertical: 15),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
+                                  );
+                                } else if (textBtn == "Chia tiền") {
+                                  SnackbarUtils.developing(
+                                    context,
+                                    message: 'Tính năng đang phát triển',
+                                  );
+                                } else if (textBtn == "Quản lý ví") {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const PostpaidScreen(),
+                                    ),
+                                  );
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: kTfPink,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(vertical: 15),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
                               ),
-                            ),
-                            child: Text(
-                              textBtn,
-                              style: GoogleFonts.roboto(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
+                              child: Text(
+                                textBtn,
+                                style: GoogleFonts.roboto(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ],
