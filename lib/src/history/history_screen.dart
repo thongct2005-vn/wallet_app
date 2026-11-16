@@ -1333,7 +1333,7 @@ class _PreparedTransaction {
               : 'Nhận tiền'
         : "Giao dịch không xác định";
 
-    final textBtn = isPostpaidRepay
+    final textBtn = (isPostpaidRepay || isPostpaidRefund)
         ? "Quản lý ví"
         : isMerchantPayment
         ? "Chia tiền"
@@ -1342,9 +1342,9 @@ class _PreparedTransaction {
         : t.type == "WITHDRAW"
         ? "Rút thêm"
         : isTransfer
-        ? isOut
-              ? 'Chuyển thêm'
-              : 'Chuyển lại'
+        ? (t.counterpartyPhone.trim().isEmpty
+              ? ''
+              : (isOut ? 'Chuyển thêm' : 'Chuyển lại'))
         : "Giao dịch không xác định";
 
     return _PreparedTransaction(
