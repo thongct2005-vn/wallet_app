@@ -14,6 +14,8 @@ class ApiConfig {
   static const String login = '$baseUrl/auth/login';
   static const String verifyLoginOtp = '/auth/verify-login-otp';
   static const String resendLoginOtp = '/auth/resend-login-otp';
+  static const String firstLoginChangePassword =
+      '/auth/first-login/change-password';
   static const String register = '$baseUrl/auth/register';
   static const String verifyRegister = '$baseUrl/auth/verify-register';
   static const String logout = '$baseUrl/auth/logout';

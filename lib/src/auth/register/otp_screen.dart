@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
+import 'package:app/src/auth/login/first_login_change_password_screen.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
 import 'package:app/src/auth/login/totp_confirm_dialog.dart';
 import 'package:app/src/home/home_screen.dart';
@@ -499,6 +500,19 @@ class _OtpScreenState extends State<OtpScreen> {
     if (!mounted) return;
 
     if (result['is_success'] == true) {
+      if (result['must_change_password'] == true) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => FirstLoginChangePasswordScreen(
+              changePasswordToken:
+                  result['change_password_token']?.toString() ?? '',
+              phoneNumber: widget.phoneNumber ?? result['phone']?.toString(),
+            ),
+          ),
+        );
+        return;
+      }
       await _completeLogin(result);
       return;
     }

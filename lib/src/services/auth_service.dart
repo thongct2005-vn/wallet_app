@@ -77,6 +77,20 @@ class AuthService {
       );
 
       final data = result.data['data'];
+      if (data['must_change_password'] == true) {
+        final user = Map<String, dynamic>.from(data['user_info'] ?? const {});
+        return {
+          'is_success': true,
+          'must_change_password': true,
+          'change_password_token': data['change_password_token'],
+          'user_id': user['user_id'],
+          'full_name': user['full_name'],
+          'phone': user['phone'],
+          'user_info': user,
+          'message': result.data['message'],
+        };
+      }
+
       await _storage.write(
         key: 'access_token',
         value: data['token']['access_token'],
@@ -93,6 +107,34 @@ class AuthService {
         'user_id': user['user_id'],
         'full_name': user['full_name'],
         'phone': user['phone'],
+      };
+    } catch (e) {
+      return _errorWithStatus(e);
+    }
+  }
+
+  /// Đổi mật khẩu bắt buộc ở lần đăng nhập đầu tiên cho tài khoản do ADMIN tạo.
+  Future<Map<String, dynamic>> changeFirstLoginPassword({
+    required String changePasswordToken,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    try {
+      final result = await api.patch(
+        ApiConfig.firstLoginChangePassword,
+        data: {
+          'new_password': newPassword,
+          'confirm_password': confirmPassword,
+        },
+        options: Options(
+          extra: {'skipAuth': true},
+          headers: {'x-change-password-token': changePasswordToken},
+        ),
+      );
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'data': result.data['data'],
       };
     } catch (e) {
       return _errorWithStatus(e);
