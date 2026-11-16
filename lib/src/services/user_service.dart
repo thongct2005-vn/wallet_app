@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/network/api_error_handler.dart';
+import 'package:app/core/utils/format_utils.dart';
 import 'package:crypto/crypto.dart';
 import 'package:app/core/network/api_client.dart';
 import 'package:app/core/network/api_config.dart';
-import 'package:flutter/widgets.dart';
+import 'package:dio/dio.dart';
 import 'package:get/get.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
@@ -40,7 +41,6 @@ class UserService {
       }
       return false;
     } catch (e) {
-      debugPrint('Lỗi tạo mã PIN: $e');
       return false;
     }
   }
@@ -50,8 +50,150 @@ class UserService {
       final result = await api.get(ApiConfig.checkPinStatus);
       return result.data['data']['has_pin'] ?? false;
     } catch (e) {
-      debugPrint('Lỗi kiểm tra trạng thái pin: $e');
       return false;
+    }
+  }
+
+  Future<Map<String, dynamic>> verifyPin(String oldPin) async {
+    try {
+      final result = await api.post(
+        ApiConfig.verifyPin,
+        data: {'old_pin': oldPin},
+      );
+      final data = result.data['data'] ?? {};
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'is_correct': data['is_correct'] == true,
+        'remaining_attempts': data['remaining_attempts'],
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> changePin({
+    required String oldPin,
+    required String newPin,
+  }) async {
+    try {
+      final result = await api.patch(
+        ApiConfig.changePin,
+        data: {'old_pin': oldPin, 'new_pin': newPin},
+      );
+      return {
+        'is_success': true,
+        'message': result.data['message'] ?? 'Đổi mã PIN thành công',
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> verifyPassword(String oldPassword) async {
+    try {
+      final result = await api.post(
+        ApiConfig.verifyPassword,
+        data: {'old_password': oldPassword},
+      );
+      final data = result.data['data'] ?? {};
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'is_correct': data['is_correct'] == true,
+        'remaining_attempts': data['remaining_attempts'],
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    try {
+      final result = await api.patch(
+        ApiConfig.changePassword,
+        data: {'old_password': oldPassword, 'new_password': newPassword},
+      );
+      return {
+        'is_success': true,
+        'message': result.data['message'] ?? 'Đổi mật khẩu thành công',
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> getTransactionLimits() async {
+    try {
+      final result = await api.get(ApiConfig.userLimits);
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'data': result.data['data'],
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> updateTransactionLimit({
+    required String transactionType,
+    required num maxAmount,
+    required num dailyLimit,
+    required String idempotencyKey,
+    required String pinToken,
+  }) async {
+    try {
+      final result = await api.put(
+        ApiConfig.userLimits,
+        data: {
+          'transaction_type': transactionType,
+          'max_amount': maxAmount,
+          'daily_limit': dailyLimit,
+        },
+        options: Options(
+          headers: {
+            'idempotency-key': idempotencyKey,
+            'x-pin-token': pinToken,
+          },
+        ),
+      );
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'data': result.data['data'],
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> resetTransactionLimit({
+    required String transactionType,
+    required String idempotencyKey,
+    required String pinToken,
+  }) async {
+    try {
+      final result = await api.post(
+        ApiConfig.resetUserLimit,
+        data: {'transaction_type': transactionType},
+        options: Options(
+          headers: {
+            'idempotency-key': idempotencyKey,
+            'x-pin-token': pinToken,
+          },
+        ),
+      );
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'data': result.data['data'],
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
     }
   }
 
@@ -71,10 +213,10 @@ class UserService {
               RegExp(r'\D'),
               '',
             );
-            if (rawPhone.startsWith('84')) {
+            if (rawPhone.length == 11 && rawPhone.startsWith('84')) {
               rawPhone = '0${rawPhone.substring(2)}';
             }
-            if (rawPhone.length == 10) {
+            if (FormatUtils.isValidPhone(rawPhone)) {
               phoneNumbers.add(rawPhone);
             }
           }
@@ -82,7 +224,6 @@ class UserService {
 
         List<String> uniquePhones = phoneNumbers.toSet().toList();
         uniquePhones.remove(myPhone);
-        // Server chỉ trả phone_hash, nên app tự ghép lại số điện thoại từ danh bạ của chính nó
         final Map<String, String> phoneByHash = {
           for (final p in uniquePhones) _hashPhone(p): p,
         };

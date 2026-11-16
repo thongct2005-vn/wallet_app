@@ -59,6 +59,8 @@ class AuthService {
         'masked_email': result.data['data']['masked_email'],
         // 'email' (mặc định) hoặc 'totp' khi tài khoản đã bật Google Authenticator
         'otp_method': result.data['data']['otp_method'] ?? 'email',
+        'require_cccd_last4':
+            result.data['data']['require_cccd_last4'] == true,
       };
     } catch (e) {
       return _errorWithStatus(e);
@@ -67,12 +69,17 @@ class AuthService {
 
   Future<Map<String, dynamic>> verifyLoginOtp(
     String otpToken,
-    String otp,
-  ) async {
+    String otp, {
+    String? cccdLast4,
+  }) async {
     try {
       final result = await api.post(
         ApiConfig.verifyLoginOtp,
-        data: {'otp': otp},
+        data: {
+          'otp': otp,
+          if (cccdLast4 != null && cccdLast4.isNotEmpty)
+            'cccd_last4': cccdLast4,
+        },
         options: _withOtpToken(otpToken),
       );
 

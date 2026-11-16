@@ -54,11 +54,9 @@ class SocketService {
       userController.balance.value = data['balance'].toString();
     });
 
-    // Server báo access token của socket đã hết hạn (server cho ~60s để gia hạn)
     socket!.on('token_expired', (_) => _reauthenticate());
 
     socket!.on('force_logout', (data) {
-      debugPrint('[Socket] Nhận force_logout: $data');
       final reason = data is Map
           ? (data['reason'] ?? 'Tài khoản của bạn đã đăng nhập ở thiết bị khác')
           : 'Tài khoản của bạn đã đăng nhập ở thiết bị khác';
@@ -66,20 +64,14 @@ class SocketService {
     });
   }
 
-  // Gọi 1 API có xác thực để interceptor của Dio tự refresh access token nếu đã hết hạn,
-  // rồi gửi token mới cho server. Không kịp gia hạn thì server sẽ ngắt socket.
   Future<void> _reauthenticate() async {
     try {
       await WalletService().getWalletBalance();
       final token = await _storage.read(key: 'access_token');
       if (token == null) return;
-      socket?.emitWithAck(
-        'refresh_auth',
-        {'token': token},
-        ack: (data) => debugPrint('[Socket] refresh_auth: $data'),
-      );
+      socket?.emitWithAck('refresh_auth', {'token': token}, ack: (data) => {});
     } catch (e) {
-      debugPrint('[Socket] Không gia hạn được token cho socket: $e');
+      return;
     }
   }
 

@@ -14,6 +14,8 @@ class TransactionModel {
   final num balanceAfter;
   final String bankName;
   final String? orderId;
+  final String fundingSource;
+  final String? postpaidAction;
 
   TransactionModel({
     required this.id,
@@ -31,6 +33,8 @@ class TransactionModel {
     required this.balanceAfter,
     required this.bankName,
     this.orderId,
+    this.fundingSource = 'MAIN_WALLET',
+    this.postpaidAction,
   });
 
   factory TransactionModel.fromJson(Map<String, dynamic> json) {
@@ -58,6 +62,8 @@ class TransactionModel {
       balanceAfter: num.tryParse(json['balance_after'].toString()) ?? 0,
       bankName: json['bank_name'] ?? '',
       orderId: json['order_id'],
+      fundingSource: json['funding_source'] ?? 'MAIN_WALLET',
+      postpaidAction: json['postpaid_action'],
     );
   }
 }

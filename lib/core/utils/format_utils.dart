@@ -24,14 +24,21 @@ class FormatUtils {
     return amountNum;
   }
 
-  static String formatCustomDateTime(String timeString) {
-    DateTime parsedDate = DateTime.parse(timeString);
+  static final DateFormat _dateTimeFmt = DateFormat('HH:mm - dd/MM/yyyy');
 
-    DateTime date = parsedDate.toUtc().add(const Duration(hours: 7));
-    String formattedDate = DateFormat('HH:mm - dd/MM/yyyy').format(date);
-
-    return formattedDate;
+  static String formatDateTime(DateTime parsedDate) {
+    final date = parsedDate.toUtc().add(const Duration(hours: 7));
+    return _dateTimeFmt.format(date);
   }
+
+  static String formatCustomDateTime(String timeString) {
+    return formatDateTime(DateTime.parse(timeString));
+  }
+
+  static final RegExp _phoneRegex = RegExp(r'^(03|05|07|08|09)\d{8}$');
+
+  /// Kiểm tra SĐT Việt Nam hợp lệ (10 chữ số, đầu 03, 05, 07, 08, 09).
+  static bool isValidPhone(String phone) => _phoneRegex.hasMatch(phone);
 
   static String formatAvatar(String fullName) {
     if (fullName.trim().isEmpty) return '?';

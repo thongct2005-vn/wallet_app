@@ -1,11 +1,17 @@
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/verify_pin_bottom_sheet.dart';
+import 'package:app/src/home/home_screen.dart';
 import 'package:app/src/services/bank_service.dart';
 import 'package:app/src/services/wallet_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:uuid/uuid.dart';
+
+const Color _kPink = Color(0xFFEC407A);
+const Color _kPinkLight = Color(0xFFF48FB1);
+const Color _kText = Color(0xFF1F1B24);
+const Color _kBg = Color(0xFFFAF6F8);
 
 class LinkBankScreen extends StatefulWidget {
   final List<dynamic> bankList;
@@ -28,169 +34,220 @@ class _LinkBankScreenState extends State<LinkBankScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white.withValues(alpha: 0.95),
-      extendBodyBehindAppBar: true,
-      body: Stack(
-        children: [
-          Container(
-            height: 500,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.pink.shade200.withValues(alpha: 0.75),
-                  Colors.white.withValues(alpha: 0.0),
-                ],
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 5, 15, 10),
-                  child: Row(
-                    children: [
-                      Container(
-                        height: 30,
-                        width: 30,
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            width: 1,
-                            color: Colors.white.withValues(alpha: 0.8),
-                          ),
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.8),
-                        ),
-                        child: IconButton(
-                          onPressed: () => Navigator.pop(context),
-                          padding: EdgeInsets.zero,
-                          icon: const Icon(Icons.arrow_back, size: 20),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        "Liên kết ngân hàng",
-                        style: GoogleFonts.roboto(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const Spacer(),
-                      Container(
-                        height: 30,
-                        width: 30,
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            width: 1,
-                            color: Colors.white.withValues(alpha: 0.8),
-                          ),
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.8),
-                        ),
-                        child: IconButton(
-                          onPressed: () {},
-                          padding: EdgeInsets.zero,
-                          icon: const Icon(Iconsax.home_2, size: 18),
-                        ),
-                      ),
+    return FreezePinMediaQuery(
+      child: Scaffold(
+        backgroundColor: _kBg,
+        extendBodyBehindAppBar: true,
+        resizeToAvoidBottomInset: false,
+        body: Stack(
+          children: [
+            RepaintBoundary(
+              child: Container(
+                height: 380,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      _kPink.withValues(alpha: 0.24),
+                      _kPinkLight.withValues(alpha: 0.08),
+                      Colors.white.withValues(alpha: 0.0),
                     ],
                   ),
                 ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(15),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+            ),
+            SafeArea(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+                    child: Row(
                       children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: 55,
-                              height: 55,
-                              decoration: BoxDecoration(
-                                color: Colors.pink.shade50,
-                                shape: BoxShape.circle,
-                              ),
-                              alignment: Alignment.center,
-                              child: const Icon(Iconsax.support),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Container(
-                                padding: const EdgeInsets.all(15),
-                                decoration: BoxDecoration(
-                                  color: Colors.pink.shade50.withValues(
-                                    alpha: 0.6,
-                                  ),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: Colors.pink.shade100,
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Text(
-                                  "Liên kết ngân hàng của bạn để thanh toán/chuyển tiền qua Mio.",
-                                  style: GoogleFonts.roboto(
-                                    fontSize: 16,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                        _circleButton(
+                          icon: Icons.arrow_back_ios_new_rounded,
+                          onPressed: () => Navigator.pop(context),
                         ),
-                        const SizedBox(height: 20),
-                        ..._bankList.map((bank) {
-                          String bankId = bank['id']?.toString() ?? '';
-                          String bankCode = bank['code']?.toString() ?? '';
-                          String bankName = bank['name']?.toString() ?? 'Ngân hàng';
-                          String bankLogo = bank['logo_url']?.toString() ?? "";
-                          bool isLinked = bank['is_linked'] as bool;
-
-                          List<Color> gradientColors = [
-                            Colors.grey.shade600,
-                            Colors.grey.shade400,
-                          ];
-
-                          if (bankCode == 'MBBANK') {
-                            gradientColors = [
-                              Colors.blue.shade600,
-                              Colors.blue.shade400,
-                            ];
-                          } else if (bankCode == 'VIETCOMBANK') {
-                            gradientColors = [
-                              Colors.green.shade600,
-                              Colors.green.shade400,
-                            ];
-                          }
-
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _buildBankTile(
-                              name: bankName,
-                              gradientColors: gradientColors,
-                              isLinked: isLinked,
-                              logoUrl: bankLogo,
-                              onTap: () {
-                                _showCheckPinDialog(context, bankId);
-                              },
+                        Expanded(
+                          child: Text(
+                            "Liên kết ngân hàng",
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.roboto(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w700,
+                              color: _kText,
                             ),
-                          );
-                        }),
+                          ),
+                        ),
+                        _circleButton(
+                          icon: Iconsax.home_2,
+                          onPressed: () {
+                            if (Navigator.canPop(context)) {
+                              Navigator.popUntil(
+                                context,
+                                (route) => route.isFirst,
+                              );
+                            } else {
+                              Navigator.pushAndRemoveUntil(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const HomeScreen(),
+                                ),
+                                (r) => false,
+                              );
+                            }
+                          },
+                        ),
                       ],
                     ),
                   ),
-                ),
-              ],
+                  Expanded(
+                    child: RepaintBoundary(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(15),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Container(
+                                  width: 54,
+                                  height: 54,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.pink.shade100,
+                                      width: 1.2,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: _kPink.withValues(alpha: 0.18),
+                                        blurRadius: 16,
+                                        offset: const Offset(0, 6),
+                                      ),
+                                    ],
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: const Icon(
+                                    Iconsax.support,
+                                    color: Color(0xFFD81B60),
+                                    size: 26,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 14,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(
+                                        color: Colors.pink.shade100,
+                                        width: 1.2,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: _kPink.withValues(alpha: 0.14),
+                                          blurRadius: 18,
+                                          offset: const Offset(0, 6),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Text(
+                                      "Liên kết ngân hàng của bạn để thanh toán/chuyển tiền qua Mio.",
+                                      style: GoogleFonts.roboto(
+                                        fontSize: 15,
+                                        height: 1.4,
+                                        fontWeight: FontWeight.w500,
+                                        color: _kText,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            ..._bankList.map((bank) {
+                              String bankId = bank['id']?.toString() ?? '';
+                              String bankCode = bank['code']?.toString() ?? '';
+                              String bankName =
+                                  bank['name']?.toString() ?? 'Ngân hàng';
+                              String bankLogo =
+                                  bank['logo_url']?.toString() ?? "";
+                              bool isLinked = bank['is_linked'] as bool;
+
+                              List<Color> gradientColors = [
+                                Colors.grey.shade600,
+                                Colors.grey.shade400,
+                              ];
+
+                              if (bankCode == 'MBBANK') {
+                                gradientColors = [
+                                  Colors.blue.shade600,
+                                  Colors.blue.shade400,
+                                ];
+                              } else if (bankCode == 'VIETCOMBANK') {
+                                gradientColors = [
+                                  Colors.green.shade600,
+                                  Colors.green.shade400,
+                                ];
+                              }
+
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _buildBankTile(
+                                  name: bankName,
+                                  gradientColors: gradientColors,
+                                  isLinked: isLinked,
+                                  logoUrl: bankLogo,
+                                  onTap: () {
+                                    _showCheckPinDialog(context, bankId);
+                                  },
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _circleButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return Container(
+      height: 42,
+      width: 42,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: _kPink.withValues(alpha: 0.14),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
           ),
         ],
+      ),
+      child: IconButton(
+        onPressed: onPressed,
+        padding: EdgeInsets.zero,
+        icon: Icon(icon, size: 21, color: _kText),
       ),
     );
   }
@@ -301,10 +358,8 @@ class _LinkBankScreenState extends State<LinkBankScreen> {
     // checkPin cần idempotency key để cấp pin_token; mỗi lần mở hộp thoại dùng một key mới
     final String idempotencyKey = _uuid.v7();
 
-    showModalBottomSheet(
+    showSmoothPinBottomSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (context) {
         return CheckPinBottomSheet(
           onCheckPin: (pin) async {
@@ -342,6 +397,10 @@ class _LinkBankScreenState extends State<LinkBankScreen> {
                 _bankList[index]['is_linked'] = true;
               }
             });
+            SnackbarUtils.success(
+              this.context,
+              result['message']?.toString() ?? 'Liên kết ngân hàng thành công',
+            );
           },
         );
       },

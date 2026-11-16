@@ -85,15 +85,47 @@ class TransactionService {
   Future<Map<String, dynamic>> processQRPayment(
     String referenceCode,
     String idempotencyKey,
-    String pinToken,
-  ) async {
+    String pinToken, {
+    String fundingSource = 'MAIN_WALLET',
+  }) async {
     try {
       final result = await api.post(
         ApiConfig.payment,
-        data: {'reference_code': referenceCode},
+        data: {
+          'reference_code': referenceCode,
+          if (fundingSource == 'POSTPAID') 'funding_source': 'POSTPAID',
+        },
         options: Options(
           headers: {'idempotency-key': idempotencyKey, 'x-pin-token': pinToken},
         ),
+      );
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'data': result.data['data'],
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> previewFee({
+    required String transactionType,
+    required num amount,
+    String? merchantUserId,
+    String? referenceCode,
+  }) async {
+    try {
+      final result = await api.post(
+        ApiConfig.previewFee,
+        data: {
+          'transaction_type': transactionType,
+          'amount': amount.round(),
+          if (merchantUserId != null && merchantUserId.isNotEmpty)
+            'merchant_user_id': merchantUserId,
+          if (referenceCode != null && referenceCode.isNotEmpty)
+            'reference_code': referenceCode,
+        },
       );
       return {
         'is_success': true,
@@ -109,6 +141,8 @@ class TransactionService {
     String? cursorId,
     int? limit, {
     String? keyword,
+    String? transactionType,
+    String? direction,
     DateTime? startDate,
     DateTime? endDate,
   }) async {
@@ -119,8 +153,12 @@ class TransactionService {
           'cursor_id': cursorId,
           'limit': limit,
           if (keyword != null && keyword.isNotEmpty) 'keyword': keyword,
-          if (startDate != null) 'start_date': startDate.toIso8601String(),
-          if (endDate != null) 'end_date': endDate.toIso8601String(),
+          if (transactionType != null && transactionType.isNotEmpty)
+            'transaction_type': transactionType,
+          if (direction != null && direction.isNotEmpty)
+            'direction': direction,
+          if (startDate != null) 'start_date': _dateOnly(startDate),
+          if (endDate != null) 'end_date': _dateOnly(endDate),
         },
       );
       return {
@@ -145,4 +183,29 @@ class TransactionService {
     return ApiErrorHandler.handleError(e);
   }
 }
+
+  static String _dateOnly(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  Future<Map<String, dynamic>> exportHistoryToEmail({
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    try {
+      final result = await api.post(
+        ApiConfig.historyExportEmail,
+        data: {
+          'start_date': _dateOnly(startDate),
+          'end_date': _dateOnly(endDate),
+        },
+        options: Options(receiveTimeout: const Duration(seconds: 30)),
+      );
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'data': result.data['data'],
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
 }

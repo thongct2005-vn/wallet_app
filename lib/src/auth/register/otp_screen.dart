@@ -2,10 +2,11 @@ import 'dart:async';
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/src/auth/login/first_login_change_password_screen.dart';
+import 'package:app/src/auth/auth_ui.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
 import 'package:app/src/auth/login/totp_confirm_dialog.dart';
 import 'package:app/src/home/home_screen.dart';
-import 'package:app/src/kyc/kyc_front_id_screen.dart';
+import 'package:app/src/kyc/kyc_guide_screen.dart';
 import 'package:app/src/services/app_data_service.dart';
 import 'package:app/src/services/auth_service.dart';
 import 'package:app/src/services/kyc.service.dart';
@@ -37,6 +38,9 @@ class OtpScreen extends StatefulWidget {
 
   /// true: sau khi đăng nhập xong, tắt Google Authenticator (quay về OTP email)
   final bool disableTotpAfterLogin;
+
+  /// true: phát hiện rủi ro khi đăng nhập, yêu cầu nhập thêm 4 số cuối CCCD
+  final bool requireCccdLast4;
   const OtpScreen({
     super.key,
     this.phoneNumber,
@@ -47,21 +51,20 @@ class OtpScreen extends StatefulWidget {
     this.isTotp = false,
     this.enableTotpAfterLogin = false,
     this.disableTotpAfterLogin = false,
+    this.requireCccdLast4 = false,
   });
 
   @override
   State<OtpScreen> createState() => _OtpScreenState();
 }
 
-class _OtpScreenState extends State<OtpScreen> {
-  final List<TextEditingController> _controllers = List.generate(
-    _otpLength,
-    (_) => TextEditingController(),
-  );
-  final List<FocusNode> _focusNodes = List.generate(
-    _otpLength,
-    (_) => FocusNode(),
-  );
+class _OtpScreenState extends State<OtpScreen> with SmoothAutoFocusMixin {
+  final TextEditingController _otpController = TextEditingController();
+  final FocusNode _otpFocusNode = FocusNode();
+  final TextEditingController _cccdController = TextEditingController();
+  final FocusNode _cccdFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
+
   final OtpService _otpService = OtpService();
   final AuthService _authService = AuthService();
   final UserService _userService = UserService();
@@ -71,418 +74,119 @@ class _OtpScreenState extends State<OtpScreen> {
     UserController(),
     permanent: true,
   );
-  bool _isLoading = false;
-  bool _isResending = false;
-  int _countdown = 0;
-  String _msg = "";
+
+  final ValueNotifier<bool> _isLoadingNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _isResendingNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<int> _countdownNotifier = ValueNotifier<int>(0);
+  final ValueNotifier<String> _msgNotifier = ValueNotifier<String>('');
+  final ValueNotifier<bool> _hasFocusNotifier = ValueNotifier<bool>(false);
   Timer? _timer;
+
+  @override
+  FocusNode get initialFocusNode => _otpFocusNode;
 
   @override
   void initState() {
     super.initState();
-    for (final node in _focusNodes) {
-      node.addListener(() {
-        if (mounted) setState(() {});
-      });
-    }
+    _otpFocusNode.addListener(_onFocusChanged);
+    _cccdFocusNode.addListener(_onFocusChanged);
+    _cccdController.addListener(() {
+      if (_msgNotifier.value.isNotEmpty && _cccdController.text.isNotEmpty) {
+        _msgNotifier.value = '';
+      }
+    });
     if (!widget.isTotp) _startCountdown();
+  }
+
+  void _onFocusChanged() {
+    _hasFocusNotifier.value = _otpFocusNode.hasFocus || _cccdFocusNode.hasFocus;
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    for (final controller in _controllers) {
-      controller.dispose();
-    }
-    for (final node in _focusNodes) {
-      node.dispose();
-    }
+    _otpFocusNode.removeListener(_onFocusChanged);
+    _cccdFocusNode.removeListener(_onFocusChanged);
+    _otpController.dispose();
+    _otpFocusNode.dispose();
+    _cccdController.dispose();
+    _cccdFocusNode.dispose();
+    _scrollController.dispose();
+    _isLoadingNotifier.dispose();
+    _isResendingNotifier.dispose();
+    _countdownNotifier.dispose();
+    _msgNotifier.dispose();
+    _hasFocusNotifier.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return PopScope(
-      canPop: true,
-      child: GestureDetector(
-        onTap: () {
-          FocusManager.instance.primaryFocus?.unfocus();
-        },
-        child: Scaffold(
-          backgroundColor: Colors.white,
-          extendBodyBehindAppBar: true,
-          appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            title: Text(
-              "Xác nhận OTP",
-              style: GoogleFonts.roboto(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            leading: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 10, 0, 10),
-              child: Container(
-                height: 40,
-                width: 40,
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    width: 1,
-                    color: Colors.white.withValues(alpha: 0.8),
-                  ),
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.8),
-                ),
-                child: IconButton(
-                  onPressed: () => Navigator.pop(
-                    context,
-                    MaterialPageRoute(builder: (_) => LoginPhoneScreen()),
-                  ),
-                  padding: EdgeInsets.zero,
-                  icon: const Icon(Icons.arrow_back, size: 20),
-                ),
-              ),
-            ),
-          ),
-          body: Stack(
-            children: [
-              Container(
-                width: double.infinity,
-                height: 500,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.blue.withValues(alpha: 0.25),
-                      Colors.white.withValues(alpha: 0),
-                    ],
-                  ),
-                ),
-              ),
-              SafeArea(
-                child: Column(
-                  children: [
-                    const SizedBox(height: 20),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Column(
-                          children: [
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(15),
-                                border: Border.all(
-                                  color: Colors.grey.withValues(alpha: 0.2),
-                                  width: 0.5,
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Iconsax.security,
-                                        color: Colors.pink,
-                                        size: 22,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        "Xác thực tài khoản",
-                                        style: GoogleFonts.roboto(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  RichText(
-                                    text: TextSpan(
-                                      style: GoogleFonts.roboto(
-                                        fontSize: 14,
-                                        color: Colors.black.withValues(
-                                          alpha: 0.6,
-                                        ),
-                                        height: 1.5,
-                                      ),
-                                      children: widget.isTotp
-                                          ? [
-                                              const TextSpan(
-                                                text:
-                                                    "Mở ứng dụng Google Authenticator và nhập mã 6 số đang hiển thị cho tài khoản này.",
-                                              ),
-                                            ]
-                                          : [
-                                              const TextSpan(
-                                                text:
-                                                    "Mã xác thực sẽ được gửi đến email ",
-                                              ),
-                                              TextSpan(
-                                                text: widget.email ?? "",
-                                                style: GoogleFonts.roboto(
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Colors.black,
-                                                ),
-                                              ),
-                                            ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 30),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: List.generate(
-                                _otpLength,
-                                (i) => Padding(
-                                  padding: EdgeInsets.only(left: i == 0 ? 0 : 8),
-                                  child: _buildOtpBox(context, i),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            if (!widget.isTotp)
-                            TextButton(
-                              onPressed: (_countdown > 0 || _isResending)
-                                  ? null
-                                  : _resendOtp,
-                              style: TextButton.styleFrom(
-                                foregroundColor: Colors.pink,
-                                disabledForegroundColor: Colors.grey,
-                              ),
-                              child: _isResending
-                                  ? const SizedBox(
-                                      height: 16,
-                                      width: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.pink,
-                                      ),
-                                    )
-                                  : Text(
-                                      _countdown > 0
-                                          ? "Gửi lại mã sau $_countdown s"
-                                          : "Gửi lại mã",
-                                      style: GoogleFonts.roboto(
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 15,
-                                      ),
-                                    ),
-                            ),
-                            if (_msg != "") ...[
-                              const SizedBox(height: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(
-                                      Icons.error_outline_rounded,
-                                      color: Colors.red,
-                                      size: 16,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Flexible(
-                                      child: Text(
-                                        _msg,
-                                        style: GoogleFonts.roboto(
-                                          color: Colors.red,
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 55,
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : _handleVerify,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.pink,
-                            disabledBackgroundColor: Colors.pink.withValues(
-                              alpha: 0.4,
-                            ),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: _isLoading
-                              ? const SizedBox(
-                                  height: 24,
-                                  width: 24,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : Text(
-                                  "Xác nhận",
-                                  style: GoogleFonts.roboto(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOtpBox(BuildContext context, int index) {
-    final bool isFirst = index == 0;
-    final bool isLast = index == _otpLength - 1;
-    return Container(
-      height: 56,
-      width: 44,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: _focusNodes[index].hasFocus
-              ? Colors.pink
-              : Colors.grey.withValues(alpha: 0.4),
-          width: _focusNodes[index].hasFocus ? 2 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Center(
-        child: TextField(
-          controller: _controllers[index],
-          focusNode: _focusNodes[index],
-          autofocus: isFirst,
-          maxLength: 1,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          textAlign: TextAlign.center,
-          onTap: () {
-            setState(() {
-              _msg = "";
-            });
-          },
-          onChanged: (value) {
-            if (value.isNotEmpty && !isLast) {
-              FocusScope.of(context).nextFocus();
-            } else if (value.isEmpty && !isFirst) {
-              FocusScope.of(context).previousFocus();
-            }
-            setState(() {
-              _msg = "";
-            });
-          },
-          decoration: const InputDecoration(
-            border: InputBorder.none,
-            counterText: "",
-          ),
-          style: GoogleFonts.roboto(fontSize: 22, fontWeight: FontWeight.w600),
-          cursorColor: Colors.pink,
-        ),
-      ),
-    );
-  }
-
   void _startCountdown() {
-    setState(() {
-      _countdown = _resendSeconds;
-    });
+    _countdownNotifier.value = _resendSeconds;
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_countdown > 0) {
-        setState(() {
-          _countdown--;
-        });
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_countdownNotifier.value > 0) {
+        _countdownNotifier.value = _countdownNotifier.value - 1;
       } else {
         timer.cancel();
       }
     });
   }
 
-  String _currentCode() {
-    return _controllers.map((c) => c.text.replaceAll(' ', '')).join();
-  }
-
   void _clearOtpFields() {
-    for (final controller in _controllers) {
-      controller.clear();
-    }
-    FocusScope.of(context).requestFocus(_focusNodes[0]);
+    _otpController.clear();
+    requestKeyboardFocus(_otpFocusNode);
   }
 
   Future<void> _resendOtp() async {
-    setState(() {
-      _isResending = true;
-      _msg = "";
-    });
+    _isResendingNotifier.value = true;
+    _msgNotifier.value = '';
 
     final result = widget.isLogin == true
-        ? await _authService.resendLoginOtp(widget.otpToken ?? "")
-        : await _otpService.generateOtp(phone: widget.phoneNumber, email: widget.email);
+        ? await _authService.resendLoginOtp(widget.otpToken ?? '')
+        : await _otpService.generateOtp(
+            phone: widget.phoneNumber,
+            email: widget.email,
+          );
 
     if (!mounted) return;
-    setState(() {
-      _isResending = false;
-    });
+    _isResendingNotifier.value = false;
 
     if (result['is_success'] == true) {
       _startCountdown();
+      SnackbarUtils.success(context, 'Đã gửi lại mã xác thực');
     } else {
-      setState(() {
-        _msg = result['message'] ?? "Không thể gửi lại mã, vui lòng thử lại";
-      });
+      _msgNotifier.value =
+          result['message']?.toString() ??
+          'Không thể gửi lại mã, vui lòng thử lại';
     }
   }
 
   Future<void> _handleVerify() async {
-    final code = _currentCode();
+    if (_isLoadingNotifier.value) return;
+    final code = _otpController.text.trim();
 
     if (code.length != _otpLength) {
-      setState(() {
-        _msg = "Vui lòng nhập đủ $_otpLength số";
-      });
+      _msgNotifier.value = 'Vui lòng nhập đủ $_otpLength số OTP';
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _msg = "";
-    });
+    if (widget.isLogin == true && widget.requireCccdLast4) {
+      final cccdLast4 = _cccdController.text.trim();
+      if (cccdLast4.length != 4) {
+        _msgNotifier.value =
+            'Vui lòng nhập đủ 4 số cuối CCCD để xác minh bảo mật';
+        requestKeyboardFocus(_cccdFocusNode);
+        return;
+      }
+    }
+
+    FocusManager.instance.primaryFocus?.unfocus();
+    _isLoadingNotifier.value = true;
+    _msgNotifier.value = '';
 
     if (widget.isLogin == true) {
       await _verifyLogin(code);
@@ -493,8 +197,9 @@ class _OtpScreenState extends State<OtpScreen> {
 
   Future<void> _verifyLogin(String code) async {
     final result = await _authService.verifyLoginOtp(
-      widget.otpToken ?? "",
+      widget.otpToken ?? '',
       code,
+      cccdLast4: widget.requireCccdLast4 ? _cccdController.text.trim() : null,
     );
 
     if (!mounted) return;
@@ -517,9 +222,7 @@ class _OtpScreenState extends State<OtpScreen> {
       return;
     }
 
-    setState(() {
-      _isLoading = false;
-    });
+    _isLoadingNotifier.value = false;
 
     if (result['status_code'] == 401) {
       Navigator.pushAndRemoveUntil(
@@ -527,7 +230,7 @@ class _OtpScreenState extends State<OtpScreen> {
         MaterialPageRoute(
           builder: (_) => LoginPhoneScreen(
             isForceLogout: true,
-            msg: result['message'] ?? "Phiên xác thực đã hết hạn",
+            msg: result['message'] ?? 'Phiên xác thực đã hết hạn',
           ),
         ),
         (r) => false,
@@ -536,22 +239,18 @@ class _OtpScreenState extends State<OtpScreen> {
     }
 
     _clearOtpFields();
-    setState(() {
-      _msg = result['message'] ?? "OTP không chính xác";
-    });
+    _msgNotifier.value = result['message'] ?? 'OTP không chính xác';
   }
 
   Future<void> _verifyRegister(String code) async {
     final result = await _authService.registerWithEmail(
-      otpToken: widget.otpToken ?? "",
+      otpToken: widget.otpToken ?? '',
       otp: code,
-      password: widget.password ?? "",
+      password: widget.password ?? '',
     );
 
     if (!mounted) return;
-    setState(() {
-      _isLoading = false;
-    });
+    _isLoadingNotifier.value = false;
 
     if (result['is_success'] == true) {
       Navigator.pushAndRemoveUntil(
@@ -566,9 +265,7 @@ class _OtpScreenState extends State<OtpScreen> {
       );
     } else {
       _clearOtpFields();
-      setState(() {
-        _msg = result['message'] ?? "Xác thực đăng ký thất bại";
-      });
+      _msgNotifier.value = result['message'] ?? 'Xác thực đăng ký thất bại';
     }
   }
 
@@ -577,8 +274,8 @@ class _OtpScreenState extends State<OtpScreen> {
 
     _userController.setUserData(
       newId: result['user_id'],
-      newPhone: result['phone'] ?? "",
-      newFullName: result['full_name'] ?? "Không rõ tên",
+      newPhone: result['phone'] ?? '',
+      newFullName: result['full_name'] ?? 'Không rõ tên',
       newBalance: homeData['balance'],
       newHasPin: homeData['has_pin'],
     );
@@ -592,9 +289,7 @@ class _OtpScreenState extends State<OtpScreen> {
     }
     if (!mounted) return;
 
-    setState(() {
-      _isLoading = false;
-    });
+    _isLoadingNotifier.value = false;
 
     // Người dùng đã chọn dùng Google Authenticator: nhập mã đầu tiên để bật
     if (widget.enableTotpAfterLogin) {
@@ -617,12 +312,202 @@ class _OtpScreenState extends State<OtpScreen> {
     }
 
     final Widget next = userKYC['data']['is_kyc']
-        ? HomeScreen()
-        : KycFrontIdScreen();
+        ? const HomeScreen()
+        : const KycGuideScreen();
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => next),
       (r) => false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isRegisterFlow = widget.isLogin != true;
+
+    return AuthScaffold(
+      appBarTitle: 'Xác nhận OTP',
+      onBack: () => Navigator.pop(context),
+      scrollController: _scrollController,
+      hasFocusListenable: _hasFocusNotifier,
+      bottomBar: ValueListenableBuilder<bool>(
+        valueListenable: _isLoadingNotifier,
+        builder: (context, isLoading, _) {
+          return AuthPrimaryButton(
+            label: 'Xác nhận',
+            loading: isLoading,
+            onTap: _handleVerify,
+          );
+        },
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 6),
+          AuthHeroBanner(
+            icon: Iconsax.shield_tick,
+            badgeText: isRegisterFlow
+                ? 'Bước 3/3 • Hoàn tất mở ví'
+                : (widget.isTotp ? 'Google Authenticator' : 'Bảo mật 2 lớp'),
+            title: widget.isTotp ? 'Nhập mã Authenticator' : 'Nhập mã xác thực',
+            subtitle: widget.isTotp
+                ? 'Mở ứng dụng Google Authenticator và nhập mã 6 số đang hiển thị cho tài khoản này.'
+                : 'Mã xác thực 6 chữ số đã được gửi tới địa chỉ email ${widget.email ?? ''}',
+          ),
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
+            decoration: authCardDeco(radius: 22),
+            child: Column(
+              children: [
+                ValueListenableBuilder<String>(
+                  valueListenable: _msgNotifier,
+                  builder: (context, msg, _) {
+                    return Column(
+                      children: [
+                        AuthOtpInputRow(
+                          controller: _otpController,
+                          focusNode: _otpFocusNode,
+                          length: _otpLength,
+                          hasError: msg.isNotEmpty,
+                          onChanged: (_) {
+                            if (_msgNotifier.value.isNotEmpty) {
+                              _msgNotifier.value = '';
+                            }
+                          },
+                          onCompleted: (_) {
+                            if (widget.isLogin == true &&
+                                widget.requireCccdLast4 &&
+                                _cccdController.text.trim().length != 4) {
+                              requestKeyboardFocus(_cccdFocusNode);
+                              return;
+                            }
+                            _handleVerify();
+                          },
+                        ),
+                        if (widget.isLogin == true &&
+                            widget.requireCccdLast4) ...[
+                          const SizedBox(height: 18),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: Colors.orange.withValues(alpha: 0.35),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Xác minh bảo mật bổ sung',
+                                  style: GoogleFonts.roboto(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF8D4E00),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Phát hiện dấu hiệu bất thường. Vui lòng nhập thêm 4 số cuối của CCCD đã đăng ký.',
+                                  style: GoogleFonts.roboto(
+                                    fontSize: 12.5,
+                                    color: const Color(0xFF8D4E00),
+                                    height: 1.35,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                AuthTextField(
+                                  controller: _cccdController,
+                                  focusNode: _cccdFocusNode,
+                                  hintText: 'Nhập 4 số cuối CCCD',
+                                  leadingIcon: Iconsax.card,
+                                  hasError: msg.isNotEmpty,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        signed: false,
+                                        decimal: false,
+                                      ),
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                  ],
+                                  maxLength: 4,
+                                  onSubmitted: (_) => _handleVerify(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        if (msg.isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          AuthErrorBanner(message: msg),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+                if (!widget.isTotp) ...[
+                  const SizedBox(height: 18),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: _isResendingNotifier,
+                    builder: (context, isResending, _) {
+                      if (isResending) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 6),
+                          child: SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              color: kAuthPink,
+                            ),
+                          ),
+                        );
+                      }
+                      return ValueListenableBuilder<int>(
+                        valueListenable: _countdownNotifier,
+                        builder: (context, seconds, _) {
+                          final canResend = seconds <= 0;
+                          return TextButton.icon(
+                            onPressed: canResend ? _resendOtp : null,
+                            style: TextButton.styleFrom(
+                              foregroundColor: kAuthPinkDark,
+                              disabledForegroundColor: kAuthMuted,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(99),
+                              ),
+                            ),
+                            icon: Icon(
+                              Iconsax.refresh,
+                              size: 16,
+                              color: canResend ? kAuthPinkDark : kAuthMuted,
+                            ),
+                            label: Text(
+                              canResend
+                                  ? 'Gửi lại mã OTP'
+                                  : 'Gửi lại mã sau ${seconds}s',
+                              style: GoogleFonts.roboto(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

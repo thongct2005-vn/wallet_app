@@ -1,9 +1,10 @@
 import 'package:app/core/utils/format_utils.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/verify_pin_bottom_sheet.dart';
+import 'package:app/src/services/postpaid_service.dart';
 import 'package:app/src/services/transaction_service.dart';
 import 'package:app/src/transfer/result_tranfer_screen.dart';
-import 'package:dotted_line/dotted_line.dart';
+import 'package:app/src/transfer/transfer_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:app/src/services/wallet_service.dart';
@@ -20,6 +21,7 @@ class ConfirmTranferScreen extends StatefulWidget {
   final String? referenceCode;
   final bool isMerchant;
   final String? orderId;
+  final String initialFundingSource;
 
   const ConfirmTranferScreen({
     super.key,
@@ -32,6 +34,7 @@ class ConfirmTranferScreen extends StatefulWidget {
     this.referenceCode,
     this.isMerchant = false,
     this.orderId,
+    this.initialFundingSource = 'MAIN_WALLET',
   });
 
   @override
@@ -41,14 +44,70 @@ class ConfirmTranferScreen extends StatefulWidget {
 class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
   final WalletService _walletService = WalletService();
   final TransactionService _transactionService = TransactionService();
+  final PostpaidService _postpaidService = PostpaidService();
   bool _isProcessingTransfer = false;
+  bool _isLoadingFeePreview = false;
+  bool _isLoadingPostpaid = false;
+  Map<String, dynamic>? _feePreview;
+  Map<String, dynamic>? _postpaidWallet;
+  late String _fundingSource;
   final Uuid _uuid = const Uuid();
   late final String idempotencyKey;
+
+  bool get _isQrPayment =>
+      widget.referenceCode != null && widget.referenceCode!.isNotEmpty;
 
   @override
   void initState() {
     super.initState();
     idempotencyKey = _uuid.v7();
+    _fundingSource =
+        (_isQrPayment && widget.initialFundingSource == 'POSTPAID')
+        ? 'POSTPAID'
+        : 'MAIN_WALLET';
+    _loadFeePreview();
+    if (_isQrPayment) {
+      _loadPostpaidWallet();
+    }
+  }
+
+  Future<void> _loadPostpaidWallet() async {
+    if (mounted) {
+      setState(() => _isLoadingPostpaid = true);
+    }
+    final res = await _postpaidService.getWallet();
+    if (!mounted) return;
+    setState(() {
+      _isLoadingPostpaid = false;
+      if (res['is_success'] == true && res['data'] is Map) {
+        _postpaidWallet = Map<String, dynamic>.from(res['data'] as Map);
+      }
+    });
+  }
+
+  Future<void> _loadFeePreview() async {
+    final numAmount = FormatUtils.formatAmountToNum(widget.amount ?? '0');
+    if (numAmount <= 0) return;
+    if (mounted) {
+      setState(() => _isLoadingFeePreview = true);
+    }
+    final isQrPayment =
+        widget.referenceCode != null && widget.referenceCode!.isNotEmpty;
+    final res = await _transactionService.previewFee(
+      transactionType: widget.isMerchant || isQrPayment
+          ? 'QR_PAYMENT'
+          : 'TRANSFER',
+      amount: numAmount,
+      merchantUserId: widget.isMerchant ? widget.receiverId : null,
+      referenceCode: widget.referenceCode,
+    );
+    if (!mounted) return;
+    setState(() {
+      _isLoadingFeePreview = false;
+      if (res['is_success'] == true && res['data'] is Map) {
+        _feePreview = Map<String, dynamic>.from(res['data'] as Map);
+      }
+    });
   }
 
   @override
@@ -58,93 +117,76 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: !_isProcessingTransfer,
-      child: Scaffold(
-        backgroundColor: Colors.white.withValues(alpha: 0.95),
-        extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: Padding(
-            padding: EdgeInsets.fromLTRB(10, 15, 0, 15),
-            child: Container(
-              height: 40,
-              width: 40,
-              decoration: BoxDecoration(
-                border: Border.all(
-                  width: 1,
-                  color: Colors.white.withValues(alpha: 0.8),
-                ),
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.8),
-              ),
-              child: IconButton(
-                padding: EdgeInsets.zero,
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-                icon: Icon(Icons.arrow_back, size: 20),
-              ),
+    return FreezeKeyboardMediaQuery(
+      child: PopScope(
+        canPop: !_isProcessingTransfer,
+        child: Scaffold(
+          backgroundColor: kTfBg,
+          extendBodyBehindAppBar: true,
+          resizeToAvoidBottomInset: false,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            centerTitle: true,
+            leading: TransferCircleButton(
+              icon: Icons.arrow_back_ios_new_rounded,
+              onPressed: _isProcessingTransfer
+                  ? null
+                  : () => Navigator.pop(context),
             ),
+            title: const TransferAppBarTitle("Xác nhận thanh toán"),
           ),
-          title: Text(
-            "Xác nhận thanh toán",
-            style: GoogleFonts.roboto(
-              fontSize: 20,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        body: Stack(
-          children: [
-            Container(
-              height: 500,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.pink.shade200.withValues(alpha: 0.75),
-                    Colors.white.withValues(alpha: 0.0),
+          body: Stack(
+            children: [
+              const RepaintBoundary(child: TransferHeaderGradient()),
+              SafeArea(
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: RepaintBoundary(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                          child: Column(
+                            children: [
+                              _buildContainerReceiverInfo(context),
+                              const SizedBox(height: 16),
+                              _buildContainerVoucher(context),
+                              const SizedBox(height: 16),
+                              _buildContainerWalletInfo(context),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    RepaintBoundary(
+                      child: _buildContainerConfirmButton(context),
+                    ),
                   ],
                 ),
               ),
-            ),
-            SafeArea(
-              child: Column(
-                children: [
-                  _buildContainerReceiverInfo(context),
-                  _buildContainerVoucher(context),
-                  _buildContainerWalletInfo(context),
-                  const Spacer(),
-                  _buildContainerConfirmButton(context),
-                ],
-              ),
-            ),
-            if (_isProcessingTransfer)
-              Positioned.fill(
-                child: Container(
-                  color: Colors.transparent,
-                  child: Center(
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade400,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 3,
+              if (_isProcessingTransfer)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.transparent,
+                    child: Center(
+                      child: Container(
+                        width: 50,
+                        height: 50,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade400,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 3,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -153,286 +195,427 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
   Widget _buildInfoRow({
     required String label,
     required String value,
-    CrossAxisAlignment crossAxisAlignment = CrossAxisAlignment.center,
     bool isMultiLine = false,
+    bool bold = false,
     Color? valueColor,
   }) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(10, 10, 10, 0),
-      child: Row(
-        crossAxisAlignment: crossAxisAlignment,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.roboto(
-              color: Colors.black.withValues(alpha: 0.5),
-              fontSize: 20,
-            ),
-          ),
-          SizedBox(width: 100),
-          Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              maxLines: isMultiLine ? 3 : 1,
-              overflow: isMultiLine
-                  ? TextOverflow.ellipsis
-                  : TextOverflow.visible,
-              style: GoogleFonts.roboto(
-                color: valueColor,
-                fontWeight: FontWeight.w500,
-                fontSize: 20,
-              ),
-            ),
-          ),
-        ],
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: TransferInfoRow(
+        label: label,
+        value: value,
+        maxLines: isMultiLine ? 3 : 1,
+        bold: bold,
+        valueColor: valueColor,
       ),
     );
   }
 
   Widget _buildContainerReceiverInfo(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(15, 10, 15, 0),
-      child: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(15),
-        ),
-        child: Column(
-          children: [
-            Padding(
-              padding: EdgeInsets.all(10),
-              child: Row(
-                children: [
-                  Icon(Iconsax.send_1, color: Colors.redAccent),
-                  SizedBox(width: 5),
-                  Text(
-                    widget.isMerchant ? "Thanh toán" : "Chuyển tiền",
-                    style: GoogleFonts.roboto(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 22,
-                    ),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+      decoration: transferCardDeco(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: kTfPink.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: const Icon(Iconsax.send_1, color: kTfPink, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  widget.isMerchant ? "Thanh toán" : "Chuyển tiền",
+                  style: GoogleFonts.roboto(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 19,
+                    color: kTfText,
                   ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(10, 0, 10, 0),
-              child: DottedLine(
-                dashColor: Colors.grey.shade200,
-                dashLength: 6,
-                dashGapLength: 4,
-                lineThickness: 1,
-              ),
-            ),
-            _buildInfoRow(
-              label: 'Số tiền',
-              value: '${widget.amount}đ',
-              valueColor: Colors.lightBlueAccent,
-            ),
-            _buildInfoRow(
-              label: widget.isMerchant ? 'Cửa hàng' : 'Người nhận',
-              value: widget.receiverName ?? 'Không rõ tên',
-              valueColor: Colors.lightBlueAccent,
-              isMultiLine: widget.isMerchant,
-            ),
-            if (!widget.isMerchant)
-              _buildInfoRow(
-                label: 'Số điện thoại',
-                value: widget.receiverPhone ?? '',
-              ),
-            if ((widget.description ?? '').isNotEmpty) ...[
-              _buildInfoRow(
-                label: widget.isMerchant ? 'Nội dung' : 'Lời nhắn',
-                value: widget.description ?? '',
-                isMultiLine: true,
-                crossAxisAlignment: CrossAxisAlignment.start,
+                ),
               ),
             ],
-            if (widget.isMerchant && (widget.orderId ?? '').isNotEmpty)
-              _buildInfoRow(
-                label: 'Mã hóa đơn',
-                value: widget.orderId ?? '',
-                isMultiLine: true,
-                crossAxisAlignment: CrossAxisAlignment.start,
-              ),
-            SizedBox(height: 10),
-          ],
-        ),
+          ),
+          const SizedBox(height: 14),
+          Divider(height: 1, color: Colors.black.withValues(alpha: 0.07)),
+          _buildInfoRow(
+            label: 'Số tiền',
+            value: '${widget.amount}đ',
+            bold: true,
+            valueColor: kTfPinkDark,
+          ),
+          _buildInfoRow(
+            label: 'Phí giao dịch',
+            value: _isLoadingFeePreview
+                ? 'Đang tính...'
+                : (!widget.isMerchant &&
+                      _feePreview?['fee_payer']?.toString() == 'SENDER' &&
+                      ((_feePreview?['fee_amount'] as num?) ?? 0) > 0)
+                ? '${FormatUtils.formatDisplayNumber((_feePreview?['fee_amount'] as num?) ?? 0)}đ'
+                : 'Miễn phí (0đ)',
+          ),
+          _buildInfoRow(
+            label: widget.isMerchant ? 'Cửa hàng' : 'Người nhận',
+            value: widget.receiverName ?? 'Không rõ tên',
+            isMultiLine: widget.isMerchant,
+          ),
+          if (!widget.isMerchant)
+            _buildInfoRow(
+              label: 'Số điện thoại',
+              value: widget.receiverPhone ?? '',
+            ),
+          if ((widget.description ?? '').isNotEmpty)
+            _buildInfoRow(
+              label: widget.isMerchant ? 'Nội dung' : 'Lời nhắn',
+              value: widget.description ?? '',
+              isMultiLine: true,
+            ),
+          if (widget.isMerchant && (widget.orderId ?? '').isNotEmpty)
+            _buildInfoRow(
+              label: 'Mã hóa đơn',
+              value: widget.orderId ?? '',
+              isMultiLine: true,
+            ),
+        ],
       ),
     );
   }
 
   Widget _buildContainerVoucher(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(15, 15, 15, 0),
+    return GestureDetector(
+      onTap: () {},
       child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(15),
-          color: Colors.white,
-        ),
         width: double.infinity,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(10, 15, 10, 15),
-          child: Row(
-            children: [
-              Icon(Iconsax.receipt_discount, color: Colors.yellow),
-              SizedBox(width: 5),
-              Text(
-                "Ưu đãi",
-                style: GoogleFonts.roboto(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 20,
-                ),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        decoration: transferCardDeco(),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(13),
               ),
-              const Spacer(),
-              GestureDetector(
-                onTap: () {},
-                child: Row(
-                  children: [
-                    Text(
-                      "Chọn hoặc nhập mã",
-                      style: GoogleFonts.roboto(
-                        fontWeight: FontWeight.w400,
-                        fontSize: 16,
-                        color: Colors.black.withValues(alpha: 0.5),
-                      ),
-                    ),
-                    Icon(Icons.chevron_right),
-                  ],
-                ),
+              child: Icon(
+                Iconsax.receipt_discount,
+                color: Colors.amber.shade800,
+                size: 22,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              "Ưu đãi",
+              style: GoogleFonts.roboto(
+                fontWeight: FontWeight.w700,
+                fontSize: 17,
+                color: kTfText,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              "Chọn hoặc nhập mã",
+              style: GoogleFonts.roboto(fontSize: 14, color: kTfMuted),
+            ),
+            const Icon(Icons.chevron_right, color: kTfMuted, size: 20),
+          ],
         ),
       ),
     );
   }
 
   Widget _buildContainerWalletInfo(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(15, 15, 15, 0),
-      child: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(15),
-          color: Colors.white,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    final baseAmount = FormatUtils.formatAmountToNum(widget.amount ?? '0');
+    final mainBalance = num.tryParse(widget.walletBalance ?? '0') ?? 0;
+    final mainSelected = _fundingSource == 'MAIN_WALLET';
+    final mainEnough = mainBalance >= baseAmount;
+
+    final ppData = _postpaidWallet;
+    final ppActivated = ppData?['activated'] == true;
+    final ppStatus = (ppData?['status'] ?? 'INACTIVE').toString();
+    final ppAvailable =
+        num.tryParse(ppData?['available_limit']?.toString() ?? '0') ?? 0;
+    final ppEligible =
+        ppActivated && ppStatus == 'ACTIVE' && ppAvailable >= baseAmount;
+    final ppSelected = _fundingSource == 'POSTPAID';
+
+    String ppSubtitle;
+    if (_isLoadingPostpaid && ppData == null) {
+      ppSubtitle = 'Đang kiểm tra hạn mức...';
+    } else if (!ppActivated) {
+      ppSubtitle = 'Chưa kích hoạt Ví trả sau';
+    } else if (ppStatus == 'PAST_DUE') {
+      ppSubtitle = 'Ví đang quá hạn thanh toán';
+    } else if (ppStatus != 'ACTIVE') {
+      ppSubtitle = 'Ví trả sau đang tạm khóa';
+    } else if (ppAvailable < baseAmount) {
+      ppSubtitle =
+          'Còn ${FormatUtils.formatDisplayNumber(ppAvailable)}đ (Không đủ)';
+    } else {
+      ppSubtitle =
+          '${FormatUtils.formatDisplayNumber(ppAvailable)}đ';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: transferCardDeco(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(2, 0, 2, 12),
+            child: Text(
+              "Trả ngay",
+              style: GoogleFonts.roboto(
+                fontWeight: FontWeight.w700,
+                fontSize: 17,
+                color: kTfText,
+              ),
+            ),
+          ),
+          InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: _isQrPayment && mainEnough
+                ? () => setState(() => _fundingSource = 'MAIN_WALLET')
+                : null,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                color: mainSelected
+                    ? kTfPink.withValues(alpha: 0.05)
+                    : Colors.grey.shade50,
+                border: Border.all(
+                  width: mainSelected ? 1.5 : 1,
+                  color: mainSelected
+                      ? kTfPink
+                      : Colors.grey.withValues(alpha: 0.28),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    alignment: Alignment.center,
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: mainEnough ? kTfPink : Colors.grey.shade400,
+                    ),
+                    child: Text(
+                      'Mio',
+                      style: GoogleFonts.roboto(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Ví Mio',
+                          style: GoogleFonts.roboto(
+                            fontSize: 14,
+                            color: kTfMuted,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${FormatUtils.formatDisplayNumber(mainBalance)}đ${mainEnough ? '' : ' (Không đủ)'}',
+                          style: GoogleFonts.roboto(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                            color: mainEnough ? kTfText : kTfMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _buildSourceRadio(selected: mainSelected, enabled: mainEnough),
+                ],
+              ),
+            ),
+          ),
+          if (_isQrPayment) ...[
+            const SizedBox(height: 16),
             Padding(
-              padding: EdgeInsets.fromLTRB(10, 15, 0, 0),
+              padding: const EdgeInsets.fromLTRB(2, 0, 2, 10),
               child: Text(
-                "Trả ngay",
+                "Trả sau",
                 style: GoogleFonts.roboto(
                   fontWeight: FontWeight.w700,
-                  fontSize: 20,
+                  fontSize: 17,
+                  color: kTfText,
                 ),
               ),
             ),
-            Padding(
-              padding: EdgeInsets.all(10),
+            InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: ppEligible
+                  ? () => setState(() => _fundingSource = 'POSTPAID')
+                  : null,
               child: Container(
                 width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  color: Colors.white,
-                  border: Border.all(width: 2, color: Colors.pink),
+                  borderRadius: BorderRadius.circular(16),
+                  color: ppSelected
+                      ? kTfPink.withValues(alpha: 0.05)
+                      : Colors.grey.shade50,
+                  border: Border.all(
+                    width: ppSelected ? 1.5 : 1,
+                    color: ppSelected
+                        ? kTfPink
+                        : Colors.grey.withValues(alpha: 0.28),
+                  ),
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(10, 10, 0, 10),
-                      child: Container(
-                        alignment: Alignment.center,
-                        width: 25,
-                        height: 25,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(30),
-                          color: Colors.pink,
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(2),
-                          child: Text(
-                            'Mio',
-                            style: GoogleFonts.roboto(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 8,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
+                    Container(
+                      alignment: Alignment.center,
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: ppEligible
+                            ? const Color(0xFFDB2777)
+                            : Colors.grey.shade400,
+                      ),
+                      child: const Icon(
+                        Icons.credit_score_rounded,
+                        color: Colors.white,
+                        size: 19,
                       ),
                     ),
-
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(10, 10, 10, 5),
+                    const SizedBox(width: 12),
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            'Ví Mio',
+                            'Ví trả sau',
                             style: GoogleFonts.roboto(
-                              fontSize: 16,
-                              color: Colors.black.withValues(alpha: 0.7),
-                              height: 0.9,
-                              fontWeight: FontWeight.w400,
+                              fontSize: 14,
+                              color: kTfMuted,
                             ),
                           ),
+                          const SizedBox(height: 2),
                           Text(
-                            '${FormatUtils.formatDisplayNumber(num.tryParse(widget.walletBalance!) ?? 0)}đ',
+                            ppSubtitle,
                             style: GoogleFonts.roboto(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              color: ppEligible ? kTfText : kTfMuted,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const Spacer(),
-                    Padding(
-                      padding: EdgeInsets.only(right: 10),
-                      child: Container(
-                        alignment: Alignment.center,
-                        height: 20,
-                        width: 20,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.pink,
-                        ),
-                        child: Container(
-                          height: 7,
-                          width: 7,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
+                    _buildSourceRadio(
+                      selected: ppSelected,
+                      enabled: ppEligible,
                     ),
                   ],
                 ),
               ),
             ),
           ],
-        ),
+        ],
       ),
     );
   }
 
+  Widget _buildSourceRadio({required bool selected, required bool enabled}) {
+    return Container(
+      width: 22,
+      height: 22,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: selected
+              ? kTfPink
+              : enabled
+              ? Colors.grey.shade400
+              : Colors.grey.shade300,
+          width: 2,
+        ),
+      ),
+      child: selected
+          ? Container(
+              width: 11,
+              height: 11,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: kTfPink,
+              ),
+            )
+          : null,
+    );
+  }
+
   Widget _buildContainerConfirmButton(BuildContext context) {
+    final baseAmount = FormatUtils.formatAmountToNum(widget.amount ?? '0');
+    final isSenderPayer =
+        _fundingSource != 'POSTPAID' &&
+        !widget.isMerchant &&
+        _feePreview?['fee_payer']?.toString() == 'SENDER';
+    final payerFee = isSenderPayer
+        ? ((_feePreview?['fee_amount'] as num?) ?? 0)
+        : 0;
+    final totalPay = isSenderPayer
+        ? ((_feePreview?['total_debit_from_payer'] as num?) ??
+              (baseAmount + payerFee))
+        : baseAmount;
+
+    final mainBalance = num.tryParse(widget.walletBalance ?? '0') ?? 0;
+    final ppData = _postpaidWallet;
+    final ppEligible =
+        ppData != null &&
+        ppData['activated'] == true &&
+        ppData['status'] == 'ACTIVE' &&
+        (num.tryParse(ppData['available_limit']?.toString() ?? '0') ?? 0) >=
+            totalPay;
+    final canConfirm = _fundingSource == 'POSTPAID'
+        ? (ppData == null && _isLoadingPostpaid
+              ? widget.initialFundingSource == 'POSTPAID'
+              : ppEligible)
+        : mainBalance >= totalPay;
+
     return Container(
       width: double.infinity,
-      color: Colors.white,
-
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
       child: Padding(
-        padding: EdgeInsets.fromLTRB(10, 15, 10, 15),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -440,70 +623,30 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
               children: [
                 Text(
                   "Tổng tiền",
-                  style: GoogleFonts.roboto(
-                    fontSize: 20,
-                    color: Colors.black.withValues(alpha: 0.7),
-
-                    fontWeight: FontWeight.w400,
-                  ),
+                  style: GoogleFonts.roboto(fontSize: 16, color: kTfMuted),
                 ),
-                Text(
-                  '${widget.amount ?? '0'}đ',
-                  style: GoogleFonts.roboto(
-                    fontSize: 35,
-                    fontWeight: FontWeight.w700,
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '${FormatUtils.formatDisplayNumber(totalPay)}đ',
+                      style: GoogleFonts.roboto(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w800,
+                        color: kTfText,
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            GestureDetector(
-              onTap: _isProcessingTransfer
-                  ? null
-                  : () {
-                      _showCheckPinDialog(context);
-                    },
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  color: _isProcessingTransfer
-                      ? Colors.black.withValues(alpha: 0.1)
-                      : Colors.pinkAccent,
-                ),
-                child: Padding(
-                  padding: EdgeInsets.only(top: 10, bottom: 10),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _isProcessingTransfer
-                          ? SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Icon(
-                              Icons.lock_outline,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                      const SizedBox(width: 10),
-                      Text(
-                        "Xác nhận",
-                        style: GoogleFonts.roboto(
-                          fontSize: 20,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            const SizedBox(height: 12),
+            TransferPrimaryButton(
+              label: "Xác nhận",
+              icon: Icons.lock_outline,
+              enabled: canConfirm,
+              loading: _isProcessingTransfer,
+              onTap: () => _showCheckPinDialog(context),
             ),
           ],
         ),
@@ -512,10 +655,8 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
   }
 
   void _showCheckPinDialog(BuildContext context) {
-    showModalBottomSheet(
+    showSmoothPinBottomSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (context) {
         return CheckPinBottomSheet(
           onCheckPin: (pin) async {
@@ -567,6 +708,7 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
               widget.referenceCode!,
               idempotencyKey,
               pinToken,
+              fundingSource: _fundingSource,
             );
       setState(() {
         _isProcessingTransfer = false;

@@ -2,9 +2,11 @@ import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/format_utils.dart';
 import 'package:app/src/services/user_service.dart';
 import 'package:app/src/transfer/amount_input_screen.dart';
+import 'package:app/src/transfer/transfer_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class ContactListScreen extends StatefulWidget {
@@ -22,8 +24,7 @@ class _ContactListScreenState extends State<ContactListScreen> {
   List<dynamic> _filteredUsers = [];
   bool _permanentlyDenied = false;
 
-  // Tìm người dùng ngoài danh bạ khi nhập đủ 10 số điện thoại
-  static final RegExp _phoneRegex = RegExp(r'^0\d{9}$');
+  // Tìm người dùng ngoài danh bạ khi nhập đủ 10 số điện thoại hợp lệ
   bool _isFinding = false;
   int _findSeq = 0;
   String _findPhone = '';
@@ -46,182 +47,131 @@ class _ContactListScreenState extends State<ContactListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white.withValues(alpha: 0.95),
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: Padding(
-          padding: EdgeInsets.fromLTRB(10, 10, 0, 10),
-          child: Container(
-            height: 40,
-            width: 40,
-            decoration: BoxDecoration(
-              border: Border.all(
-                width: 1,
-                color: Colors.white.withValues(alpha: 0.8),
-              ),
-              shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: 0.8),
-            ),
-            child: IconButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              padding: EdgeInsets.zero,
-              icon: Icon(Icons.arrow_back, size: 20),
-            ),
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+      child: Scaffold(
+        backgroundColor: kTfBg,
+        extendBodyBehindAppBar: true,
+        resizeToAvoidBottomInset: false,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: true,
+          leading: TransferCircleButton(
+            icon: Icons.arrow_back_ios_new_rounded,
+            onPressed: () {
+              FocusManager.instance.primaryFocus?.unfocus();
+              Navigator.pop(context);
+            },
           ),
-        ),
-        title: Text('Chuyển tiền', style: GoogleFonts.roboto(fontSize: 20)),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(55),
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 15, left: 15, right: 15),
-            child: Container(
-              height: 50,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.8),
-                borderRadius: BorderRadius.circular(30),
-              ),
-              child: Row(
-                children: [
-                  const SizedBox(width: 10),
-                  Icon(Icons.search),
-
-                  Expanded(
-                    child: TextField(
-                      controller: _phoneController,
-                      maxLength: 25,
-                      cursorColor: Colors.pink,
-                      style: GoogleFonts.roboto(fontSize: 16),
-
-                      decoration: InputDecoration(
-                        hintText: 'Tìm tên, SĐT',
-                        hintStyle: GoogleFonts.roboto(fontSize: 16),
-                        counterText: '',
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.only(left: 10, right: 15),
+          title: const TransferAppBarTitle('Chuyển tiền'),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(66),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: TextFieldTapRegion(
+                child: Container(
+                  height: 50,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: kTfPink.withValues(alpha: 0.12),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 14),
+                      const Icon(
+                        Iconsax.search_normal_1,
+                        size: 20,
+                        color: kTfPink,
+                      ),
+                      Expanded(
+                        child: TextField(
+                          controller: _phoneController,
+                          maxLength: 25,
+                          cursorColor: kTfPink,
+                          textInputAction: TextInputAction.search,
+                          onTapOutside: (_) =>
+                              FocusManager.instance.primaryFocus?.unfocus(),
+                          onSubmitted: (_) =>
+                              FocusManager.instance.primaryFocus?.unfocus(),
+                          style: GoogleFonts.roboto(
+                            fontSize: 16,
+                            color: kTfText,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Tìm tên, SĐT',
+                            hintStyle: GoogleFonts.roboto(
+                              fontSize: 16,
+                              color: kTfMuted,
+                            ),
+                            counterText: '',
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.only(
+                              left: 10,
+                              right: 15,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
         ),
+        body: _buildBody(context),
       ),
-      body: _buildBody(context),
     );
   }
 
   Widget _buildBody(BuildContext context) {
     return Stack(
       children: [
-        Container(
-          height: 500,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.pink.shade200.withValues(alpha: 0.8),
-                Colors.white.withValues(alpha: 0.0),
-              ],
-            ),
-          ),
-        ),
+        const RepaintBoundary(child: TransferHeaderGradient()),
         SafeArea(
           child: _isLoading
-              ? Center(child: CircularProgressIndicator(color: Colors.pink))
+              ? const Center(child: CircularProgressIndicator(color: kTfPink))
               : _errMsg.isNotEmpty
-              ? Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(20.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _errMsg,
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.roboto(
-                            color: Colors.red,
-                            fontSize: 18,
-                          ),
-                        ),
-                        if (_permanentlyDenied) ...[
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: () => openAppSettings(),
-                            child: Text("Mở Cài đặt", style: GoogleFonts.roboto()),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                )
-              : _filteredUsers.isEmpty && _phoneRegex.hasMatch(_query)
+              ? _buildErrorState()
+              : _filteredUsers.isEmpty && FormatUtils.isValidPhone(_query)
               ? _buildFindResult()
               : _filteredUsers.isEmpty
-              ? Center(
-                  child: Text(
-                    'Không tìm thấy người dùng này',
-                    style: GoogleFonts.roboto(fontSize: 16),
-                  ),
-                )
-              : Container(
-                  margin: EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.grey.shade100, width: 1),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: EdgeInsets.fromLTRB(15, 10, 0, 0),
-                        child: Text(
-                          'Danh bạ',
-                          style: GoogleFonts.roboto(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: ListView.separated(
-                            shrinkWrap: true,
-                            padding: EdgeInsets.zero,
-                            separatorBuilder: (context, index) {
-                              return Divider(
-                                height: 1,
-                                thickness: 0.5,
-                                color: Colors.grey.shade300,
-                                indent: 70,
-                                endIndent: 20,
-                              );
-                            },
-                            itemCount: _filteredUsers.length,
-                            itemBuilder: (context, index) {
-                              final user = _filteredUsers[index];
-                              return _buildUserTile(
-                                fullName: user['full_name'] ?? 'Không rõ tên',
-                                phone: user['phone'] ?? '',
-                                userId: user['id'],
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
+              ? _buildEmptyState('Không tìm thấy người dùng này')
+                : _buildListCard(
+                    title: 'Danh bạ',
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: const EdgeInsets.only(bottom: 8),
+                    separatorBuilder: (context, index) {
+                      return Divider(
+                        height: 1,
+                        thickness: 0.5,
+                        color: Colors.black.withValues(alpha: 0.07),
+                        indent: 74,
+                        endIndent: 18,
+                      );
+                    },
+                    itemCount: _filteredUsers.length,
+                    itemBuilder: (context, index) {
+                      final user = _filteredUsers[index];
+                      return _buildUserTile(
+                        fullName: user['full_name'] ?? 'Không rõ tên',
+                        phone: user['phone'] ?? '',
+                        userId: user['id'],
+                      );
+                    },
                   ),
                 ),
         ),
@@ -231,28 +181,140 @@ class _ContactListScreenState extends State<ContactListScreen> {
 
   String get _query => _phoneController.text.trim();
 
+  // Thẻ trắng chứa tiêu đề và danh sách
+  Widget _buildListCard({
+    required String title,
+    required Widget child,
+    bool scrollable = true,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Container(
+          width: double.infinity,
+          decoration: transferCardDeco(radius: 22),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 6),
+                    child: Text(
+                      title,
+                      style: GoogleFonts.roboto(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: kTfText,
+                      ),
+                    ),
+                  ),
+                  if (scrollable) Flexible(child: child) else child,
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: kTfPink.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Iconsax.user_search, color: kTfPink, size: 30),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.roboto(fontSize: 16, color: kTfMuted),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Iconsax.info_circle,
+                color: Colors.redAccent,
+                size: 30,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              _errMsg,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.roboto(fontSize: 16, color: kTfText),
+            ),
+            if (_permanentlyDenied) ...[
+              const SizedBox(height: 18),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kTfPink,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: () => openAppSettings(),
+                child: Text(
+                  "Mở Cài đặt",
+                  style: GoogleFonts.roboto(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildUserTile({
     required String fullName,
     required String phone,
     required dynamic userId,
   }) {
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: Colors.pink.shade50.withValues(alpha: 0.6),
-        child: Text(
-          FormatUtils.formatAvatar(fullName),
-          style: GoogleFonts.roboto(
-            color: Colors.pink,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-      title: Text(
-        fullName,
-        style: GoogleFonts.roboto(fontWeight: FontWeight.w700, fontSize: 20),
-      ),
-      subtitle: Text(phone, style: GoogleFonts.roboto(fontSize: 14)),
+    return InkWell(
       onTap: () {
+        FocusManager.instance.primaryFocus?.unfocus();
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -264,60 +326,66 @@ class _ContactListScreenState extends State<ContactListScreen> {
           ),
         );
       },
+      child: Container(
+        width: double.infinity,
+        constraints: const BoxConstraints(minHeight: 64),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.max,
+          mainAxisAlignment: MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            TransferAvatar(name: fullName, size: 44),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    fullName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.roboto(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                      color: kTfText,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    phone,
+                    style: GoogleFonts.roboto(fontSize: 14, color: kTfMuted),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: kTfMuted, size: 20),
+          ],
+        ),
+      ),
     );
   }
 
   // Kết quả tìm theo số điện thoại (người dùng không có trong danh bạ)
   Widget _buildFindResult() {
     if (_isFinding) {
-      return const Center(child: CircularProgressIndicator(color: Colors.pink));
+      return const Center(child: CircularProgressIndicator(color: kTfPink));
     }
     if (_foundUser != null) {
-      return Container(
-        margin: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.grey.shade100, width: 1),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(15, 10, 0, 0),
-              child: Text(
-                'Kết quả tìm kiếm',
-                style: GoogleFonts.roboto(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: Material(
-                color: Colors.transparent,
-                child: _buildUserTile(
-                  fullName: _foundUser!['full_name'] ?? 'Không rõ tên',
-                  phone: _findPhone,
-                  userId: _foundUser!['user_id'],
-                ),
-              ),
-            ),
-          ],
+      return _buildListCard(
+        title: 'Kết quả tìm kiếm',
+        scrollable: false,
+        child: _buildUserTile(
+          fullName: _foundUser!['full_name'] ?? 'Không rõ tên',
+          phone: _findPhone,
+          userId: _foundUser!['user_id'],
         ),
       );
     }
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Text(
-          _findMsg.isNotEmpty ? _findMsg : 'Không tìm thấy người dùng này',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.roboto(fontSize: 16),
-        ),
-      ),
+    return _buildEmptyState(
+      _findMsg.isNotEmpty ? _findMsg : 'Không tìm thấy người dùng này',
     );
   }
 
@@ -325,7 +393,7 @@ class _ContactListScreenState extends State<ContactListScreen> {
     _filterUsers();
     final seq = ++_findSeq;
     final query = _query;
-    if (!_phoneRegex.hasMatch(query) || _filteredUsers.isNotEmpty) {
+    if (!FormatUtils.isValidPhone(query) || _filteredUsers.isNotEmpty) {
       setState(() {
         _isFinding = false;
         _foundUser = null;

@@ -39,4 +39,46 @@ class KYCService {
       return ApiErrorHandler.handleError(e);
     }
   }
+
+  /// Cập nhật thông tin KYC: gửi từng file ảnh gốc (không nén) dạng multipart
+  Future<Map<String, dynamic>> updateKYC(
+    File frontIdImage,
+    File backIdImage,
+    File faceImage,
+  ) async {
+    try {
+      final formData = FormData.fromMap({
+        'front_id': await MultipartFile.fromFile(
+          frontIdImage.path,
+          filename: 'front_id.jpg',
+        ),
+        'back_id': await MultipartFile.fromFile(
+          backIdImage.path,
+          filename: 'back_id.jpg',
+        ),
+        'face': await MultipartFile.fromFile(
+          faceImage.path,
+          filename: 'face.jpg',
+        ),
+      });
+
+      final result = await api.put(
+        ApiConfig.updateKYC,
+        data: formData,
+        options: Options(
+          contentType: 'multipart/form-data',
+          sendTimeout: const Duration(seconds: 90),
+          receiveTimeout: const Duration(seconds: 90),
+        ),
+      );
+
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'data': result.data['data'],
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
 }

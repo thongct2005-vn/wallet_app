@@ -6,19 +6,35 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:app/main.dart';
+import 'package:uuid/uuid.dart';
 
 class ApiClient {
   static final ApiClient _instance = ApiClient._internal();
   late Dio dio;
   final _storage = const FlutterSecureStorage();
+  String? _cachedDeviceId;
 
   static const Map<String, String> _ngrokHeaders = {
     'ngrok-skip-browser-warning': 'true',
+    'User-Agent': 'MioWallet/2.1.0 (Flutter)',
   };
 
   Completer<String?>? _refreshCompleter;
 
   factory ApiClient() => _instance;
+
+  Future<String> _getOrCreateDeviceId() async {
+    if (_cachedDeviceId != null && _cachedDeviceId!.isNotEmpty) {
+      return _cachedDeviceId!;
+    }
+    String? stored = await _storage.read(key: 'device_id');
+    if (stored == null || stored.isEmpty) {
+      stored = 'dev-${const Uuid().v4()}';
+      await _storage.write(key: 'device_id', value: stored);
+    }
+    _cachedDeviceId = stored;
+    return stored;
+  }
 
   ApiClient._internal() {
     dio = Dio(
@@ -33,6 +49,8 @@ class ApiClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
+          final deviceId = await _getOrCreateDeviceId();
+          options.headers['X-Device-Id'] = deviceId;
           if (options.extra['skipAuth'] != true) {
             final accessToken = await _storage.read(key: 'access_token');
             if (accessToken != null) {
@@ -108,7 +126,11 @@ class ApiClient {
 
   Future<void> _logout() async {
     SocketService().disconnect();
+    final deviceId = await _storage.read(key: 'device_id');
     await _storage.deleteAll();
+    if (deviceId != null && deviceId.isNotEmpty) {
+      await _storage.write(key: 'device_id', value: deviceId);
+    }
     if (navigatorKey.currentState != null) {
       navigatorKey.currentState!.pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => const LoginPhoneScreen()),

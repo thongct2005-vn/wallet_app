@@ -1,6 +1,5 @@
-//https://my-ewallet-api.onrender.com/api/v2
 //https://orectic-noctilucent-ronan.ngrok-free.dev
-//http://localhost:3000/api/v2
+
 
 class ApiConfig {
   static const String origin =
@@ -20,7 +19,6 @@ class ApiConfig {
   static const String verifyRegister = '$baseUrl/auth/verify-register';
   static const String logout = '$baseUrl/auth/logout';
 
-  // Google Authenticator (TOTP)
   static const String totpSetup = '$baseUrl/auth/totp/setup';
   static const String totpRecover = '$baseUrl/auth/totp/recover';
   static const String totpEnable = '$baseUrl/auth/totp/enable';
@@ -33,19 +31,39 @@ class ApiConfig {
   static const String getWalletBalance = '$baseUrl/wallet/balance';
   static const String checkTransfer = '$baseUrl/wallet/check-transfer';
   static const String checkPin = '$baseUrl/wallet/check-pin';
+  static const String verifyPinChallenge =
+      '$baseUrl/wallet/verify-pin-challenge';
+  static const String resendPinChallenge =
+      '$baseUrl/wallet/resend-pin-challenge';
+
+  // POSTPAID WALLET (VÍ TRẢ SAU)
+  static const String postpaidInfo = '$baseUrl/postpaid/info';
+  static const String postpaidWallet = '$baseUrl/postpaid/wallet';
+  static const String postpaidActivate = '$baseUrl/postpaid/activate';
+  static const String postpaidEntries = '$baseUrl/postpaid/entries';
+  static const String postpaidRepay = '$baseUrl/postpaid/repay';
 
   static const String findUser = '$baseUrl/user/find-user';
   static const String checkContact = '$baseUrl/user/check-contact';
   static const String checkPinStatus = '$baseUrl/user/pin-status';
   static const String createPin = '$baseUrl/user/create-pin';
+  static const String verifyPin = '$baseUrl/user/verify-pin';
+  static const String changePin = '$baseUrl/user/change-pin';
+  static const String verifyPassword = '$baseUrl/user/verify-password';
+  static const String changePassword = '$baseUrl/user/change-password';
+  static const String userLimits = '$baseUrl/user/limits';
+  static const String resetUserLimit = '$baseUrl/user/limits/reset';
   static const String updateFcmToken = '$baseUrl/user/fcm-token';
 
   static const String transfer = '$baseUrl/transaction/transfer';
   static const String topup = '$baseUrl/transaction/topup';
   static const String withdraw = '$baseUrl/transaction/withdraw';
   static const String payment = '$baseUrl/transaction/qr-payment';
+  static const String previewFee = '$baseUrl/transaction/preview-fee';
   static const String history = '$baseUrl/transaction/history';
   static const String historySummary = '$baseUrl/transaction/summary';
+  static const String historyExportEmail =
+      '$baseUrl/transaction/export-email';
 
   static const String createStaticQRToken = '$baseUrl/payment/qr/static';
   static const String getUserInfoByStaticQR =
@@ -56,6 +74,9 @@ class ApiConfig {
 
   static const String getBankLinkStatus = '$baseUrl/bank/status';
   static const String linkBankAccount = '$baseUrl/bank/link';
+  static const String enableBankShowBalance = '$baseUrl/bank/show-balance';
+  static const String hideBankBalance = '$baseUrl/bank/hide-balance';
+  static const String unlinkBankAccount = '$baseUrl/bank/unlink';
 
   static const String forgotRequest = '$baseUrl/user/forgot/request';
   static const String forgotResendOtp = '$baseUrl/user/forgot/resend-otp';
@@ -66,4 +87,5 @@ class ApiConfig {
 
   static const String checkUserKYC = '$baseUrl/kyc/check';
   static const String verifyKYC = '$baseUrl/kyc/verify';
+  static const String updateKYC = '$baseUrl/kyc/update';
 }
