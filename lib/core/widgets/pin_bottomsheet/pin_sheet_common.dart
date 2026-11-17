@@ -421,6 +421,7 @@ class PinCodeInputPillState extends State<PinCodeInputPill> {
                     enableIMEPersonalizedLearning: false,
                     enableInteractiveSelection: false,
                     showCursor: false,
+                    onTapOutside: (_) {},
                     onChanged: _onTextChanged,
                   ),
                 ),

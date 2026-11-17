@@ -32,9 +32,23 @@ class PostpaidService {
     }
   }
 
-  Future<Map<String, dynamic>> activate() async {
+  Future<Map<String, dynamic>> _postWithPinToken(
+    String url, {
+    required String idempotencyKey,
+    required String pinToken,
+    Map<String, dynamic> data = const <String, dynamic>{},
+  }) async {
     try {
-      final result = await api.post(ApiConfig.postpaidActivate);
+      final result = await api.post(
+        url,
+        data: data,
+        options: Options(
+          headers: {
+            'idempotency-key': idempotencyKey,
+            'x-pin-token': pinToken,
+          },
+        ),
+      );
       return {
         'is_success': true,
         'message': result.data['message'],
@@ -43,6 +57,49 @@ class PostpaidService {
     } catch (e) {
       return ApiErrorHandler.handleError(e);
     }
+  }
+
+  Future<Map<String, dynamic>> activate({
+    required String idempotencyKey,
+    required String pinToken,
+  }) => _postWithPinToken(
+    ApiConfig.postpaidActivate,
+    idempotencyKey: idempotencyKey,
+    pinToken: pinToken,
+  );
+
+  Future<Map<String, dynamic>> freezeWallet({
+    required String idempotencyKey,
+    required String pinToken,
+  }) => _postWithPinToken(
+    ApiConfig.postpaidFreeze,
+    idempotencyKey: idempotencyKey,
+    pinToken: pinToken,
+  );
+
+  Future<Map<String, dynamic>> unfreezeWallet({
+    required String idempotencyKey,
+    required String pinToken,
+  }) => _postWithPinToken(
+    ApiConfig.postpaidUnfreeze,
+    idempotencyKey: idempotencyKey,
+    pinToken: pinToken,
+  );
+
+  Future<Map<String, dynamic>> closeWallet({
+    required String idempotencyKey,
+    required String pinToken,
+    String? reason,
+  }) {
+    final trimmedReason = reason?.trim();
+    return _postWithPinToken(
+      ApiConfig.postpaidClose,
+      idempotencyKey: idempotencyKey,
+      pinToken: pinToken,
+      data: trimmedReason != null && trimmedReason.isNotEmpty
+          ? {'reason': trimmedReason}
+          : const <String, dynamic>{},
+    );
   }
 
   static String _dateOnly(DateTime d) =>
@@ -83,26 +140,11 @@ class PostpaidService {
     required int amount,
     required String idempotencyKey,
     required String pinToken,
-  }) async {
-    try {
-      final result = await api.post(
-        ApiConfig.postpaidRepay,
-        data: {'amount': amount},
-        options: Options(
-          headers: {
-            'idempotency-key': idempotencyKey,
-            'x-pin-token': pinToken,
-          },
-        ),
-      );
-      return {
-        'is_success': true,
-        'message': result.data['message'],
-        'data': result.data['data'],
-      };
-    } catch (e) {
-      return ApiErrorHandler.handleError(e);
-    }
-  }
+  }) => _postWithPinToken(
+    ApiConfig.postpaidRepay,
+    idempotencyKey: idempotencyKey,
+    pinToken: pinToken,
+    data: {'amount': amount},
+  );
 }
 

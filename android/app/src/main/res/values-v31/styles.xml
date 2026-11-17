@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="BaseLaunchThemeV31" parent="BaseLaunchThemeV21">
+        <item name="windowSplashScreenAnimatedIcon">@drawable/launch_logo_v31</item>
+    </style>
+
+    <style name="LaunchTheme" parent="BaseLaunchThemeV31" />
+</resources>

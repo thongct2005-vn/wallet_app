@@ -1,5 +1,6 @@
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/format_utils.dart';
+import 'package:app/core/utils/route_transition_utils.dart';
 import 'package:app/src/services/user_service.dart';
 import 'package:app/src/transfer/amount_input_screen.dart';
 import 'package:app/src/transfer/transfer_ui.dart';
@@ -16,6 +17,15 @@ class ContactListScreen extends StatefulWidget {
 }
 
 class _ContactListScreenState extends State<ContactListScreen> {
+  static final TextStyle _searchInputStyle = GoogleFonts.roboto(
+    fontSize: 16,
+    color: kTfText,
+  );
+  static final TextStyle _searchHintStyle = GoogleFonts.roboto(
+    fontSize: 16,
+    color: kTfMuted,
+  );
+
   final TextEditingController _phoneController = TextEditingController();
   final UserService _userService = UserService();
   bool _isLoading = true;
@@ -23,6 +33,8 @@ class _ContactListScreenState extends State<ContactListScreen> {
   List<dynamic> _users = [];
   List<dynamic> _filteredUsers = [];
   bool _permanentlyDenied = false;
+  bool _didScheduleInitialLoad = false;
+  VoidCallback? _cancelDeferredLoad;
 
   // Tìm người dùng ngoài danh bạ khi nhập đủ 10 số điện thoại hợp lệ
   bool _isFinding = false;
@@ -34,12 +46,22 @@ class _ContactListScreenState extends State<ContactListScreen> {
   @override
   void initState() {
     super.initState();
-    _loadContact();
     _phoneController.addListener(_onQueryChanged);
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_didScheduleInitialLoad) {
+      _didScheduleInitialLoad = true;
+      // Đợi hiệu ứng mở trang xong rồi mới xin quyền/đọc danh bạ để transition luôn mượt.
+      _cancelDeferredLoad = runAfterRouteTransition(context, _loadContact);
+    }
+  }
+
+  @override
   void dispose() {
+    _cancelDeferredLoad?.call();
     _phoneController.removeListener(_onQueryChanged);
     _phoneController.dispose();
     super.dispose();
@@ -103,16 +125,10 @@ class _ContactListScreenState extends State<ContactListScreen> {
                               FocusManager.instance.primaryFocus?.unfocus(),
                           onSubmitted: (_) =>
                               FocusManager.instance.primaryFocus?.unfocus(),
-                          style: GoogleFonts.roboto(
-                            fontSize: 16,
-                            color: kTfText,
-                          ),
+                          style: _searchInputStyle,
                           decoration: InputDecoration(
                             hintText: 'Tìm tên, SĐT',
-                            hintStyle: GoogleFonts.roboto(
-                              fontSize: 16,
-                              color: kTfMuted,
-                            ),
+                            hintStyle: _searchHintStyle,
                             counterText: '',
                             border: InputBorder.none,
                             contentPadding: const EdgeInsets.only(

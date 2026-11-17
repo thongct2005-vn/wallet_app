@@ -122,6 +122,20 @@ class PostpaidEntryVisualStyle {
           ),
           shortLabel: 'Trả nợ VTS',
         );
+      case 'REPAY_SERVICE_FEE':
+        return const PostpaidEntryVisualStyle(
+          icon: Icons.account_balance_wallet_rounded,
+          badgeIcon: Icons.north_east_rounded,
+          accentColor: Color(0xFFDB2777),
+          badgeColor: Color(0xFFBE185D),
+          tintColor: Color(0xFFFCE7F3),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFEC407A), Color(0xFFD81B60)],
+          ),
+          shortLabel: 'Trả phí DV',
+        );
       case 'REPAY_LATE_FEE':
         return const PostpaidEntryVisualStyle(
           icon: Icons.account_balance_wallet_rounded,
@@ -149,6 +163,20 @@ class PostpaidEntryVisualStyle {
             colors: [Color(0xFF34D399), Color(0xFF059669)],
           ),
           shortLabel: 'Hoàn trả sau',
+        );
+      case 'SERVICE_FEE':
+        return const PostpaidEntryVisualStyle(
+          icon: Icons.receipt_long_rounded,
+          badgeIcon: Icons.percent_rounded,
+          accentColor: Color(0xFFD97706),
+          badgeColor: Color(0xFFB45309),
+          tintColor: Color(0xFFFEF3C7),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFBBF24), Color(0xFFD97706)],
+          ),
+          shortLabel: 'Phí dịch vụ',
         );
       case 'LATE_FEE':
         return const PostpaidEntryVisualStyle(
@@ -226,8 +254,18 @@ String buildPostpaidEntryTitle(Map<String, dynamic> entry) {
           : 'Thanh toán QR bằng Ví trả sau';
     case 'REPAY_PRINCIPAL':
       return 'Trả nợ gốc Ví trả sau';
+    case 'REPAY_SERVICE_FEE':
+      return 'Thanh toán phí dịch vụ Ví trả sau';
     case 'REPAY_LATE_FEE':
       return 'Thanh toán phí trễ hạn';
+    case 'SERVICE_FEE':
+      if (note != null && note.isNotEmpty) {
+        return formatPostpaidCycleNote(note);
+      }
+      if (cycleMonth != null && cycleMonth.isNotEmpty) {
+        return 'Phí dịch vụ kỳ ${formatPostpaidCycleMonth(cycleMonth)}';
+      }
+      return 'Phí dịch vụ Ví trả sau hàng tháng';
     case 'LATE_FEE':
       if (note != null && note.isNotEmpty) {
         return formatPostpaidCycleNote(note);

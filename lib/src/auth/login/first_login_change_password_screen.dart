@@ -1,10 +1,12 @@
+import 'package:app/src/auth/auth_ui.dart';
 import 'package:app/src/auth/login/login_phone_screen.dart';
 import 'package:app/src/services/auth_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:pinput/pinput.dart';
+import 'package:iconsax/iconsax.dart';
 
-/// Màn hình bắt buộc đổi mật khẩu ở lần đăng nhập đầu tiên cho tài khoản USER do ADMIN cấp.
+/// Màn hình bắt buộc đổi mật khẩu trong lần đăng nhập đầu tiên.
 class FirstLoginChangePasswordScreen extends StatefulWidget {
   final String changePasswordToken;
   final String? phoneNumber;
@@ -23,29 +25,87 @@ class FirstLoginChangePasswordScreen extends StatefulWidget {
 }
 
 class _FirstLoginChangePasswordScreenState
-    extends State<FirstLoginChangePasswordScreen> {
+    extends State<FirstLoginChangePasswordScreen>
+    with SmoothAutoFocusMixin {
+  static final List<TextInputFormatter> _digitsOnly = [
+    FilteringTextInputFormatter.digitsOnly,
+  ];
+
   final TextEditingController _newController = TextEditingController();
   final TextEditingController _confirmController = TextEditingController();
+  final FocusNode _newFocusNode = FocusNode();
+  final FocusNode _confirmFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
+
+  final ValueNotifier<String> _errorNotifier = ValueNotifier<String>('');
+  final ValueNotifier<bool> _isHideNewNotifier = ValueNotifier<bool>(true);
+  final ValueNotifier<bool> _isHideConfirmNotifier = ValueNotifier<bool>(true);
+  final ValueNotifier<bool> _isLoadingNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _hasFocusNotifier = ValueNotifier<bool>(false);
+
   late final AuthService _authService;
 
-  bool _isLoading = false;
-  bool _isHidden = true;
-  String _msg = '';
+  @override
+  FocusNode get initialFocusNode => _newFocusNode;
 
   @override
   void initState() {
     super.initState();
     _authService = widget.authService ?? AuthService();
+    _newController.addListener(_clearErrorOnEdit);
+    _confirmController.addListener(_clearErrorOnEdit);
+    _newFocusNode.addListener(_onFocusChanged);
+    _confirmFocusNode.addListener(_onFocusChanged);
+  }
+
+  void _clearErrorOnEdit() {
+    if (_errorNotifier.value.isNotEmpty) {
+      _errorNotifier.value = '';
+    }
+  }
+
+  void _onFocusChanged() {
+    final focused = _newFocusNode.hasFocus || _confirmFocusNode.hasFocus;
+    _hasFocusNotifier.value = focused;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final target =
+          (_confirmFocusNode.hasFocus
+                  ? 84.0
+                  : focused
+                  ? 44.0
+                  : 0.0)
+              .clamp(0.0, _scrollController.position.maxScrollExtent);
+      if ((_scrollController.offset - target).abs() > 2.0) {
+        _scrollController.animateTo(
+          target,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
   }
 
   @override
   void dispose() {
+    _newController.removeListener(_clearErrorOnEdit);
+    _confirmController.removeListener(_clearErrorOnEdit);
+    _newFocusNode.removeListener(_onFocusChanged);
+    _confirmFocusNode.removeListener(_onFocusChanged);
     _newController.dispose();
     _confirmController.dispose();
+    _newFocusNode.dispose();
+    _confirmFocusNode.dispose();
+    _scrollController.dispose();
+    _errorNotifier.dispose();
+    _isHideNewNotifier.dispose();
+    _isHideConfirmNotifier.dispose();
+    _isLoadingNotifier.dispose();
+    _hasFocusNotifier.dispose();
     super.dispose();
   }
 
-  void _toLogin(String message) {
+  void _navigateBackToLogin(String message) {
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
@@ -59,23 +119,24 @@ class _FirstLoginChangePasswordScreenState
     );
   }
 
-  Future<void> _submit() async {
-    final newPassword = _newController.text;
-    final confirmPassword = _confirmController.text;
+  Future<void> _handleSubmit() async {
+    if (_isLoadingNotifier.value) return;
+
+    final newPassword = _newController.text.trim();
+    final confirmPassword = _confirmController.text.trim();
 
     if (!RegExp(r'^\d{6}$').hasMatch(newPassword)) {
-      setState(() => _msg = 'Mật khẩu mới phải gồm đúng 6 chữ số');
+      _errorNotifier.value = 'Mật khẩu mới phải gồm đúng 6 chữ số';
       return;
     }
-    if (newPassword != confirmPassword) {
-      setState(() => _msg = 'Mật khẩu xác nhận không khớp');
+    if (confirmPassword != newPassword) {
+      _errorNotifier.value = 'Mật khẩu xác nhận không khớp';
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _msg = '';
-    });
+    FocusManager.instance.primaryFocus?.unfocus();
+    _errorNotifier.value = '';
+    _isLoadingNotifier.value = true;
 
     final result = await _authService.changeFirstLoginPassword(
       changePasswordToken: widget.changePasswordToken,
@@ -84,229 +145,191 @@ class _FirstLoginChangePasswordScreenState
     );
 
     if (!mounted) return;
-    setState(() => _isLoading = false);
+    _isLoadingNotifier.value = false;
 
     if (result['is_success'] == true) {
-      final serverMessage = result['message']?.toString();
-      _toLogin(
-        (serverMessage != null && serverMessage.isNotEmpty)
-            ? serverMessage
-            : 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới.',
+      _navigateBackToLogin(
+        result['message']?.toString() ??
+            'Đổi mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới',
       );
       return;
     }
 
     if (result['status_code'] == 401) {
-      _toLogin(
+      _navigateBackToLogin(
         result['message']?.toString() ??
-            'Phiên đổi mật khẩu đã hết hạn. Vui lòng đăng nhập lại.',
+            'Phiên đổi mật khẩu lần đầu đã hết hạn, vui lòng đăng nhập lại',
       );
       return;
     }
 
-    setState(
-      () => _msg =
-          result['message']?.toString() ?? 'Không thể đổi mật khẩu. Vui lòng thử lại.',
-    );
+    _errorNotifier.value =
+        result['message']?.toString() ?? 'Không thể đổi mật khẩu mới';
   }
 
   @override
   Widget build(BuildContext context) {
-    final pinTheme = PinTheme(
-      width: 46,
-      height: 56,
-      textStyle: GoogleFonts.roboto(fontSize: 22, fontWeight: FontWeight.w600),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.4)),
-      ),
-    );
-    final focusedTheme = pinTheme.copyWith(
-      decoration: pinTheme.decoration!.copyWith(
-        border: Border.all(color: Colors.pink, width: 2),
-      ),
-    );
+    final phone = (widget.phoneNumber ?? '').trim();
+    final badgeText = phone.isNotEmpty
+        ? 'SĐT: $phone'
+        : 'Lần đăng nhập đầu tiên';
 
     return PopScope(
       canPop: false,
-      child: GestureDetector(
-        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-        child: Scaffold(
-          backgroundColor: Colors.white,
-          appBar: AppBar(
-            automaticallyImplyLeading: false,
-            backgroundColor: Colors.white,
-            elevation: 0,
-            title: Text(
-              'Đổi mật khẩu lần đầu',
-              style: GoogleFonts.roboto(
-                fontSize: 22,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
+      child: AuthScaffold(
+        appBarTitle: 'Đổi mật khẩu lần đầu',
+        scrollController: _scrollController,
+        hasFocusListenable: _hasFocusNotifier,
+        bottomBar: ValueListenableBuilder<bool>(
+          valueListenable: _isLoadingNotifier,
+          builder: (context, isLoading, _) {
+            return AuthPrimaryButton(
+              key: const Key('first_login_submit_button'),
+              label: 'Xác nhận đổi mật khẩu',
+              icon: Icons.check_circle_outline_rounded,
+              loading: isLoading,
+              onTap: _handleSubmit,
+            );
+          },
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 6),
+            AuthHeroBanner(
+              icon: Iconsax.shield_tick,
+              badgeText: badgeText,
+              title: 'Thiết lập mật khẩu mới',
+              subtitle:
+                  'Đây là lần đăng nhập đầu tiên. Vui lòng tạo mật khẩu mới gồm 6 chữ số để bảo vệ tài khoản Ví Mio.',
+            ),
+            const SizedBox(height: 22),
+            RepaintBoundary(
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: authCardDeco(radius: 22),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Mật khẩu mới', style: kAuthSectionLabelStyle),
+                    const SizedBox(height: 10),
+                    ValueListenableBuilder<String>(
+                      valueListenable: _errorNotifier,
+                      builder: (context, err, _) {
+                        final hasErr = err.isNotEmpty;
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ValueListenableBuilder<bool>(
+                              valueListenable: _isHideNewNotifier,
+                              builder: (context, isHidden, _) {
+                                return AuthTextField(
+                                  key: const Key('first_login_new_password'),
+                                  controller: _newController,
+                                  focusNode: _newFocusNode,
+                                  hintText: 'Nhập mật khẩu mới (6 số)',
+                                  leadingIcon: Icons.lock_outline_rounded,
+                                  obscureText: isHidden,
+                                  onToggleObscure: () {
+                                    _isHideNewNotifier.value = !isHidden;
+                                  },
+                                  hasError: hasErr,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        signed: false,
+                                        decimal: false,
+                                      ),
+                                  textInputAction: TextInputAction.next,
+                                  inputFormatters: _digitsOnly,
+                                  maxLength: 6,
+                                  onSubmitted: (_) =>
+                                      requestKeyboardFocus(_confirmFocusNode),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Xác nhận mật khẩu mới',
+                              style: kAuthSectionLabelStyle,
+                            ),
+                            const SizedBox(height: 10),
+                            ValueListenableBuilder<bool>(
+                              valueListenable: _isHideConfirmNotifier,
+                              builder: (context, isHidden, _) {
+                                return AuthTextField(
+                                  key: const Key(
+                                    'first_login_confirm_password',
+                                  ),
+                                  controller: _confirmController,
+                                  focusNode: _confirmFocusNode,
+                                  hintText: 'Nhập lại mật khẩu mới (6 số)',
+                                  leadingIcon: Icons.lock_reset_rounded,
+                                  obscureText: isHidden,
+                                  onToggleObscure: () {
+                                    _isHideConfirmNotifier.value = !isHidden;
+                                  },
+                                  hasError: hasErr,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        signed: false,
+                                        decimal: false,
+                                      ),
+                                  textInputAction: TextInputAction.done,
+                                  inputFormatters: _digitsOnly,
+                                  maxLength: 6,
+                                  onSubmitted: (_) => _handleSubmit(),
+                                );
+                              },
+                            ),
+                            if (hasErr) ...[
+                              const SizedBox(height: 14),
+                              AuthErrorBanner(
+                                key: const Key('first_login_error_text'),
+                                message: err,
+                              ),
+                            ],
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          body: SafeArea(
-            child: Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 8,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.pink.withValues(alpha: 0.06),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.pink.withValues(alpha: 0.2),
-                            ),
-                          ),
-                          child: Text(
-                            'Vì lý do bảo mật, bạn cần đổi mật khẩu tạm thời sang mật khẩu cá nhân mới (6 chữ số) trước khi tiếp tục sử dụng ví.',
-                            style: GoogleFonts.roboto(
-                              fontSize: 14,
-                              color: Colors.black87,
-                              height: 1.4,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Text(
-                          'Nhập mật khẩu mới (6 chữ số)',
-                          style: GoogleFonts.roboto(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Center(
-                          child: Pinput(
-                            key: const Key('first_login_new_password'),
-                            controller: _newController,
-                            length: 6,
-                            autofocus: true,
-                            obscureText: _isHidden,
-                            keyboardType: TextInputType.number,
-                            defaultPinTheme: pinTheme,
-                            focusedPinTheme: focusedTheme,
-                            onChanged: (_) {
-                              if (_msg.isNotEmpty) setState(() => _msg = '');
-                            },
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          'Xác nhận mật khẩu mới',
-                          style: GoogleFonts.roboto(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Center(
-                          child: Pinput(
-                            key: const Key('first_login_confirm_password'),
-                            controller: _confirmController,
-                            length: 6,
-                            obscureText: _isHidden,
-                            keyboardType: TextInputType.number,
-                            defaultPinTheme: pinTheme,
-                            focusedPinTheme: focusedTheme,
-                            onChanged: (_) {
-                              if (_msg.isNotEmpty) setState(() => _msg = '');
-                            },
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton.icon(
-                            onPressed: () =>
-                                setState(() => _isHidden = !_isHidden),
-                            icon: Icon(
-                              _isHidden
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_outlined,
-                              size: 18,
-                            ),
-                            label: Text(_isHidden ? 'Hiện' : 'Ẩn'),
-                          ),
-                        ),
-                        if (_msg.isNotEmpty)
-                          Container(
-                            key: const Key('first_login_error_text'),
-                            width: double.infinity,
-                            margin: const EdgeInsets.only(top: 6),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.red.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              _msg,
-                              style: GoogleFonts.roboto(
-                                color: Colors.red.shade700,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                      ],
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: kAuthPinkSoft.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: kAuthPink.withValues(alpha: 0.18)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 1),
+                    child: Icon(
+                      Icons.info_outline_rounded,
+                      size: 17,
+                      color: kAuthPinkDark,
                     ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-                  child: Column(
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        height: 55,
-                        child: ElevatedButton(
-                          key: const Key('first_login_submit_button'),
-                          onPressed: _isLoading ? null : _submit,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.pink,
-                            disabledBackgroundColor: Colors.pink.withValues(
-                              alpha: 0.4,
-                            ),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: _isLoading
-                              ? const SizedBox(
-                                  height: 24,
-                                  width: 24,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : Text(
-                                  'Xác nhận đổi mật khẩu',
-                                  style: GoogleFonts.roboto(
-                                    color: Colors.white,
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                        ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Mật khẩu mới gồm đúng 6 chữ số và không được trùng mật khẩu tạm thời đã được cấp. Sau khi đổi xong, bạn sẽ đăng nhập lại bằng mật khẩu mới.',
+                      style: GoogleFonts.roboto(
+                        fontSize: 12.5,
+                        height: 1.45,
+                        color: kAuthText,
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

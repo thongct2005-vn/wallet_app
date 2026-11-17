@@ -1,6 +1,5 @@
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/format_utils.dart';
-import 'package:app/core/utils/icon_expand_route.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/create_pin_bottom_sheet.dart';
 import 'package:app/src/history/history_screen.dart';
@@ -49,26 +48,26 @@ class _HomeScreenState extends State<HomeScreen> {
   final AppDataService _appDataService = AppDataService();
   final UserController _userController = Get.find<UserController>();
   final BankService _bankService = BankService();
-  final GlobalKey _topUpIconKey = GlobalKey();
-  final GlobalKey _withdrawIconKey = GlobalKey();
-  final GlobalKey _transferIconKey = GlobalKey();
-  final GlobalKey _postpaidIconKey = GlobalKey();
   String _fullName = '';
   bool _isHidenWalletBalance = false;
   String _balance = '0';
   bool _hasPin = false;
-  bool _isCheckingBank = false;
+  final ValueNotifier<bool> _isCheckingBankNotifier = ValueNotifier<bool>(false);
   int _selectedIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    setState(() {
-      _fullName = _userController.fullName.value;
-      _balance =
-          '${FormatUtils.formatDisplayNumber(num.tryParse(_userController.balance.value) ?? 0)}đ';
-      _hasPin = _userController.hasPin.value;
-    });
+    _fullName = _userController.fullName.value;
+    _balance =
+        '${FormatUtils.formatDisplayNumber(num.tryParse(_userController.balance.value) ?? 0)}đ';
+    _hasPin = _userController.hasPin.value;
+  }
+
+  @override
+  void dispose() {
+    _isCheckingBankNotifier.dispose();
+    super.dispose();
   }
 
   @override
@@ -84,6 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: PopScope(
         canPop: false,
         child: Scaffold(
+          backgroundColor: const Color(0xFFFAF6F8),
           extendBodyBehindAppBar: true,
           resizeToAvoidBottomInset: false,
         appBar: _selectedIndex == 0
@@ -117,28 +117,35 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-            IndexedStack(index: _selectedIndex, children: pages),
-            if (_isCheckingBank)
-              Positioned.fill(
-                child: Container(
-                  color: Colors.transparent,
-                  child: Center(
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade400,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 3,
+            RepaintBoundary(
+              child: IndexedStack(index: _selectedIndex, children: pages),
+            ),
+            ValueListenableBuilder<bool>(
+              valueListenable: _isCheckingBankNotifier,
+              builder: (context, isChecking, _) {
+                if (!isChecking) return const SizedBox.shrink();
+                return Positioned.fill(
+                  child: Container(
+                    color: Colors.transparent,
+                    child: Center(
+                      child: Container(
+                        width: 50,
+                        height: 50,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade400,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 3,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
+                );
+              },
+            ),
           ],
         ),
         floatingActionButton: Container(
@@ -504,7 +511,6 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Expanded(
             child: _buildQuickAction(
-              _topUpIconKey,
               Iconsax.wallet_add,
               "Nạp tiền",
               () {
@@ -518,7 +524,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           Expanded(
             child: _buildQuickAction(
-              _withdrawIconKey,
               Iconsax.wallet_minus,
               "Rút tiền",
               () {
@@ -532,7 +537,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           Expanded(
             child: _buildQuickAction(
-              _transferIconKey,
               Iconsax.money_send,
               "Chuyển tiền",
               () {
@@ -542,9 +546,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
                 Navigator.push(
                   context,
-                  IconExpandRoute(
-                    iconKey: _transferIconKey,
-                    icon: Iconsax.money_send,
+                  MaterialPageRoute(
                     builder: (context) => const ContactListScreen(),
                   ),
                 );
@@ -553,15 +555,12 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           Expanded(
             child: _buildQuickAction(
-              _postpaidIconKey,
               Icons.credit_score_rounded,
               "Ví trả sau",
               () {
                 Navigator.push(
                   context,
-                  IconExpandRoute(
-                    iconKey: _postpaidIconKey,
-                    icon: Icons.credit_score_rounded,
+                  MaterialPageRoute(
                     builder: (context) => const PostpaidScreen(),
                   ),
                 );
@@ -574,7 +573,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildQuickAction(
-    GlobalKey iconKey,
     IconData icon,
     String text,
     VoidCallback onTap,
@@ -588,7 +586,6 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              key: iconKey,
               width: 56,
               height: 56,
               decoration: BoxDecoration(
@@ -840,19 +837,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _getBankLinkStatus(bool isTopUpTab) async {
-    if (_isCheckingBank) return; // tránh bấm nhiều lần khi đang chờ
-    setState(() => _isCheckingBank = true);
-    final targetKey = isTopUpTab ? _topUpIconKey : _withdrawIconKey;
-    final targetIcon = isTopUpTab ? Iconsax.wallet_add : Iconsax.wallet_minus;
+    if (_isCheckingBankNotifier.value) return; // tránh bấm nhiều lần khi đang chờ
+    _isCheckingBankNotifier.value = true;
     try {
       final result = await _bankService.getBankLinkStatus();
       if (!mounted) return;
+      _isCheckingBankNotifier.value = false;
       if (result['data']['has_linked_account']) {
         Navigator.push(
           context,
-          IconExpandRoute(
-            iconKey: targetKey,
-            icon: targetIcon,
+          MaterialPageRoute(
             builder: (context) => TopUpWithdrawScreen(
               walletBalance: _balance,
               isTopUpTab: isTopUpTab,
@@ -862,9 +856,7 @@ class _HomeScreenState extends State<HomeScreen> {
       } else {
         Navigator.push(
           context,
-          IconExpandRoute(
-            iconKey: targetKey,
-            icon: targetIcon,
+          MaterialPageRoute(
             builder: (context) =>
                 LinkBankScreen(bankList: result['data']['available_banks']),
           ),
@@ -878,7 +870,7 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isCheckingBank = false);
+      if (mounted) _isCheckingBankNotifier.value = false;
     }
   }
 }
