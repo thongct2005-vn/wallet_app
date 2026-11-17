@@ -10,8 +10,10 @@ class TransactionService {
     String amount,
     String description,
     String idempotencyKey,
-    String pinToken,
-  ) async {
+    String pinToken, {
+    String fundingSource = 'MAIN_WALLET',
+    String? linkedBankAccountId,
+  }) async {
     try {
       final result = await api.post(
         ApiConfig.transfer,
@@ -19,6 +21,9 @@ class TransactionService {
           'destination_user_id': destinationUserId,
           'amount': amount,
           'description': description,
+          if (fundingSource != 'MAIN_WALLET') 'funding_source': fundingSource,
+          if (linkedBankAccountId != null && linkedBankAccountId.isNotEmpty)
+            'linked_bank_account_id': linkedBankAccountId,
         },
         options: Options(
           headers: {'idempotency-key': idempotencyKey, 'x-pin-token': pinToken},
@@ -87,13 +92,16 @@ class TransactionService {
     String idempotencyKey,
     String pinToken, {
     String fundingSource = 'MAIN_WALLET',
+    String? linkedBankAccountId,
   }) async {
     try {
       final result = await api.post(
         ApiConfig.payment,
         data: {
           'reference_code': referenceCode,
-          if (fundingSource == 'POSTPAID') 'funding_source': 'POSTPAID',
+          if (fundingSource != 'MAIN_WALLET') 'funding_source': fundingSource,
+          if (linkedBankAccountId != null && linkedBankAccountId.isNotEmpty)
+            'linked_bank_account_id': linkedBankAccountId,
         },
         options: Options(
           headers: {'idempotency-key': idempotencyKey, 'x-pin-token': pinToken},

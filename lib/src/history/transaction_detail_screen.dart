@@ -45,10 +45,18 @@ class TransactionDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final UserController userController = Get.find<UserController>();
+    final bool isFailed = transactionModel.isFailed;
+    final bool isPending = transactionModel.isPending;
     final bool isPostpaidRepay =
         transactionModel.fundingSource == 'POSTPAID' &&
         (transactionModel.postpaidAction == 'REPAY_PRINCIPAL' ||
-            transactionModel.postpaidAction == 'REPAY_LATE_FEE');
+            transactionModel.postpaidAction == 'REPAY_LATE_FEE' ||
+            transactionModel.postpaidAction == 'REPAY_SERVICE_FEE');
+    final String postpaidServiceName =
+        transactionModel.counterpartyName.trim().isNotEmpty &&
+                transactionModel.counterpartyName.trim() != 'Người nhận'
+            ? transactionModel.counterpartyName.trim()
+            : 'Ví trả sau';
     final bool isPostpaidRefund =
         transactionModel.fundingSource == 'POSTPAID' &&
         transactionModel.postpaidAction == 'REFUND';
@@ -56,6 +64,26 @@ class TransactionDetailScreen extends StatelessWidget {
         transactionModel.type == "PAYMENT" && !isPostpaidRepay;
     final bool isTransfer =
         transactionModel.type == "TRANSFER" && !isPostpaidRefund;
+    final String transferMessage = isTransfer
+        ? (isFailed
+              ? (transactionModel.userMessage ?? '').trim()
+              : (transactionModel.description ?? '').trim())
+        : '';
+    final String failureReason =
+        (transactionModel.description ?? '').trim().isNotEmpty
+        ? transactionModel.description!.trim()
+        : 'Giao dịch không thể thực hiện. Vui lòng thử lại.';
+    final Color statusBgColor = isFailed
+        ? const Color(0xFFFEE2E2)
+        : (isPending
+              ? const Color(0xFFFEF3C7)
+              : kTfSuccess.withValues(alpha: 0.12));
+    final Color statusTextColor = isFailed
+        ? const Color(0xFFDC2626)
+        : (isPending ? const Color(0xFFD97706) : kTfSuccess);
+    final String statusText = status.trim().isNotEmpty
+        ? status.trim()
+        : (isFailed ? 'Thất bại' : (isPending ? 'Đang xử lý' : 'Thành công'));
 
     return Scaffold(
       backgroundColor: kTfBg,
@@ -113,6 +141,26 @@ class TransactionDetailScreen extends StatelessWidget {
                     SnakeBorderCard(
                       borderRadius: 16,
                       borderWidth: 1.5,
+                      colors: isFailed
+                          ? const [
+                              Colors.transparent,
+                              Color(0xFFDC2626),
+                              Color(0xFFFCA5A5),
+                              Colors.transparent,
+                            ]
+                          : isPending
+                          ? const [
+                              Colors.transparent,
+                              Color(0xFFD97706),
+                              Color(0xFFFDE68A),
+                              Colors.transparent,
+                            ]
+                          : const [
+                              Colors.transparent,
+                              Colors.green,
+                              Colors.lightGreenAccent,
+                              Colors.transparent,
+                            ],
                       child: Container(
                         padding: const EdgeInsets.all(16),
                         color: Colors.white,
@@ -164,6 +212,49 @@ class TransactionDetailScreen extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (isFailed) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF1F2),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: const Color(0xFFFECDD3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.only(top: 1),
+                              child: Icon(
+                                Icons.cancel_outlined,
+                                size: 18,
+                                color: Color(0xFFE11D48),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                failureReason,
+                                style: GoogleFonts.roboto(
+                                  fontSize: 13.5,
+                                  height: 1.45,
+                                  fontWeight: FontWeight.w500,
+                                  color: const Color(0xFF881337),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 18),
                     const TransferDashedDivider(),
                     const SizedBox(height: 6),
@@ -176,13 +267,13 @@ class TransactionDetailScreen extends StatelessWidget {
                           vertical: 5,
                         ),
                         decoration: BoxDecoration(
-                          color: kTfSuccess.withValues(alpha: 0.12),
+                          color: statusBgColor,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          status,
+                          statusText,
                           style: GoogleFonts.roboto(
-                            color: kTfSuccess,
+                            color: statusTextColor,
                             fontWeight: FontWeight.w700,
                             fontSize: 13,
                           ),
@@ -215,7 +306,12 @@ class TransactionDetailScreen extends StatelessWidget {
                       ),
                     ),
                     if (isTransfer) ...[
-                      _infoRow("Ví Mio", walletName),
+                      _infoRow(
+                        transactionModel.fundingSource == 'BANK'
+                            ? "Tài khoản/thẻ"
+                            : "Ví Mio",
+                        walletName,
+                      ),
                       if (transactionModel.counterpartyPhone.isNotEmpty)
                         _infoRow(
                           "Số điện thoại",
@@ -224,26 +320,47 @@ class TransactionDetailScreen extends StatelessWidget {
                     ] else if (isPostpaidRefund) ...[
                       _infoRow("Tài khoản hoàn", walletName),
                       _infoRow("Cửa hàng", transactionModel.counterpartyName),
-                      if ((transactionModel.description ?? '').trim().isNotEmpty)
+                      if (!isFailed &&
+                          (transactionModel.description ?? '')
+                              .trim()
+                              .isNotEmpty)
                         _infoRow("Nội dung", transactionModel.description!),
                       if ((transactionModel.orderId ?? '').trim().isNotEmpty)
                         _infoRow("Mã đơn", transactionModel.orderId!),
                     ] else if (isPostpaidRepay) ...[
                       _infoRow("Nguồn thanh toán", walletName),
-                      _infoRow("Dịch vụ", transactionModel.counterpartyName),
-                      if ((transactionModel.description ?? '').trim().isNotEmpty)
+                      _infoRow("Dịch vụ", postpaidServiceName),
+                      if (!isFailed &&
+                          (transactionModel.description ?? '')
+                              .trim()
+                              .isNotEmpty)
                         _infoRow("Nội dung", transactionModel.description!),
                     ] else if (isMerchant) ...[
+                      if (transactionModel.fundingSource == 'BANK' &&
+                          walletName.trim().isNotEmpty)
+                        _infoRow("Tài khoản/thẻ", walletName),
                       _infoRow("Cửa hàng", transactionModel.counterpartyName),
-                      _infoRow("Nội dung", transactionModel.description ?? ''),
-                      _infoRow(
-                        "Mã đơn",
-                        transactionModel.orderId ?? transactionCode,
-                      ),
+                      if (!isFailed &&
+                          (transactionModel.description ?? '')
+                              .trim()
+                              .isNotEmpty)
+                        _infoRow("Nội dung", transactionModel.description!),
+                      if ((transactionModel.orderId ?? '').trim().isNotEmpty ||
+                          !isFailed)
+                        _infoRow(
+                          "Mã đơn",
+                          (transactionModel.orderId ?? '').trim().isNotEmpty
+                              ? transactionModel.orderId!
+                              : transactionCode,
+                        ),
                     ] else ...[
                       _infoRow("Tài khoản/thẻ", walletName),
                     ],
                     _infoRow("Tổng phí", feeText, isLast: true),
+                    if (transferMessage.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      _buildTransferMessageBox(transferMessage),
+                    ],
                     const SizedBox(height: 22),
                     Row(
                       children: [
@@ -272,7 +389,7 @@ class TransactionDetailScreen extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (textBtn.trim().isNotEmpty) ...[
+                        if (!isFailed && textBtn.trim().isNotEmpty) ...[
                           const SizedBox(width: 12),
                           Expanded(
                             child: ElevatedButton(
@@ -352,6 +469,65 @@ class TransactionDetailScreen extends StatelessWidget {
                   ],
                 ),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransferMessageBox(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: kTfPink.withValues(alpha: 0.045),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: kTfPink.withValues(alpha: 0.18),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: kTfPink.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Iconsax.message_text,
+              size: 17,
+              color: kTfPink,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Lời nhắn",
+                  style: GoogleFonts.roboto(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                    color: kTfMuted,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: GoogleFonts.roboto(
+                    fontSize: 14.5,
+                    height: 1.4,
+                    fontWeight: FontWeight.w500,
+                    color: kTfText,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

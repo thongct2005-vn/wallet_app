@@ -1,5 +1,9 @@
+import 'package:app/core/network/api_error_handler.dart';
+import 'package:app/core/services/connectivity_service.dart';
+import 'package:app/core/utils/route_transition_utils.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/src/home/home_screen.dart';
+import 'package:app/src/link_bank/link_bank_screen.dart';
 import 'package:app/src/services/bank_service.dart';
 import 'package:app/src/topup_withdraw/confirm_topup_withdrawn_screen.dart';
 import 'package:app/src/transfer/transfer_ui.dart';
@@ -19,16 +23,24 @@ const Color _kBg = Color(0xFFFAF6F8);
 class TopUpWithdrawScreen extends StatefulWidget {
   final String walletBalance;
   final bool isTopUpTab;
+  final bool checkBankLinkOnOpen;
+  final BankService? bankService;
+  final ConnectivityService? connectivityService;
+
   const TopUpWithdrawScreen({
     super.key,
     required this.walletBalance,
     required this.isTopUpTab,
+    this.checkBankLinkOnOpen = false,
+    this.bankService,
+    this.connectivityService,
   });
 
   /// Route chuyển trang mượt (trượt nhẹ + mờ dần) dùng khi mở từ màn Home.
   static Route<T> route<T>({
     required String walletBalance,
     required bool isTopUpTab,
+    bool checkBankLinkOnOpen = false,
   }) {
     return PageRouteBuilder<T>(
       transitionDuration: const Duration(milliseconds: 320),
@@ -36,6 +48,7 @@ class TopUpWithdrawScreen extends StatefulWidget {
       pageBuilder: (_, _, _) => TopUpWithdrawScreen(
         walletBalance: walletBalance,
         isTopUpTab: isTopUpTab,
+        checkBankLinkOnOpen: checkBankLinkOnOpen,
       ),
       transitionsBuilder: (_, animation, _, child) {
         final curved = CurvedAnimation(
@@ -139,8 +152,13 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
   ];
 
   final TextEditingController _amountController = TextEditingController();
-  final BankService _bankService = BankService();
+  late final BankService _bankService;
+  late final ConnectivityService _connectivityService;
   bool _isTopUpTab = true;
+  bool _isCheckingInitialBank = false;
+  bool _didScheduleInitialCheck = false;
+  VoidCallback? _cancelDeferredCheck;
+  String? _initialErrorMsg;
   final ValueNotifier<bool> _isLoadingNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<bool> _hasAmountNotifier = ValueNotifier<bool>(false);
 
@@ -150,8 +168,83 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
   @override
   void initState() {
     super.initState();
+    _bankService = widget.bankService ?? BankService();
+    _connectivityService =
+        widget.connectivityService ?? ConnectivityService.instance;
     _isTopUpTab = widget.isTopUpTab;
+    _isCheckingInitialBank = widget.checkBankLinkOnOpen;
     _amountController.addListener(_onAmountControllerChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (widget.checkBankLinkOnOpen && !_didScheduleInitialCheck) {
+      _didScheduleInitialCheck = true;
+      _cancelDeferredCheck = runAfterRouteTransition(
+        context,
+        _checkInitialBankLink,
+      );
+    }
+  }
+
+  Future<void> _checkInitialBankLink() async {
+    if (mounted) {
+      setState(() {
+        _isCheckingInitialBank = true;
+        _initialErrorMsg = null;
+      });
+    }
+
+    await _connectivityService.refresh();
+    if (!mounted) return;
+
+    if (!_connectivityService.isConnected) {
+      setState(() {
+        _isCheckingInitialBank = false;
+        _initialErrorMsg = ApiErrorHandler.offlineMessage;
+      });
+      return;
+    }
+
+    try {
+      final result = await _bankService.getBankLinkStatus();
+      if (!mounted) return;
+
+      if (result['is_success'] != true || result['data'] is! Map) {
+        setState(() {
+          _isCheckingInitialBank = false;
+          _initialErrorMsg =
+              result['message']?.toString() ??
+              ApiErrorHandler.noResponseMessage();
+        });
+        return;
+      }
+
+      final data = result['data'] as Map;
+      if (data['has_linked_account'] == true) {
+        setState(() {
+          _isCheckingInitialBank = false;
+          _initialErrorMsg = null;
+        });
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                LinkBankScreen(bankList: data['available_banks']),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      final err = ApiErrorHandler.handleError(e);
+      setState(() {
+        _isCheckingInitialBank = false;
+        _initialErrorMsg =
+            err['message']?.toString() ?? ApiErrorHandler.noResponseMessage();
+      });
+    }
   }
 
   void _onAmountControllerChanged() {
@@ -163,6 +256,7 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
 
   @override
   void dispose() {
+    _cancelDeferredCheck?.call();
     _amountController.removeListener(_onAmountControllerChanged);
     _amountController.dispose();
     _focusNode.dispose();
@@ -264,8 +358,51 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
                       ],
                     ),
                   ),
-                  Expanded(
-                    child: SingleChildScrollView(
+                  if (_isCheckingInitialBank)
+                    const Expanded(
+                      child: Center(
+                        child: CircularProgressIndicator(color: _kPink),
+                      ),
+                    )
+                  else if (_initialErrorMsg != null)
+                    Expanded(
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Iconsax.warning_2,
+                                size: 48,
+                                color: _kPink,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                _initialErrorMsg!,
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.roboto(
+                                  fontSize: 15,
+                                  color: _kText,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed: _checkInitialBankLink,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _kPink,
+                                  foregroundColor: Colors.white,
+                                ),
+                                child: const Text('Thử lại'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: SingleChildScrollView(
                       padding: const EdgeInsets.fromLTRB(16, 6, 16, 110),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -453,8 +590,9 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
                 ],
               ),
             ),
-            Positioned(
-              left: 0,
+            if (!_isCheckingInitialBank && _initialErrorMsg == null)
+              Positioned(
+                left: 0,
               right: 0,
               bottom: 0,
               child: KeyboardTranslate(
@@ -497,7 +635,8 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
                                       final result = await _getLinkedBanks();
                                       _isLoadingNotifier.value = false;
                                       if (!context.mounted) return;
-                                      if (result['is_success']) {
+                                      if (result['is_success'] == true &&
+                                          result['data'] is Map) {
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
@@ -514,7 +653,11 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
                                       } else {
                                         SnackbarUtils.failure(
                                           context,
-                                          result['message'],
+                                          result['message']?.toString() ??
+                                              ApiErrorHandler.noResponseMessage(),
+                                          title: result['is_offline'] == true
+                                              ? 'Mất kết nối internet'
+                                              : null,
                                         );
                                       }
                                     }
@@ -757,16 +900,9 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
 
   Future<Map<String, dynamic>> _getLinkedBanks() async {
     try {
-      final result = await _bankService.getBankLinkStatus();
-      return result;
+      return await _bankService.getBankLinkStatus();
     } catch (e) {
-      if (mounted) {
-        SnackbarUtils.failure(
-          context,
-          "Hệ thống đang bảo trì. Vui lòng thử lại sau",
-        );
-      }
-      return {};
+      return ApiErrorHandler.handleError(e);
     }
   }
 }

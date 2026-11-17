@@ -1,3 +1,4 @@
+import 'package:app/core/network/api_error_handler.dart';
 import 'package:app/core/utils/format_utils.dart';
 import 'package:app/core/utils/loading_util.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
@@ -382,7 +383,7 @@ class _ConfirmTopUpWithdrawScreenState
                 isLoadingLinkedBanks = false;
               });
               if (!context.mounted) return;
-              if (result['is_success'] == true) {
+              if (result['is_success'] == true && result['data'] is Map) {
                 await Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -406,7 +407,14 @@ class _ConfirmTopUpWithdrawScreenState
                   });
                 }
               } else {
-                SnackbarUtils.failure(context, result['message']);
+                SnackbarUtils.failure(
+                  context,
+                  result['message']?.toString() ??
+                      ApiErrorHandler.noResponseMessage(),
+                  title: result['is_offline'] == true
+                      ? 'Mất kết nối internet'
+                      : null,
+                );
               }
             },
             child: Container(
@@ -735,10 +743,12 @@ class _ConfirmTopUpWithdrawScreenState
           (Route<dynamic> route) => false,
         );
       } else {
+        idempotencyKey = _uuid.v7();
         SnackbarUtils.failure(context, result['message']);
       }
     } catch (e) {
       if (!mounted) return;
+      idempotencyKey = _uuid.v7();
       SnackbarUtils.failure(context, "Có lỗi xảy ra. Vui lòng thử lại");
     } finally {
       if (mounted) setState(() => _isProcessing = false);
@@ -747,16 +757,9 @@ class _ConfirmTopUpWithdrawScreenState
 
   Future<Map<String, dynamic>> _getLinkedBanks() async {
     try {
-      final result = await _bankService.getBankLinkStatus();
-      return result;
+      return await _bankService.getBankLinkStatus();
     } catch (e) {
-      if (mounted) {
-        SnackbarUtils.failure(
-          context,
-          "Hệ thống đang bảo trì. Vui lòng thử lại sau",
-        );
-      }
-      return {};
+      return ApiErrorHandler.handleError(e);
     }
   }
 }

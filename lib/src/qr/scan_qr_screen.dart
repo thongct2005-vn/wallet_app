@@ -1,10 +1,11 @@
 import 'package:app/core/utils/dialog_utils.dart';
 import 'package:app/core/utils/format_utils.dart';
+import 'package:app/src/services/bank_service.dart';
 import 'package:app/src/services/payment_service.dart';
-import 'package:app/src/services/postpaid_service.dart';
 import 'package:app/src/services/wallet_service.dart';
 import 'package:app/src/transfer/amount_input_screen.dart';
 import 'package:app/src/transfer/confirm_tranfer_screen.dart';
+import 'package:app/src/transfer/transfer_funding_helper.dart';
 import 'package:app/src/transfer/transfer_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -19,6 +20,7 @@ class ScanQRScreen extends StatefulWidget {
 class _ScanQRScreenState extends State<ScanQRScreen> {
   final PaymentService _paymentService = PaymentService();
   final WalletService _walletService = WalletService();
+  final BankService _bankService = BankService();
 
   // normal + detectionTimeoutMs: mỗi lần đọc cách nhau 1 giây
   // (detectionTimeoutMs chỉ có tác dụng khi detectionSpeed = normal)
@@ -148,33 +150,19 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
       return;
     }
 
-    final check = await _walletService.checkTransferEligibility(amount!);
+    final needed = FormatUtils.formatAmountToNum(amount!);
+    final resolution = await evaluateTransferFundingBeforeConfirm(
+      walletService: _walletService,
+      bankService: _bankService,
+      rawAmount: amount,
+      neededAmount: needed,
+      isQrPayment: true,
+    );
     if (!mounted) return;
 
-    if (check['is_success'] != true) {
-      _showError("Hệ thống đang bảo trì. Vui lòng thử lại sau");
+    if (!resolution.canProceed) {
+      _showError(resolution.errorMessage ?? "Số dư trong ví không đủ");
       return;
-    }
-
-    String initialFundingSource = 'MAIN_WALLET';
-    if (check['is_eligible'] != true) {
-      final needed = FormatUtils.formatAmountToNum(amount);
-      final ppRes = await PostpaidService().getWallet();
-      if (!mounted) return;
-      final ppData = ppRes['is_success'] == true && ppRes['data'] is Map
-          ? ppRes['data'] as Map
-          : null;
-      final canUsePostpaid =
-          ppData != null &&
-          ppData['activated'] == true &&
-          ppData['status'] == 'ACTIVE' &&
-          (num.tryParse(ppData['available_limit']?.toString() ?? '0') ?? 0) >=
-              needed;
-      if (!canUsePostpaid) {
-        _showError("Số dư trong ví không đủ");
-        return;
-      }
-      initialFundingSource = 'POSTPAID';
     }
 
     Navigator.push(
@@ -184,15 +172,15 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
           receiverId: receiverId,
           receiverName: receiverFullName,
           receiverPhone: receiverPhone,
-          amount: FormatUtils.formatDisplayNumber(
-            FormatUtils.formatAmountToNum(amount),
-          ),
+          amount: FormatUtils.formatDisplayNumber(needed),
           description: description,
-          walletBalance: check['wallet_balance'],
+          walletBalance: resolution.walletBalance,
           referenceCode: qrData,
           isMerchant: isMerchant,
           orderId: orderId,
-          initialFundingSource: initialFundingSource,
+          initialFundingSource: resolution.initialFundingSource,
+          initialLinkedBankAccountId: resolution.initialLinkedBankAccountId,
+          initialLinkedBanks: resolution.linkedBanks,
         ),
       ),
     ).then((_) => _resumeScan());

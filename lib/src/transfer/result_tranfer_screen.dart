@@ -120,6 +120,14 @@ class _ResultTranferScreenState extends State<ResultTranferScreen> {
                               label: "Dịch vụ/ Cửa hàng",
                               value: data['fundingSource'] == 'POSTPAID'
                                   ? "Thanh toán qua Ví trả sau"
+                                  : data['fundingSource'] == 'BANK' &&
+                                        (data['bankName'] ?? '')
+                                            .toString()
+                                            .trim()
+                                            .isNotEmpty
+                                  ? (widget.isMerchant
+                                        ? "Thanh toán qua ${data['bankName']}"
+                                        : "Chuyển tiền qua ${data['bankName']}")
                                   : widget.isMerchant
                                   ? "Thanh toán qua Mio"
                                   : "Chuyển tiền qua Mio",

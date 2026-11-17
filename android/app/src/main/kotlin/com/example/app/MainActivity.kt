@@ -1,15 +1,23 @@
 package com.example.app
 
 import android.content.ContentValues
+import android.content.Context
+import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.provider.Settings
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileOutputStream
@@ -18,12 +26,18 @@ class MainActivity : FlutterFragmentActivity() {
     private val galleryChannel = "com.example.app/gallery"
     private val splashChannel = "com.example.app/splash"
     private val windowFocusChannel = "com.example.app/window_focus"
+    private val connectivityMethodChannel = "com.example.app/connectivity"
+    private val connectivityEventChannel = "com.example.app/connectivity_events"
 
     @Volatile
     private var keepSplashOnScreen = true
     private val mainHandler = Handler(Looper.getMainLooper())
     private val fallbackReleaseSplash = Runnable { releaseSplash() }
     private val pendingFocusWaiters = mutableListOf<Pair<MethodChannel.Result, Runnable>>()
+    private var connectivityEventSink: EventChannel.EventSink? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var pendingLostCheck: Runnable? = null
+    private var lastEmittedConnected: Boolean? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -78,6 +92,29 @@ class MainActivity : FlutterFragmentActivity() {
                     result.notImplemented()
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, connectivityMethodChannel)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "checkConnectivity" -> result.success(isNetworkConnected())
+                    "openNetworkSettings" -> result.success(openNetworkSettings())
+                    else -> result.notImplemented()
+                }
+            }
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, connectivityEventChannel)
+            .setStreamHandler(object : EventChannel.StreamHandler {
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                    connectivityEventSink = events
+                    lastEmittedConnected = isNetworkConnected()
+                    events?.success(lastEmittedConnected)
+                    registerNetworkMonitor()
+                }
+
+                override fun onCancel(arguments: Any?) {
+                    connectivityEventSink = null
+                    lastEmittedConnected = null
+                    unregisterNetworkMonitor()
+                }
+            })
     }
 
     private fun savePngToGallery(bytes: ByteArray, fileName: String): String {
@@ -151,6 +188,8 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(fallbackReleaseSplash)
+        unregisterNetworkMonitor()
+        connectivityEventSink = null
         flushFocusWaiters(false)
         super.onDestroy()
     }
@@ -158,6 +197,118 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onResume() {
         super.onResume()
         setHighRefreshRate()
+        emitConnectivityIfChanged(isNetworkConnected())
+    }
+
+    private fun isNetworkConnected(): Boolean {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return true
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val network = cm.activeNetwork ?: return false
+            val caps = cm.getNetworkCapabilities(network) ?: return false
+            val hasTransport =
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ||
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+            hasTransport && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        } else {
+            @Suppress("DEPRECATION")
+            cm.activeNetworkInfo?.isConnected == true
+        }
+    }
+
+    private fun emitConnectivityIfChanged(connected: Boolean) {
+        mainHandler.post {
+            val sink = connectivityEventSink ?: return@post
+            if (lastEmittedConnected != connected) {
+                lastEmittedConnected = connected
+                sink.success(connected)
+            }
+        }
+    }
+
+    private fun registerNetworkMonitor() {
+        unregisterNetworkMonitor()
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                cancelPendingLostCheck()
+                emitConnectivityIfChanged(isNetworkConnected())
+            }
+
+            override fun onCapabilitiesChanged(
+                network: Network,
+                networkCapabilities: NetworkCapabilities,
+            ) {
+                val connected = isNetworkConnected()
+                if (connected) {
+                    cancelPendingLostCheck()
+                }
+                emitConnectivityIfChanged(connected)
+            }
+
+            override fun onLost(network: Network) {
+                // Tránh nhấp nháy thông báo khi chuyển nhanh giữa Wi-Fi và dữ liệu di động.
+                cancelPendingLostCheck()
+                val check = Runnable {
+                    emitConnectivityIfChanged(isNetworkConnected())
+                }
+                pendingLostCheck = check
+                mainHandler.postDelayed(check, 350L)
+            }
+
+            override fun onUnavailable() {
+                cancelPendingLostCheck()
+                emitConnectivityIfChanged(isNetworkConnected())
+            }
+        }
+        networkCallback = callback
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                cm.registerDefaultNetworkCallback(callback)
+            } else {
+                val request = NetworkRequest.Builder()
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    .build()
+                cm.registerNetworkCallback(request, callback)
+            }
+        } catch (_: Exception) {
+            networkCallback = null
+        }
+    }
+
+    private fun unregisterNetworkMonitor() {
+        cancelPendingLostCheck()
+        val callback = networkCallback ?: return
+        networkCallback = null
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
+        try {
+            cm.unregisterNetworkCallback(callback)
+        } catch (_: Exception) {}
+    }
+
+    private fun cancelPendingLostCheck() {
+        pendingLostCheck?.let { mainHandler.removeCallbacks(it) }
+        pendingLostCheck = null
+    }
+
+    private fun openNetworkSettings(): Boolean {
+        val actions = listOf(
+            Settings.ACTION_WIFI_SETTINGS,
+            Settings.ACTION_WIRELESS_SETTINGS,
+            Settings.ACTION_SETTINGS,
+        )
+        for (action in actions) {
+            try {
+                val intent = Intent(action).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(intent)
+                return true
+            } catch (_: Exception) {}
+        }
+        return false
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

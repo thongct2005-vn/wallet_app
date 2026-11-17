@@ -22,13 +22,16 @@ const Color _kIncome = Color(0xFF2E9E5B);
 const Color _kExpense = Color(0xFFE53935);
 
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key});
+  final TransactionService? transactionService;
+
+  const HistoryScreen({super.key, this.transactionService});
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  final TransactionService _transactionService = TransactionService();
+  late final TransactionService _transactionService =
+      widget.transactionService ?? TransactionService();
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -301,10 +304,22 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ? 'chuyển tiền chuyển đến $name transfer'
               : 'nhận tiền nhận từ $name transfer';
         } else if (t.type == 'PAYMENT') {
-          typeDisplay = 'thanh toán $name payment';
+          if (t.fundingSource == 'POSTPAID') {
+            typeDisplay =
+                'ví trả sau thanh toán dư nợ phí dịch vụ phí trễ hạn thanh toán phí dịch vụ ví trả sau postpaid payment';
+          } else {
+            typeDisplay = 'thanh toán $name payment';
+          }
         }
 
-        final combined = '$desc $name $bank $phone $idStr $orderId $typeDisplay';
+        final statusKeywords = t.isFailed
+            ? 'thất bại failed loi error'
+            : (t.isPending
+                ? 'đang xử lý pending'
+                : 'thành công completed');
+
+        final combined =
+            '$desc $name $bank $phone $idStr $orderId $typeDisplay $statusKeywords';
         final combinedClean = _removeDiacritics(combined);
 
         return combined.contains(_searchKeyword) ||
@@ -1148,7 +1163,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   transactionModel: t,
                   title: item.titleDetail,
                   amount: item.signedAmount,
-                  status: 'Thành công',
+                  status: item.statusLabel,
                   time: item.formattedTime,
                   transactionCode: t.id.toString(),
                   walletName: item.walletName,
@@ -1216,15 +1231,31 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   children: [
                     Text(
                       item.signedAmount,
-                      style: item.isIncome
-                          ? _tileIncomeAmountStyle
-                          : _tileExpenseAmountStyle,
+                      style: item.isFailed
+                          ? _tileIncomeAmountStyle.copyWith(
+                              color: const Color(0xFF9CA3AF),
+                            )
+                          : (item.isIncome
+                                ? _tileIncomeAmountStyle
+                                : _tileExpenseAmountStyle),
                     ),
                     const SizedBox(height: 5),
                     Text(
                       item.formattedBalance,
                       style: _tileBalanceStyle,
                     ),
+                    if (item.isFailed) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'THẤT BẠI',
+                        style: GoogleFonts.roboto(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                          color: _kExpense,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -1240,6 +1271,8 @@ class _PreparedTransaction {
   final TransactionModel raw;
   final _TransactionVisualStyle style;
   final bool isIncome;
+  final bool isFailed;
+  final String statusLabel;
   final String title;
   final String titleDetail;
   final String textBtn;
@@ -1254,6 +1287,8 @@ class _PreparedTransaction {
     required this.raw,
     required this.style,
     required this.isIncome,
+    required this.isFailed,
+    required this.statusLabel,
     required this.title,
     required this.titleDetail,
     required this.textBtn,
@@ -1269,18 +1304,26 @@ class _PreparedTransaction {
     TransactionModel t,
     TextStyle badgeBaseStyle,
   ) {
+    final isFailed = t.isFailed;
+    final isPending = t.isPending;
     final isOut = t.direction == 'OUT';
     final isIncome = !isOut || t.type == "TOPUP";
     final isMerchantPayment = t.type == "PAYMENT";
     final isTransfer = t.type == "TRANSFER";
     final isPostpaid = t.fundingSource == 'POSTPAID';
+    final isBankFunded = t.fundingSource == 'BANK';
     final postpaidAction = t.postpaidAction;
     final isPostpaidPurchase = isPostpaid && postpaidAction == 'PURCHASE';
     final isPostpaidRefund = isPostpaid && postpaidAction == 'REFUND';
+    final isPostpaidServiceFeeRepay =
+        isPostpaid && postpaidAction == 'REPAY_SERVICE_FEE';
+    final isPostpaidLateFeeRepay =
+        isPostpaid && postpaidAction == 'REPAY_LATE_FEE';
     final isPostpaidRepay =
         isPostpaid &&
         (postpaidAction == 'REPAY_PRINCIPAL' ||
-            postpaidAction == 'REPAY_LATE_FEE');
+            postpaidAction == 'REPAY_LATE_FEE' ||
+            postpaidAction == 'REPAY_SERVICE_FEE');
     final isPostpaidCreditEvent = isPostpaidPurchase || isPostpaidRefund;
 
     final style = _TransactionVisualStyle.fromType(
@@ -1291,7 +1334,10 @@ class _PreparedTransaction {
       isPostpaidRepay: isPostpaidRepay,
     );
 
-    final amountPrefix = isIncome ? '+' : '-';
+    final amountPrefix = isFailed ? '' : (isIncome ? '+' : '-');
+    final statusLabel = isFailed
+        ? 'Thất bại'
+        : (isPending ? 'Đang xử lý' : 'Thành công');
     final bankLabel = t.bankName.trim().isNotEmpty
         ? t.bankName.trim()
         : 'ngân hàng';
@@ -1299,8 +1345,16 @@ class _PreparedTransaction {
         ? t.counterpartyName.trim()
         : (isMerchantPayment ? 'đối tác' : 'người dùng');
 
+    final postpaidRepayTitle = isPostpaidServiceFeeRepay
+        ? "Thanh toán phí dịch vụ Ví trả sau"
+        : isPostpaidLateFeeRepay
+        ? ((t.description ?? '').toLowerCase().contains('phí dịch vụ')
+              ? "Thanh toán phí Ví trả sau"
+              : "Thanh toán phí trễ hạn Ví trả sau")
+        : "Thanh toán dư nợ Ví trả sau";
+
     final title = isPostpaidRepay
-        ? "Thanh toán dư nợ Ví trả sau"
+        ? postpaidRepayTitle
         : isPostpaidRefund
         ? "Hoàn tiền từ $counterpartyLabel"
         : t.type == "TOPUP"
@@ -1316,7 +1370,7 @@ class _PreparedTransaction {
         : "Giao dịch không xác định";
 
     final titleDetail = isPostpaidRepay
-        ? "Thanh toán dư nợ Ví trả sau"
+        ? postpaidRepayTitle
         : isPostpaidRefund
         ? "Hoàn tiền Ví trả sau"
         : isPostpaidPurchase
@@ -1351,12 +1405,19 @@ class _PreparedTransaction {
       raw: t,
       style: style,
       isIncome: isIncome,
+      isFailed: isFailed,
+      statusLabel: statusLabel,
       title: title,
       titleDetail: titleDetail,
       textBtn: textBtn,
       walletName: isPostpaidCreditEvent
           ? 'Ví trả sau'
-          : (t.type != 'TRANSFER' && !isPostpaidRepay ? bankLabel : 'Ví Mio'),
+          : (isBankFunded ||
+                    (t.type != 'TRANSFER' &&
+                        t.type != 'PAYMENT' &&
+                        !isPostpaidRepay)
+                ? bankLabel
+                : 'Ví Mio'),
       formattedTime: FormatUtils.formatDateTime(t.createdAt),
       signedAmount: '$amountPrefix${FormatUtils.formatDisplayNumber(t.amount)}đ',
       formattedFee: t.fee > 0

@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:app/core/services/app_bootstrap.dart';
+import 'package:app/core/services/connectivity_service.dart';
 import 'package:app/core/services/firebase_bootstrap.dart';
+import 'package:app/core/widgets/network_status_banner.dart';
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -34,6 +36,7 @@ class _MainAppState extends State<MainApp> {
   @override
   void initState() {
     super.initState();
+    unawaited(ConnectivityService.instance.initialize());
     // Gỡ Native Splash ngay sau khi frame đầu tiên của màn hình đích vẽ xong.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       SplashBridge.hide();
@@ -128,6 +131,11 @@ class _MainAppState extends State<MainApp> {
       debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey,
       theme: _lightTheme,
+      builder: (context, child) {
+        return NetworkStatusOverlay(
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: widget.initialScreen,
     );
   }

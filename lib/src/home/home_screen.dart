@@ -1,15 +1,15 @@
 import 'package:app/core/controller/user_controller.dart';
+import 'package:app/core/network/api_error_handler.dart';
+import 'package:app/core/services/connectivity_service.dart';
 import 'package:app/core/utils/format_utils.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/create_pin_bottom_sheet.dart';
 import 'package:app/src/history/history_screen.dart';
-import 'package:app/src/link_bank/link_bank_screen.dart';
 import 'package:app/src/postpaid/postpaid_screen.dart';
 import 'package:app/src/profile/profile_screen.dart';
 import 'package:app/src/promotion/promotion_screen.dart';
 import 'package:app/src/qr/qr_main_screen.dart';
 import 'package:app/src/services/app_data_service.dart';
-import 'package:app/src/services/bank_service.dart';
 import 'package:app/src/topup_withdraw/topup_withdraw_screen.dart';
 import 'package:app/src/transfer/contact_list_screen.dart';
 import 'package:flutter/material.dart';
@@ -47,12 +47,10 @@ class _HomeScreenState extends State<HomeScreen> {
   final UserService _userService = UserService();
   final AppDataService _appDataService = AppDataService();
   final UserController _userController = Get.find<UserController>();
-  final BankService _bankService = BankService();
   String _fullName = '';
   bool _isHidenWalletBalance = false;
   String _balance = '0';
   bool _hasPin = false;
-  final ValueNotifier<bool> _isCheckingBankNotifier = ValueNotifier<bool>(false);
   int _selectedIndex = 0;
 
   @override
@@ -62,12 +60,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _balance =
         '${FormatUtils.formatDisplayNumber(num.tryParse(_userController.balance.value) ?? 0)}đ';
     _hasPin = _userController.hasPin.value;
-  }
-
-  @override
-  void dispose() {
-    _isCheckingBankNotifier.dispose();
-    super.dispose();
   }
 
   @override
@@ -119,32 +111,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             RepaintBoundary(
               child: IndexedStack(index: _selectedIndex, children: pages),
-            ),
-            ValueListenableBuilder<bool>(
-              valueListenable: _isCheckingBankNotifier,
-              builder: (context, isChecking, _) {
-                if (!isChecking) return const SizedBox.shrink();
-                return Positioned.fill(
-                  child: Container(
-                    color: Colors.transparent,
-                    child: Center(
-                      child: Container(
-                        width: 50,
-                        height: 50,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade400,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 3,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
             ),
           ],
         ),
@@ -518,7 +484,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   _showCreatePinDialog(context);
                   return;
                 }
-                _getBankLinkStatus(true);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => TopUpWithdrawScreen(
+                      walletBalance: _balance,
+                      isTopUpTab: true,
+                      checkBankLinkOnOpen: true,
+                    ),
+                  ),
+                );
               },
             ),
           ),
@@ -531,7 +506,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   _showCreatePinDialog(context);
                   return;
                 }
-                _getBankLinkStatus(false);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => TopUpWithdrawScreen(
+                      walletBalance: _balance,
+                      isTopUpTab: false,
+                      checkBankLinkOnOpen: true,
+                    ),
+                  ),
+                );
               },
             ),
           ),
@@ -809,15 +793,38 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _onRefresh() async {
     try {
+      await ConnectivityService.instance.refresh();
+      if (!ConnectivityService.instance.isConnected) {
+        if (mounted) {
+          SnackbarUtils.failure(
+            context,
+            ApiErrorHandler.offlineMessage,
+            title: 'Mất kết nối internet',
+          );
+        }
+        return;
+      }
+
       final result = await _userService.getMe();
       final homeData = await _appDataService.fetchHomeData();
 
+      if (result['is_success'] != true || result['user_id'] == null) {
+        if (mounted) {
+          SnackbarUtils.failure(
+            context,
+            result['message']?.toString() ?? ApiErrorHandler.noResponseMessage(),
+            title: result['is_offline'] == true ? 'Mất kết nối internet' : null,
+          );
+        }
+        return;
+      }
+
       _userController.setUserData(
-        newId: result['user_id'],
-        newPhone: result['phone'],
-        newFullName: result['full_name'],
-        newBalance: homeData['balance'],
-        newHasPin: homeData['has_pin'],
+        newId: result['user_id'].toString(),
+        newPhone: (result['phone'] ?? '').toString(),
+        newFullName: (result['full_name'] ?? '').toString(),
+        newBalance: (homeData['balance'] ?? _userController.balance.value).toString(),
+        newHasPin: homeData['has_pin'] == true,
       );
 
       setState(() {
@@ -828,49 +835,13 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     } catch (e) {
       if (mounted) {
+        final err = ApiErrorHandler.handleError(e);
         SnackbarUtils.failure(
           context,
-          "Không thể tải dữ liệu. Vui lòng thử lại",
+          err['message']?.toString() ?? 'Không thể tải dữ liệu. Vui lòng thử lại',
+          title: err['is_offline'] == true ? 'Mất kết nối internet' : null,
         );
       }
-    }
-  }
-
-  Future<void> _getBankLinkStatus(bool isTopUpTab) async {
-    if (_isCheckingBankNotifier.value) return; // tránh bấm nhiều lần khi đang chờ
-    _isCheckingBankNotifier.value = true;
-    try {
-      final result = await _bankService.getBankLinkStatus();
-      if (!mounted) return;
-      _isCheckingBankNotifier.value = false;
-      if (result['data']['has_linked_account']) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => TopUpWithdrawScreen(
-              walletBalance: _balance,
-              isTopUpTab: isTopUpTab,
-            ),
-          ),
-        );
-      } else {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                LinkBankScreen(bankList: result['data']['available_banks']),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        SnackbarUtils.failure(
-          context,
-          "Hệ thống đang bảo trì. Vui lòng thử lại sau",
-        );
-      }
-    } finally {
-      if (mounted) _isCheckingBankNotifier.value = false;
     }
   }
 }
