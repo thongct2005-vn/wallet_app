@@ -15,13 +15,12 @@ class OtpService {
   );
 
   Future<Map<String, dynamic>> generateOtp({
-    String? phone,
     String? email,
   }) async {
     try {
       final result = await api.post(
         ApiConfig.sendOtp,
-        data: {'phone': ?phone, 'email': ?email},
+        data: {'email': ?email},
         options: _opts(),
       );
 
@@ -36,7 +35,6 @@ class OtpService {
   }
 
   Future<Map<String, dynamic>> verifyOtp({
-    String? phone,
     String? email,
     String? otpToken,
     required String otp,
@@ -44,7 +42,7 @@ class OtpService {
     try {
       final result = await api.post(
         ApiConfig.verifyOtp,
-        data: {'phone': ?phone, 'email': ?email, 'otp': otp},
+        data: {'email': ?email, 'otp': otp},
         options: _opts(
           headers: otpToken == null ? null : {'x-otp-token': otpToken},
         ),

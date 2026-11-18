@@ -474,8 +474,8 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet>
                             ),
                             child: Text(
                               _otpMethod == 'totp'
-                                  ? 'Phát hiện dấu hiệu bất thường. Vui lòng nhập mã 6 số từ ứng dụng Google Authenticator.'
-                                  : 'Phát hiện dấu hiệu bất thường. Vui lòng nhập mã OTP 6 số đã gửi tới email $_maskedEmail.',
+                                  ? 'Vui lòng nhập mã 6 số từ ứng dụng Google Authenticator.'
+                                  : 'Vui lòng nhập mã OTP 6 số đã gửi tới email $_maskedEmail.',
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                 fontSize: 13,
