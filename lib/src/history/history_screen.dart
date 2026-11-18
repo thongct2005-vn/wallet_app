@@ -3,6 +3,7 @@ import 'package:app/core/utils/dialog_utils.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/date_range_picker_sheet.dart';
 import 'package:app/src/history/transaction_detail_screen.dart';
+import 'package:app/src/history/transaction_filter_screen.dart';
 import 'package:app/src/services/transaction_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -45,8 +46,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   bool _isLoading = false;
   bool _hasMore = true;
   String _searchKeyword = '';
-  String? _selectedType;
-  String? _selectedDirection;
+  TransactionFilterCriteria _filter = TransactionFilterCriteria.empty;
 
   static final TextStyle _tileTitleStyle = GoogleFonts.roboto(
     fontSize: 14.5,
@@ -87,51 +87,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
     fontWeight: FontWeight.w500,
     color: _kMuted,
   );
-  DateTime? _startDate;
-  DateTime? _endDate;
   double _totalIncome = 0;
   double _totalExpense = 0;
   bool _isExporting = false;
   int _fetchGeneration = 0;
-
-  static const List<_TransactionTypeFilter> _typeFilters = [
-    _TransactionTypeFilter(
-      type: null,
-      direction: null,
-      label: 'Tất cả',
-      icon: Iconsax.receipt_item5,
-    ),
-    _TransactionTypeFilter(
-      type: 'TOPUP',
-      direction: null,
-      label: 'Nạp tiền',
-      icon: Iconsax.direct_inbox5,
-    ),
-    _TransactionTypeFilter(
-      type: 'WITHDRAW',
-      direction: null,
-      label: 'Rút tiền',
-      icon: Iconsax.direct_send5,
-    ),
-    _TransactionTypeFilter(
-      type: 'TRANSFER',
-      direction: 'OUT',
-      label: 'Chuyển tiền',
-      icon: Iconsax.money_send5,
-    ),
-    _TransactionTypeFilter(
-      type: 'TRANSFER',
-      direction: 'IN',
-      label: 'Nhận tiền',
-      icon: Iconsax.money_recive5,
-    ),
-    _TransactionTypeFilter(
-      type: 'PAYMENT',
-      direction: null,
-      label: 'Thanh toán',
-      icon: Icons.storefront_rounded,
-    ),
-  ];
 
   @override
   void initState() {
@@ -162,10 +121,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   bool get _hasActiveFilters =>
-      _selectedType != null ||
-      _selectedDirection != null ||
-      _searchKeyword.isNotEmpty ||
-      (_startDate != null && _endDate != null);
+      _searchKeyword.isNotEmpty || !_filter.isEmpty;
 
   Future<void> _fetchMore({bool reset = false}) async {
     if (!reset && _isLoading) return;
@@ -183,10 +139,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
       _nextCursor,
       20,
       keyword: _searchKeyword.isEmpty ? null : _searchKeyword,
-      transactionType: _selectedType,
-      direction: _selectedDirection,
-      startDate: _startDate,
-      endDate: _endDate,
+      transactionType: _filter.transactionType,
+      direction: _filter.direction,
+      startDate: _filter.startDate,
+      endDate: _filter.endDate,
+      fundingSource: _filter.fundingSource,
+      minAmount: _filter.minAmount,
+      maxAmount: _filter.maxAmount,
+      status: _filter.status,
     );
 
     if (!mounted || generation != _fetchGeneration) return;
@@ -212,29 +172,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
-  void _selectTypeFilter(_TransactionTypeFilter filter) {
-    _unfocusSearch();
-    if (_selectedType == filter.type &&
-        _selectedDirection == filter.direction) {
-      return;
-    }
-    setState(() {
-      _selectedType = filter.type;
-      _selectedDirection = filter.direction;
-      _applyFilter();
-    });
-    _fetchMore(reset: true);
-  }
-
   void _clearAllFilters() {
     _unfocusSearch();
     _searchController.clear();
     setState(() {
       _searchKeyword = '';
-      _selectedType = null;
-      _selectedDirection = null;
-      _startDate = null;
-      _endDate = null;
+      _filter = TransactionFilterCriteria.empty;
       _applyFilter();
     });
     _fetchMore(reset: true);
@@ -274,12 +217,32 @@ class _HistoryScreenState extends State<HistoryScreen> {
   void _applyFilter() {
     Iterable<TransactionModel> items = _allTransactions;
 
-    if (_selectedType != null && _selectedType!.isNotEmpty) {
-      items = items.where((t) => t.type == _selectedType);
+    if (_filter.hasService) {
+      items = items.where((t) => t.type == _filter.transactionType);
     }
 
-    if (_selectedDirection != null && _selectedDirection!.isNotEmpty) {
-      items = items.where((t) => t.direction == _selectedDirection);
+    if (_filter.direction != null && _filter.direction!.isNotEmpty) {
+      items = items.where((t) => t.direction == _filter.direction);
+    }
+
+    if (_filter.hasFundingSource) {
+      if (_filter.fundingSource == 'POSTPAID') {
+        items = items.where((t) => t.fundingSource == 'POSTPAID');
+      } else {
+        items = items.where((t) => t.fundingSource != 'POSTPAID');
+      }
+    }
+
+    if (_filter.hasStatus) {
+      items = items.where((t) => t.status.toUpperCase() == _filter.status);
+    }
+
+    if (_filter.minAmount != null) {
+      items = items.where((t) => t.amount >= _filter.minAmount!);
+    }
+
+    if (_filter.maxAmount != null) {
+      items = items.where((t) => t.amount <= _filter.maxAmount!);
     }
 
     if (_searchKeyword.isNotEmpty) {
@@ -327,16 +290,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
       });
     }
 
-    if (_startDate != null && _endDate != null) {
+    if (_filter.hasDateRange) {
       final start = DateTime(
-        _startDate!.year,
-        _startDate!.month,
-        _startDate!.day,
+        _filter.startDate!.year,
+        _filter.startDate!.month,
+        _filter.startDate!.day,
       );
       final end = DateTime(
-        _endDate!.year,
-        _endDate!.month,
-        _endDate!.day,
+        _filter.endDate!.year,
+        _filter.endDate!.month,
+        _filter.endDate!.day,
         23,
         59,
         59,
@@ -456,9 +419,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
               _appBarCircleButton(
                 icon: Iconsax.filter,
-                tooltip: 'Lọc theo ngày',
-                onPressed: _showDateFilterDialog,
+                tooltip: 'Bộ lọc giao dịch',
+                onPressed: _openFilterScreen,
                 padding: const EdgeInsets.only(left: 12),
+                badgeCount: _filter.activeCount,
               ),
               _appBarCircleButton(
                 icon: Icons.file_download_outlined,
@@ -501,12 +465,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
                     SliverToBoxAdapter(child: _buildSummaryCard()),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _buildTypeFilterBar(),
-                      ),
-                    ),
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(20, 4, 16, 8),
@@ -557,45 +515,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         ),
                       ),
                     ),
-                    if (_startDate != null && _endDate != null)
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 4,
-                          ),
-                          child: Row(
-                            children: [
-                              Chip(
-                                avatar: const Icon(
-                                  Iconsax.calendar_1,
-                                  size: 16,
-                                  color: _kPink,
-                                ),
-                                label: Text(
-                                  '${FormatUtils.formatCustomDateTime(_startDate.toString())} - ${FormatUtils.formatCustomDateTime(_endDate.toString())}',
-                                  style: GoogleFonts.roboto(
-                                    fontSize: 13,
-                                    color: _kPinkDark,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                backgroundColor: _kPink.withValues(alpha: 0.1),
-                                side: BorderSide.none,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                deleteIcon: const Icon(
-                                  Icons.close,
-                                  size: 16,
-                                  color: _kPinkDark,
-                                ),
-                                onDeleted: _clearDateFilter,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                    if (!_filter.isEmpty)
+                      SliverToBoxAdapter(child: _buildActiveFilterChips()),
                     if (_filteredTransactions.isEmpty && !_isLoading)
                       SliverToBoxAdapter(
                         child: Padding(
@@ -823,98 +744,103 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  Widget _buildTypeFilterBar() {
-    return SizedBox(
-      height: 44,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _typeFilters.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final item = _typeFilters[index];
-          final isSelected =
-              _selectedType == item.type &&
-              _selectedDirection == item.direction;
-          final bool styleIsOut = item.direction != null
-              ? item.direction == 'OUT'
-              : item.type != 'TOPUP';
-          final Color accent = item.type == null
-              ? _kPinkDark
-              : _TransactionVisualStyle.fromType(
-                  item.type!,
-                  isOut: styleIsOut,
-                ).accentColor;
-          final Gradient? gradient = isSelected
-              ? (item.type == null
-                    ? const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFFF06292), _kPinkDark],
-                      )
-                    : _TransactionVisualStyle.fromType(
-                        item.type!,
-                        isOut: styleIsOut,
-                      ).gradient)
-              : null;
+  Widget _buildActiveFilterChips() {
+    final fmt = DateFormat('dd/MM/yyyy');
+    final chips = <Widget>[];
 
-          return Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => _selectTypeFilter(item),
-              borderRadius: BorderRadius.circular(22),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 9,
-                ),
-                decoration: BoxDecoration(
-                  gradient: gradient,
-                  color: isSelected ? null : Colors.white,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(
-                    color: isSelected
-                        ? Colors.transparent
-                        : const Color(0xFFEEDDE5),
-                    width: 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: isSelected
-                          ? accent.withValues(alpha: 0.28)
-                          : Colors.black.withValues(alpha: 0.03),
-                      blurRadius: isSelected ? 10 : 6,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      item.icon,
-                      size: 16,
-                      color: isSelected ? Colors.white : accent,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      item.label,
-                      style: GoogleFonts.roboto(
-                        fontSize: 13.5,
-                        fontWeight:
-                            isSelected ? FontWeight.w700 : FontWeight.w500,
-                        color: isSelected ? Colors.white : _kText,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
+    if (_filter.hasDateRange) {
+      chips.add(
+        _activeFilterChip(
+          icon: Iconsax.calendar_1,
+          label:
+              '${fmt.format(_filter.startDate!)} - ${fmt.format(_filter.endDate!)}',
+          onDeleted: () => _updateFilter(_filter.copyWith(clearDate: true)),
+        ),
+      );
+    }
+
+    if (_filter.hasAmountRange) {
+      final fromText = _filter.minAmount != null
+          ? '${FormatUtils.formatDisplayNumber(_filter.minAmount!)}đ'
+          : '0đ';
+      final toText = _filter.maxAmount != null
+          ? '${FormatUtils.formatDisplayNumber(_filter.maxAmount!)}đ'
+          : 'Không giới hạn';
+      chips.add(
+        _activeFilterChip(
+          icon: Iconsax.money_2,
+          label: '$fromText - $toText',
+          onDeleted: () => _updateFilter(_filter.copyWith(clearAmount: true)),
+        ),
+      );
+    }
+
+    final accLabel =
+        TransactionFilterScreen.labelForAccount(_filter.fundingSource);
+    if (accLabel != null) {
+      chips.add(
+        _activeFilterChip(
+          icon: Iconsax.wallet_2,
+          label: accLabel,
+          onDeleted: () =>
+              _updateFilter(_filter.copyWith(clearFundingSource: true)),
+        ),
+      );
+    }
+
+    final svcLabel = TransactionFilterScreen.labelForService(
+      _filter.transactionType,
+      _filter.direction,
+    );
+    if (svcLabel != null) {
+      chips.add(
+        _activeFilterChip(
+          icon: Iconsax.category_2,
+          label: svcLabel,
+          onDeleted: () => _updateFilter(_filter.copyWith(clearService: true)),
+        ),
+      );
+    }
+
+    final stLabel = TransactionFilterScreen.labelForStatus(_filter.status);
+    if (stLabel != null) {
+      chips.add(
+        _activeFilterChip(
+          icon: Iconsax.tick_circle,
+          label: stLabel,
+          onDeleted: () => _updateFilter(_filter.copyWith(clearStatus: true)),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+      child: Wrap(spacing: 8, runSpacing: 6, children: chips),
+    );
+  }
+
+  Widget _activeFilterChip({
+    required IconData icon,
+    required String label,
+    required VoidCallback onDeleted,
+  }) {
+    return Chip(
+      avatar: Icon(icon, size: 15, color: _kPink),
+      label: Text(
+        label,
+        style: GoogleFonts.roboto(
+          fontSize: 12.5,
+          color: _kPinkDark,
+          fontWeight: FontWeight.w500,
+        ),
       ),
+      backgroundColor: _kPink.withValues(alpha: 0.1),
+      side: BorderSide.none,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      deleteIcon: const Icon(Icons.close, size: 15, color: _kPinkDark),
+      onDeleted: onDeleted,
     );
   }
 
@@ -962,56 +888,89 @@ class _HistoryScreenState extends State<HistoryScreen> {
     required String tooltip,
     required VoidCallback onPressed,
     required EdgeInsetsGeometry padding,
+    int badgeCount = 0,
   }) {
     return Padding(
       padding: padding,
-      child: Container(
-        height: 42,
-        width: 42,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: _kPink.withValues(alpha: 0.12),
-              blurRadius: 14,
-              offset: const Offset(0, 4),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            height: 42,
+            width: 42,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: _kPink.withValues(alpha: 0.12),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: IconButton(
-          padding: EdgeInsets.zero,
-          tooltip: tooltip,
-          onPressed: onPressed,
-          icon: Icon(icon, size: 21, color: _kText),
-        ),
+            child: IconButton(
+              padding: EdgeInsets.zero,
+              tooltip: tooltip,
+              onPressed: onPressed,
+              icon: Icon(
+                icon,
+                size: 21,
+                color: badgeCount > 0 ? _kPinkDark : _kText,
+              ),
+            ),
+          ),
+          if (badgeCount > 0)
+            Positioned(
+              right: -2,
+              top: -2,
+              child: IgnorePointer(
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: _kPinkDark,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '$badgeCount',
+                    style: GoogleFonts.roboto(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      height: 1.0,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
 
-  Future<void> _showDateFilterDialog() async {
+  void _updateFilter(TransactionFilterCriteria next) {
     _unfocusSearch();
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final oneYearAgo = DateTime(now.year - 1, now.month, now.day);
+    setState(() {
+      _filter = next;
+      _applyFilter();
+    });
+    _fetchMore(reset: true);
+  }
 
-    final result = await DateRangePickerSheet.show(
+  Future<void> _openFilterScreen() async {
+    _unfocusSearch();
+    final result = await Navigator.push<TransactionFilterCriteria>(
       context,
-      title: 'Lọc theo ngày',
-      confirmText: 'Áp dụng',
-      firstDate: oneYearAgo,
-      lastDate: today,
-      initialRange: _startDate != null && _endDate != null
-          ? DateTimeRange(start: _startDate!, end: _endDate!)
-          : null,
+      MaterialPageRoute(
+        builder: (_) => TransactionFilterScreen(initialCriteria: _filter),
+      ),
     );
 
-    if (result != null) {
-      setState(() {
-        _startDate = result.start;
-        _endDate = result.end;
-      });
-      _fetchMore(reset: true);
+    if (result != null && mounted) {
+      _updateFilter(result);
     }
   }
 
@@ -1030,8 +989,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
       confirmText: 'Tiếp tục',
       firstDate: DateTime(now.year - 1, now.month, now.day),
       lastDate: today,
-      initialRange: _startDate != null && _endDate != null
-          ? DateTimeRange(start: _startDate!, end: _endDate!)
+      initialRange: _filter.hasDateRange
+          ? DateTimeRange(start: _filter.startDate!, end: _filter.endDate!)
           : DateTimeRange(
               start: DateTime(today.year, today.month, 1),
               end: today,
@@ -1078,14 +1037,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
             _isExporting = false;
           }),
     );
-  }
-
-  void _clearDateFilter() {
-    setState(() {
-      _startDate = null;
-      _endDate = null;
-    });
-    _fetchMore(reset: true);
   }
 
   Widget _buildTransactionIcon(_TransactionVisualStyle style) {
@@ -1412,6 +1363,8 @@ class _PreparedTransaction {
       textBtn: textBtn,
       walletName: isPostpaidCreditEvent
           ? 'Ví trả sau'
+          : isPostpaidRepay
+          ? (t.bankName.trim().isNotEmpty ? bankLabel : 'Ví Mio')
           : (isBankFunded ||
                     (t.type != 'TRANSFER' &&
                         t.type != 'PAYMENT' &&
@@ -1429,20 +1382,6 @@ class _PreparedTransaction {
       badgeTextStyle: badgeBaseStyle.copyWith(color: style.accentColor),
     );
   }
-}
-
-class _TransactionTypeFilter {
-  final String? type;
-  final String? direction;
-  final String label;
-  final IconData icon;
-
-  const _TransactionTypeFilter({
-    required this.type,
-    required this.direction,
-    required this.label,
-    required this.icon,
-  });
 }
 
 class _TransactionVisualStyle {

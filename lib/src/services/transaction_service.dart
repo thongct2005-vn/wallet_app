@@ -153,6 +153,10 @@ class TransactionService {
     String? direction,
     DateTime? startDate,
     DateTime? endDate,
+    String? fundingSource,
+    int? minAmount,
+    int? maxAmount,
+    String? status,
   }) async {
     try {
       final result = await api.get(
@@ -167,6 +171,11 @@ class TransactionService {
             'direction': direction,
           if (startDate != null) 'start_date': _dateOnly(startDate),
           if (endDate != null) 'end_date': _dateOnly(endDate),
+          if (fundingSource != null && fundingSource.isNotEmpty)
+            'funding_source': fundingSource,
+          'min_amount': ?minAmount,
+          'max_amount': ?maxAmount,
+          if (status != null && status.isNotEmpty) 'status': status,
         },
       );
       return {

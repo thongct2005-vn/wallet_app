@@ -140,11 +140,18 @@ class PostpaidService {
     required int amount,
     required String idempotencyKey,
     required String pinToken,
+    String fundingSource = 'MAIN_WALLET',
+    String? linkedBankAccountId,
   }) => _postWithPinToken(
     ApiConfig.postpaidRepay,
     idempotencyKey: idempotencyKey,
     pinToken: pinToken,
-    data: {'amount': amount},
+    data: {
+      'amount': amount,
+      if (fundingSource != 'MAIN_WALLET') 'funding_source': fundingSource,
+      if (linkedBankAccountId != null && linkedBankAccountId.isNotEmpty)
+        'linked_bank_account_id': linkedBankAccountId,
+    },
   );
 }
 

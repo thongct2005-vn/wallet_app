@@ -3,6 +3,8 @@ import 'package:app/src/services/bank_service.dart';
 import 'package:app/src/services/postpaid_service.dart';
 import 'package:app/src/services/wallet_service.dart';
 
+const int kMinBankTransactionAmount = 10000;
+
 class TransferFundingResolution {
   final bool canProceed;
   final String initialFundingSource;
@@ -28,7 +30,13 @@ num? parseLinkedBankBalance(Map<String, dynamic> bank) {
   return num.tryParse(raw.toString());
 }
 
-bool isLinkedBankSelectable(Map<String, dynamic> bank, num neededAmount) {
+bool isLinkedBankSelectable(
+  Map<String, dynamic> bank,
+  num neededAmount, {
+  num? transactionAmount,
+}) {
+  final effectiveAmount = transactionAmount ?? neededAmount;
+  if (effectiveAmount < kMinBankTransactionAmount) return false;
   if (bank['is_show_balance'] != true) return true;
   final bal = parseLinkedBankBalance(bank);
   return bal != null && bal >= neededAmount;
@@ -40,6 +48,7 @@ TransferFundingResolution resolveTransferFundingOption({
   required num neededAmount,
   required List<Map<String, dynamic>> linkedBanks,
   bool postpaidEligible = false,
+  num? transactionAmount,
 }) {
   if (walletEligible) {
     return TransferFundingResolution(
@@ -59,30 +68,35 @@ TransferFundingResolution resolveTransferFundingOption({
     );
   }
 
-  String? visibleEnoughId;
-  String? unshownId;
-  for (final bank in linkedBanks) {
-    final id = bank['id']?.toString();
-    if (id == null || id.isEmpty) continue;
-    if (bank['is_show_balance'] == true) {
-      final bal = parseLinkedBankBalance(bank);
-      if (bal != null && bal >= neededAmount && visibleEnoughId == null) {
-        visibleEnoughId = id;
-      }
-    } else {
-      unshownId ??= id;
-    }
-  }
+  final effectiveTxAmount = transactionAmount ?? neededAmount;
+  final bankAmountAllowed = effectiveTxAmount >= kMinBankTransactionAmount;
 
-  final fallbackBankId = visibleEnoughId ?? unshownId;
-  if (fallbackBankId != null) {
-    return TransferFundingResolution(
-      canProceed: true,
-      initialFundingSource: 'BANK',
-      initialLinkedBankAccountId: fallbackBankId,
-      walletBalance: walletBalance,
-      linkedBanks: linkedBanks,
-    );
+  if (bankAmountAllowed) {
+    String? visibleEnoughId;
+    String? unshownId;
+    for (final bank in linkedBanks) {
+      final id = bank['id']?.toString();
+      if (id == null || id.isEmpty) continue;
+      if (bank['is_show_balance'] == true) {
+        final bal = parseLinkedBankBalance(bank);
+        if (bal != null && bal >= neededAmount && visibleEnoughId == null) {
+          visibleEnoughId = id;
+        }
+      } else {
+        unshownId ??= id;
+      }
+    }
+
+    final fallbackBankId = visibleEnoughId ?? unshownId;
+    if (fallbackBankId != null) {
+      return TransferFundingResolution(
+        canProceed: true,
+        initialFundingSource: 'BANK',
+        initialLinkedBankAccountId: fallbackBankId,
+        walletBalance: walletBalance,
+        linkedBanks: linkedBanks,
+      );
+    }
   }
 
   return TransferFundingResolution(
@@ -90,7 +104,9 @@ TransferFundingResolution resolveTransferFundingOption({
     initialFundingSource: 'MAIN_WALLET',
     walletBalance: walletBalance,
     linkedBanks: linkedBanks,
-    errorMessage: 'Số dư trong ví không đủ',
+    errorMessage: !bankAmountAllowed && linkedBanks.isNotEmpty
+        ? 'Số dư trong ví không đủ (giao dịch qua ngân hàng liên kết tối thiểu 10.000đ)'
+        : 'Số dư trong ví không đủ',
   );
 }
 
@@ -101,6 +117,7 @@ Future<TransferFundingResolution> evaluateTransferFundingBeforeConfirm({
   required String rawAmount,
   required num neededAmount,
   required bool isQrPayment,
+  num? transactionAmount,
 }) async {
   final result = await walletService.checkTransferEligibility(rawAmount);
   if (result['is_success'] != true) {
@@ -149,5 +166,6 @@ Future<TransferFundingResolution> evaluateTransferFundingBeforeConfirm({
     neededAmount: neededAmount,
     linkedBanks: linkedBanks,
     postpaidEligible: canUsePostpaid,
+    transactionAmount: transactionAmount ?? neededAmount,
   );
 }

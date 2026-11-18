@@ -4,6 +4,7 @@ import 'package:app/core/widgets/pin_bottomsheet/verify_pin_bottom_sheet.dart';
 import 'package:app/src/services/bank_service.dart';
 import 'package:app/src/services/postpaid_service.dart';
 import 'package:app/src/services/transaction_service.dart';
+import 'package:app/src/transfer/pay_now_funding_selector.dart';
 import 'package:app/src/transfer/result_tranfer_screen.dart';
 import 'package:app/src/transfer/transfer_funding_helper.dart';
 import 'package:app/src/transfer/transfer_ui.dart';
@@ -112,9 +113,14 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
               (_selectedLinkedBankAccountId == null ||
                   _selectedLinkedBankAccountId!.isEmpty) &&
               _linkedBanks.isNotEmpty) {
+            final baseAmount = FormatUtils.formatAmountToNum(widget.amount ?? '0');
             final totalPay = _computeTotalPay();
             final preferred = _linkedBanks.firstWhere(
-              (b) => isLinkedBankSelectable(b, totalPay),
+              (b) => isLinkedBankSelectable(
+                b,
+                totalPay,
+                transactionAmount: baseAmount,
+              ),
               orElse: () => _linkedBanks.first,
             );
             _selectedLinkedBankAccountId = preferred['id']?.toString();
@@ -337,7 +343,7 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
                       _feePreview?['fee_payer']?.toString() == 'SENDER' &&
                       ((_feePreview?['fee_amount'] as num?) ?? 0) > 0)
                 ? '${FormatUtils.formatDisplayNumber((_feePreview?['fee_amount'] as num?) ?? 0)}đ'
-                : 'Miễn phí (0đ)',
+                : 'Miễn phí',
           ),
           _buildInfoRow(
             label: widget.isMerchant ? 'Cửa hàng' : 'Người nhận',
@@ -412,8 +418,6 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
   Widget _buildContainerWalletInfo(BuildContext context) {
     final totalPay = _computeTotalPay();
     final mainBalance = num.tryParse(widget.walletBalance ?? '0') ?? 0;
-    final mainSelected = _fundingSource == 'MAIN_WALLET';
-    final mainEnough = mainBalance >= totalPay;
 
     final ppData = _postpaidWallet;
     final ppActivated = ppData?['activated'] == true;
@@ -437,112 +441,26 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
       ppSubtitle = '${FormatUtils.formatDisplayNumber(ppAvailable)}đ';
     }
 
-    final Widget mainWalletCard = Opacity(
-      opacity: mainEnough ? 1.0 : 0.48,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: mainEnough
-            ? () => setState(() => _fundingSource = 'MAIN_WALLET')
-            : null,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: mainSelected
-                ? kTfPink.withValues(alpha: 0.05)
-                : Colors.grey.shade50,
-            border: Border.all(
-              width: mainSelected ? 1.5 : 1,
-              color: mainSelected
-                  ? kTfPink
-                  : Colors.grey.withValues(alpha: 0.28),
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                alignment: Alignment.center,
-                width: 36,
-                height: 36,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: kTfPink,
-                ),
-                child: Text(
-                  'Mio',
-                  style: GoogleFonts.roboto(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 11,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Ví Mio',
-                      style: GoogleFonts.roboto(
-                        fontSize: 14,
-                        color: kTfMuted,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${FormatUtils.formatDisplayNumber(mainBalance)}đ',
-                      style: GoogleFonts.roboto(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                        color: kTfText,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _buildSourceRadio(selected: mainSelected, enabled: mainEnough),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    final List<Widget> eligiblePayNowOptions = [];
-    final List<Widget> insufficientPayNowOptions = [];
-
-    if (mainEnough) {
-      eligiblePayNowOptions.add(mainWalletCard);
-    } else {
-      insufficientPayNowOptions.add(mainWalletCard);
-    }
-
-    for (final bank in _linkedBanks) {
-      final optionWidget = _buildLinkedBankOption(bank, totalPay);
-      if (isLinkedBankSelectable(bank, totalPay)) {
-        eligiblePayNowOptions.add(optionWidget);
-      } else {
-        insufficientPayNowOptions.add(optionWidget);
-      }
-    }
-
-    final List<Widget> orderedPayNowOptions = [
-      ...eligiblePayNowOptions,
-      ...insufficientPayNowOptions,
-    ];
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: transferCardDeco(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return PayNowFundingSelector(
+      mainBalance: mainBalance,
+      totalPay: totalPay,
+      transactionAmount: FormatUtils.formatAmountToNum(widget.amount ?? '0'),
+      fundingSource: _fundingSource,
+      selectedLinkedBankAccountId: _selectedLinkedBankAccountId,
+      linkedBanks: _linkedBanks,
+      isLoadingBanks: _isLoadingBanks,
+      onSelectMainWallet: () => setState(() => _fundingSource = 'MAIN_WALLET'),
+      onSelectBank: (bankId) => setState(() {
+        _fundingSource = 'BANK';
+        _selectedLinkedBankAccountId = bankId;
+      }),
+      extraSections: [
+        if (_isQrPayment) ...[
+          const SizedBox(height: 16),
           Padding(
-            padding: const EdgeInsets.fromLTRB(2, 0, 2, 12),
+            padding: const EdgeInsets.fromLTRB(2, 0, 2, 10),
             child: Text(
-              "Trả ngay",
+              "Trả sau",
               style: GoogleFonts.roboto(
                 fontWeight: FontWeight.w700,
                 fontSize: 17,
@@ -550,236 +468,79 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
               ),
             ),
           ),
-          for (int i = 0; i < orderedPayNowOptions.length; i++) ...[
-            if (i > 0) const SizedBox(height: 10),
-            orderedPayNowOptions[i],
-          ],
-          if (_isLoadingBanks && _linkedBanks.isEmpty) ...[
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-              child: Text(
-                'Đang tải ngân hàng liên kết...',
-                style: GoogleFonts.roboto(fontSize: 13, color: kTfMuted),
-              ),
-            ),
-          ],
-          if (_isQrPayment) ...[
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(2, 0, 2, 10),
-              child: Text(
-                "Trả sau",
-                style: GoogleFonts.roboto(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 17,
-                  color: kTfText,
+          Opacity(
+            opacity: ppEligible ? 1.0 : 0.48,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: ppEligible
+                  ? () => setState(() => _fundingSource = 'POSTPAID')
+                  : null,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
                 ),
-              ),
-            ),
-            Opacity(
-              opacity: ppEligible ? 1.0 : 0.48,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: ppEligible
-                    ? () => setState(() => _fundingSource = 'POSTPAID')
-                    : null,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  color: ppSelected
+                      ? kTfPink.withValues(alpha: 0.05)
+                      : Colors.grey.shade50,
+                  border: Border.all(
+                    width: ppSelected ? 1.5 : 1,
                     color: ppSelected
-                        ? kTfPink.withValues(alpha: 0.05)
-                        : Colors.grey.shade50,
-                    border: Border.all(
-                      width: ppSelected ? 1.5 : 1,
-                      color: ppSelected
-                          ? kTfPink
-                          : Colors.grey.withValues(alpha: 0.28),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        alignment: Alignment.center,
-                        width: 36,
-                        height: 36,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0xFFDB2777),
-                        ),
-                        child: const Icon(
-                          Icons.credit_score_rounded,
-                          color: Colors.white,
-                          size: 19,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Ví trả sau',
-                              style: GoogleFonts.roboto(
-                                fontSize: 14,
-                                color: kTfMuted,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              ppSubtitle,
-                              style: GoogleFonts.roboto(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                                color: kTfText,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      _buildSourceRadio(
-                        selected: ppSelected,
-                        enabled: ppEligible,
-                      ),
-                    ],
+                        ? kTfPink
+                        : Colors.grey.withValues(alpha: 0.28),
                   ),
                 ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLinkedBankOption(Map<String, dynamic> bank, num totalPay) {
-    final bankId = bank['id']?.toString() ?? '';
-    final bankName = bank['bank_name']?.toString() ?? 'Ngân hàng liên kết';
-    final logoUrl = bank['logo_url']?.toString() ?? '';
-    final isShowBalance = bank['is_show_balance'] == true;
-    final bankBalance = parseLinkedBankBalance(bank);
-    final bankEnough = isLinkedBankSelectable(bank, totalPay);
-    final bankSelected =
-        _fundingSource == 'BANK' && _selectedLinkedBankAccountId == bankId;
-
-    final String subtitleText;
-    if (isShowBalance && bankBalance != null) {
-      subtitleText = 'Số dư: ${FormatUtils.formatDisplayNumber(bankBalance)}đ';
-    } else {
-      subtitleText = 'Tài khoản ngân hàng liên kết';
-    }
-
-    return Opacity(
-      opacity: bankEnough ? 1.0 : 0.48,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: bankEnough
-            ? () => setState(() {
-                  _fundingSource = 'BANK';
-                  _selectedLinkedBankAccountId = bankId;
-                })
-            : null,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: bankSelected
-                ? kTfPink.withValues(alpha: 0.05)
-                : Colors.grey.shade50,
-            border: Border.all(
-              width: bankSelected ? 1.5 : 1,
-              color: bankSelected
-                  ? kTfPink
-                  : Colors.grey.withValues(alpha: 0.28),
-            ),
-          ),
-          child: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: SizedBox(
-                  width: 36,
-                  height: 36,
-                  child: logoUrl.isNotEmpty
-                      ? Image.network(
-                          logoUrl,
-                          headers: const {'ngrok-skip-browser-warning': 'true'},
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            color: Colors.grey.shade200,
-                            child: const Icon(Iconsax.bank, size: 18),
-                          ),
-                        )
-                      : Container(
-                          color: Colors.grey.shade200,
-                          child: const Icon(Iconsax.bank, size: 18),
-                        ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Text(
-                      bankName,
-                      style: GoogleFonts.roboto(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: kTfText,
+                    Container(
+                      alignment: Alignment.center,
+                      width: 36,
+                      height: 36,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color(0xFFDB2777),
+                      ),
+                      child: const Icon(
+                        Icons.credit_score_rounded,
+                        color: Colors.white,
+                        size: 19,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitleText,
-                      style: GoogleFonts.roboto(
-                        fontWeight:
-                            isShowBalance ? FontWeight.w600 : FontWeight.w400,
-                        fontSize: 13.5,
-                        color: isShowBalance
-                            ? const Color(0xFF1B7A3D)
-                            : kTfMuted,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Ví trả sau',
+                            style: GoogleFonts.roboto(
+                              fontSize: 14,
+                              color: kTfMuted,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            ppSubtitle,
+                            style: GoogleFonts.roboto(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              color: kTfText,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
+                    SourceRadioDot(selected: ppSelected),
                   ],
                 ),
               ),
-              _buildSourceRadio(selected: bankSelected, enabled: bankEnough),
-            ],
+            ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSourceRadio({required bool selected, required bool enabled}) {
-    return Container(
-      width: 22,
-      height: 22,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: selected ? kTfPink : Colors.grey.shade400,
-          width: 2,
-        ),
-      ),
-      child: selected
-          ? Container(
-              width: 11,
-              height: 11,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: kTfPink,
-              ),
-            )
-          : null,
+        ],
+      ],
     );
   }
 
@@ -794,6 +555,7 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
         ppData['status'] == 'ACTIVE' &&
         (num.tryParse(ppData['available_limit']?.toString() ?? '0') ?? 0) >=
             totalPay;
+    final baseAmount = FormatUtils.formatAmountToNum(widget.amount ?? '0');
     final bool canConfirm;
     if (_fundingSource == 'POSTPAID') {
       canConfirm = (ppData == null && _isLoadingPostpaid)
@@ -802,7 +564,12 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
     } else if (_fundingSource == 'BANK') {
       final selectedBank = _selectedLinkedBank;
       canConfirm =
-          selectedBank != null && isLinkedBankSelectable(selectedBank, totalPay);
+          selectedBank != null &&
+          isLinkedBankSelectable(
+            selectedBank,
+            totalPay,
+            transactionAmount: baseAmount,
+          );
     } else {
       canConfirm = mainBalance >= totalPay;
     }

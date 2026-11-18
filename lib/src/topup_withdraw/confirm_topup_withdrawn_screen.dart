@@ -292,7 +292,7 @@ class _ConfirmTopUpWithdrawScreenState
                 ? 'Đang tính...'
                 : ((_feePreview?['fee_amount'] as num?) ?? 0) > 0
                 ? '${FormatUtils.formatDisplayNumber((_feePreview?['fee_amount'] as num?) ?? 0)}đ'
-                : 'Miễn phí (0đ)',
+                : 'Miễn phí',
           ),
           if (!widget.isTopUpTab &&
               _feePreview?['withdraw_quota'] is Map &&

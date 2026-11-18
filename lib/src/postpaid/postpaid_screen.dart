@@ -8,11 +8,14 @@ import 'package:app/core/widgets/pin_bottomsheet/create_pin_bottom_sheet.dart';
 import 'package:app/core/widgets/pin_bottomsheet/verify_pin_bottom_sheet.dart';
 import 'package:app/src/kyc/kyc_guide_screen.dart';
 import 'package:app/src/link_bank/manage_linked_banks_screen.dart';
+import 'package:app/src/postpaid/confirm_postpaid_repay_screen.dart';
 import 'package:app/src/postpaid/postpaid_entries_screen.dart';
 import 'package:app/src/postpaid/postpaid_entry_widgets.dart';
+import 'package:app/src/services/bank_service.dart';
 import 'package:app/src/services/postpaid_service.dart';
 import 'package:app/src/services/user_service.dart';
 import 'package:app/src/services/wallet_service.dart';
+import 'package:app/src/transfer/transfer_funding_helper.dart';
 import 'package:app/src/transfer/transfer_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -31,6 +34,7 @@ class PostpaidScreen extends StatefulWidget {
 class _PostpaidScreenState extends State<PostpaidScreen> {
   final PostpaidService _postpaidService = PostpaidService();
   final WalletService _walletService = WalletService();
+  final BankService _bankService = BankService();
   final Uuid _uuid = const Uuid();
 
   bool _isLoading = true;
@@ -419,46 +423,52 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
     final mainBalance = _toInt(wallet['main_balance']);
     final dueTotal = billedAmount + serviceFeeAmount + lateFeeAmount;
     final defaultAmount = dueTotal > 0 ? dueTotal : usedAmount;
+    final unbilledAmount = math.max(0, usedAmount - dueTotal);
 
-    final parsedAmount = await showSmoothPinBottomSheet<int>(
+    final selection = await showSmoothPinBottomSheet<_RepaySelectionResult>(
       context: context,
       builder: (_) => _RepayPostpaidSheet(
         usedAmount: usedAmount,
         dueTotal: dueTotal,
         mainBalance: mainBalance,
         defaultAmount: defaultAmount,
+        bankService: _bankService,
       ),
     );
 
-    if (parsedAmount != null && mounted) {
-      _confirmPinAndRepay(parsedAmount);
+    if (selection == null || !mounted) return;
+
+    final isServiceFeeOnly =
+        serviceFeeAmount > 0 &&
+        lateFeeAmount == 0 &&
+        billedAmount == 0 &&
+        unbilledAmount == 0 &&
+        selection.amount <= serviceFeeAmount;
+
+    final repayRes = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ConfirmPostpaidRepayScreen(
+          amount: selection.amount,
+          mainBalance: mainBalance,
+          isServiceFeeOnly: isServiceFeeOnly,
+          initialFundingSource: selection.resolution.initialFundingSource,
+          initialLinkedBankAccountId:
+              selection.resolution.initialLinkedBankAccountId,
+          initialLinkedBanks: selection.resolution.linkedBanks,
+        ),
+      ),
+    );
+
+    if (repayRes != null && repayRes['is_success'] == true && mounted) {
+      SnackbarUtils.success(
+        context,
+        isServiceFeeOnly
+            ? 'Đã thanh toán ${FormatUtils.formatDisplayNumber(selection.amount)}đ phí dịch vụ Ví trả sau'
+            : 'Đã thanh toán ${FormatUtils.formatDisplayNumber(selection.amount)}đ dư nợ Ví trả sau',
+      );
+      await _loadData();
     }
-  }
-
-  void _confirmPinAndRepay(int amountInt) {
-    _runPinVerifiedAction(
-      checkTitle:
-          'Xác thực thanh toán ${FormatUtils.formatDisplayNumber(amountInt)}đ',
-      action: 'POSTPAID_REPAY',
-      params: {'amount': amountInt},
-      request: (idempotencyKey, pinToken) => _postpaidService.repayDebt(
-        amount: amountInt,
-        idempotencyKey: idempotencyKey,
-        pinToken: pinToken,
-      ),
-      onSuccessResult: (res) {
-        final data = res['data'];
-        if (data is Map &&
-            data['mainBalanceAfter'] != null &&
-            Get.isRegistered<UserController>()) {
-          Get.find<UserController>().balance.value = data['mainBalanceAfter']
-              .toString();
-        }
-      },
-      successMessage: (_) =>
-          'Đã thanh toán ${FormatUtils.formatDisplayNumber(amountInt)}đ dư nợ Ví trả sau',
-      defaultErrorMessage: 'Thanh toán dư nợ thất bại',
-    );
   }
 
   @override
@@ -1615,9 +1625,9 @@ class _PostpaidInfoSheetState extends State<_PostpaidInfoSheet> {
     );
 
     String formatFee(int amount) =>
-        amount == 0 ? 'Miễn phí (0đ)' : '${FormatUtils.formatDisplayNumber(amount)}đ';
+        amount == 0 ? 'Miễn phí' : '${FormatUtils.formatDisplayNumber(amount)}đ';
     final serviceFeeLabel = monthlyServiceFee <= 0
-        ? 'Miễn phí (0đ)'
+        ? 'Miễn phí'
         : freeTxCount > 0
         ? '${FormatUtils.formatDisplayNumber(monthlyServiceFee)}đ/tháng (kỳ có GD, miễn $freeTxCount GD đầu)'
         : '${FormatUtils.formatDisplayNumber(monthlyServiceFee)}đ/tháng (kỳ có GD)';
@@ -1810,17 +1820,29 @@ class _PostpaidInfoSheetState extends State<_PostpaidInfoSheet> {
   }
 }
 
+class _RepaySelectionResult {
+  final int amount;
+  final TransferFundingResolution resolution;
+
+  const _RepaySelectionResult({
+    required this.amount,
+    required this.resolution,
+  });
+}
+
 class _RepayPostpaidSheet extends StatefulWidget {
   final int usedAmount;
   final int dueTotal;
   final int mainBalance;
   final int defaultAmount;
+  final BankService? bankService;
 
   const _RepayPostpaidSheet({
     required this.usedAmount,
     required this.dueTotal,
     required this.mainBalance,
     required this.defaultAmount,
+    this.bankService,
   });
 
   @override
@@ -1873,6 +1895,9 @@ class _RepayPostpaidSheetState extends State<_RepayPostpaidSheet> {
   final ValueNotifier<String?> _inlineErrorNotifier = ValueNotifier<String?>(
     null,
   );
+  late final BankService _bankService = widget.bankService ?? BankService();
+  late final Future<List<Map<String, dynamic>>> _linkedBanksFuture;
+  bool _isCheckingFunding = false;
 
   @override
   void initState() {
@@ -1880,6 +1905,21 @@ class _RepayPostpaidSheetState extends State<_RepayPostpaidSheet> {
     _amountCtrl = TextEditingController(
       text: FormatUtils.formatDisplayNumber(widget.defaultAmount),
     );
+    _linkedBanksFuture = _fetchLinkedBanks();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchLinkedBanks() async {
+    final res = await _bankService.getBankLinkStatus();
+    if (res['is_success'] == true && res['data'] is Map) {
+      final accounts = (res['data'] as Map)['linked_accounts'];
+      if (accounts is List) {
+        return accounts
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+    }
+    return const [];
   }
 
   @override
@@ -1917,7 +1957,8 @@ class _RepayPostpaidSheetState extends State<_RepayPostpaidSheet> {
     _clearError();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_isCheckingFunding) return;
     final parsedAmount = FormatUtils.formatAmountToNum(_amountCtrl.text).round();
     if (parsedAmount <= 0) {
       _inlineErrorNotifier.value = 'Số tiền phải lớn hơn 0';
@@ -1928,12 +1969,27 @@ class _RepayPostpaidSheetState extends State<_RepayPostpaidSheet> {
           'Không vượt quá tổng dư nợ (${FormatUtils.formatDisplayNumber(widget.usedAmount)}đ)';
       return;
     }
-    if (parsedAmount > widget.mainBalance) {
+    setState(() => _isCheckingFunding = true);
+    final linkedBanks = await _linkedBanksFuture;
+    if (!mounted) return;
+    setState(() => _isCheckingFunding = false);
+
+    final resolution = resolveTransferFundingOption(
+      walletEligible: widget.mainBalance >= parsedAmount,
+      walletBalance: widget.mainBalance.toString(),
+      neededAmount: parsedAmount,
+      linkedBanks: linkedBanks,
+      postpaidEligible: false,
+    );
+    if (!resolution.canProceed) {
       _inlineErrorNotifier.value =
-          'Số dư ví chính không đủ (${FormatUtils.formatDisplayNumber(widget.mainBalance)}đ)';
+          resolution.errorMessage ?? 'Số dư trong ví không đủ';
       return;
     }
-    Navigator.pop(context, parsedAmount);
+    Navigator.pop(
+      context,
+      _RepaySelectionResult(amount: parsedAmount, resolution: resolution),
+    );
   }
 
   Widget _buildPresetChip(String label, VoidCallback onTap) {
@@ -2097,7 +2153,7 @@ class _RepayPostpaidSheetState extends State<_RepayPostpaidSheet> {
                     width: double.infinity,
                     height: 52,
                     child: ElevatedButton(
-                      onPressed: _submit,
+                      onPressed: _isCheckingFunding ? null : _submit,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: kTfPink,
                         foregroundColor: Colors.white,
@@ -2106,7 +2162,16 @@ class _RepayPostpaidSheetState extends State<_RepayPostpaidSheet> {
                         ),
                         elevation: 0,
                       ),
-                      child: Text('Tiếp tục', style: _submitStyle),
+                      child: _isCheckingFunding
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text('Tiếp tục', style: _submitStyle),
                     ),
                   ),
                 ],
