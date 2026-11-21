@@ -342,7 +342,7 @@ class KycGuideScreen extends StatelessWidget {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      'Thông tin của bạn được mã hóa và bảo mật theo tiêu chuẩn an toàn Ví Mio.',
+                                      'Thông tin của bạn được mã hóa và bảo mật theo tiêu chuẩn an toàn Ví LumaPay.',
                                       style: GoogleFonts.roboto(
                                         fontSize: 12,
                                         color: kKycMuted,

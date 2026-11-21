@@ -17,7 +17,7 @@ class ApiClient {
 
   static const Map<String, String> _ngrokHeaders = {
     'ngrok-skip-browser-warning': 'true',
-    'User-Agent': 'MioWallet/2.1.0 (Flutter)',
+    'User-Agent': 'LumaPayWallet/2.1.0 (Flutter)',
   };
 
   Completer<String?>? _refreshCompleter;
@@ -68,7 +68,8 @@ class ApiClient {
         },
         onError: (DioException e, handler) async {
           if (e.response?.statusCode != 401 ||
-              e.requestOptions.extra['skipAuth'] == true) {
+              e.requestOptions.extra['skipAuth'] == true ||
+              e.requestOptions.path.contains('/auth/refresh-token')) {
             return handler.next(e);
           }
 
@@ -108,15 +109,35 @@ class ApiClient {
       }
 
       final refreshDio = Dio(
-        BaseOptions(baseUrl: dio.options.baseUrl, headers: _ngrokHeaders),
+        BaseOptions(
+          baseUrl: dio.options.baseUrl,
+          headers: _ngrokHeaders,
+          connectTimeout: const Duration(seconds: 5),
+          receiveTimeout: const Duration(seconds: 5),
+        ),
       );
       final response = await refreshDio.post(
         ApiConfig.refreshToken,
         data: {'refresh_token': refreshToken},
       );
 
-      final newAccessToken = response.data['data']['token']['access_token'];
-      final newRefreshToken = response.data['data']['token']['refresh_token'];
+      final responseData = response.data;
+      final dataMap = responseData is Map ? responseData['data'] : null;
+      final tokenData = dataMap is Map ? dataMap['token'] : null;
+      final newAccessToken = tokenData is Map
+          ? tokenData['access_token']?.toString()
+          : null;
+      final newRefreshToken = tokenData is Map
+          ? tokenData['refresh_token']?.toString()
+          : null;
+
+      if (newAccessToken == null ||
+          newAccessToken.isEmpty ||
+          newRefreshToken == null ||
+          newRefreshToken.isEmpty) {
+        _refreshCompleter!.complete(null);
+        return null;
+      }
 
       await _storage.write(key: 'access_token', value: newAccessToken);
       await _storage.write(key: 'refresh_token', value: newRefreshToken);

@@ -118,7 +118,7 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
     fontSize: 18,
     fontWeight: FontWeight.w700,
   );
-  static final TextStyle _mioBadgeStyle = GoogleFonts.roboto(
+  static final TextStyle _lumaPayBadgeStyle = GoogleFonts.roboto(
     fontWeight: FontWeight.w900,
     fontSize: 11,
     color: Colors.white,
@@ -770,14 +770,20 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
                 colors: [Color(0xFFF06292), _kPinkDark],
               ),
             ),
-            child: Text('Mio', style: _mioBadgeStyle),
+            child: Padding(
+              padding: const EdgeInsets.all(3),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text('LumaPay', style: _lumaPayBadgeStyle),
+              ),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Ví Mio', style: _walletTitleStyle),
+                Text('Ví LumaPay', style: _walletTitleStyle),
                 const SizedBox(height: 2),
                 Text(
                   '${FormatUtils.formatDisplayNumber(FormatUtils.formatAmountToNum(widget.walletBalance))}đ',

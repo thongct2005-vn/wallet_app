@@ -193,7 +193,7 @@ class _ManageLinkedBanksScreenState extends State<ManageLinkedBanksScreen> {
     await DialogUtils.showConfirmation(
       context,
       title: 'Hủy liên kết ngân hàng',
-      message: 'Bạn có chắc chắn muốn hủy liên kết $bankName khỏi Ví Mio không?',
+      message: 'Bạn có chắc chắn muốn hủy liên kết $bankName khỏi Ví LumaPay không?',
       cancelText: 'Đóng',
       confirmText: 'Hủy liên kết',
       onConfirm: () {
@@ -330,7 +330,7 @@ class _ManageLinkedBanksScreenState extends State<ManageLinkedBanksScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Nhấn nút bên dưới để chọn và liên kết ngân hàng với Ví Mio của bạn.',
+            'Nhấn nút bên dưới để chọn và liên kết ngân hàng với Ví LumaPay của bạn.',
             textAlign: TextAlign.center,
             style: GoogleFonts.roboto(
               fontSize: 13.5,

@@ -92,7 +92,7 @@ class _TransactionLimitsScreenState extends State<TransactionLimitsScreen> {
       case 'TRANSFER':
         return {
           'title': 'Chuyển tiền & Thanh toán',
-          'subtitle': 'Áp dụng cho chuyển tiền ví Mio và quét mã QR',
+          'subtitle': 'Áp dụng cho chuyển tiền ví LumaPay và quét mã QR',
           'icon': Iconsax.send_2,
           'color': kAuthPinkDark,
         };
@@ -381,7 +381,7 @@ class _TransactionLimitsScreenState extends State<TransactionLimitsScreen> {
                     badgeText: 'Kiểm soát chi tiêu',
                     title: 'Hạn mức & Sức chứa ví',
                     subtitle:
-                        'Theo dõi sức chứa tối đa của ví Mio và chủ động đặt giới hạn cho từng loại giao dịch.',
+                        'Theo dõi sức chứa tối đa của ví LumaPay và chủ động đặt giới hạn cho từng loại giao dịch.',
                   ),
                   const SizedBox(height: 20),
                   if (_walletCapacity != null) ...[
@@ -443,7 +443,7 @@ class _TransactionLimitsScreenState extends State<TransactionLimitsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Sức chứa ví Mio',
+                      'Sức chứa ví LumaPay',
                       style: GoogleFonts.roboto(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -1319,7 +1319,7 @@ class _EditCapacityBottomSheetState extends State<_EditCapacityBottomSheet> {
                   children: [
                     Expanded(
                       child: Text(
-                        'Điều chỉnh sức chứa ví Mio',
+                        'Điều chỉnh sức chứa ví LumaPay',
                         style: GoogleFonts.roboto(
                           fontSize: 17.5,
                           fontWeight: FontWeight.w700,

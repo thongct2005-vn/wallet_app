@@ -32,7 +32,7 @@ class _CreateQRScreenState extends State<CreateQRScreen> {
     fontWeight: FontWeight.w800,
     color: Colors.grey.withValues(alpha: 0.4),
   );
-  static final TextStyle _mioBrandStyle = GoogleFonts.roboto(
+  static final TextStyle _lumaPayBrandStyle = GoogleFonts.roboto(
     color: kTfPink,
     fontWeight: FontWeight.w800,
     fontSize: 24,
@@ -223,7 +223,7 @@ class _CreateQRScreenState extends State<CreateQRScreen> {
                       const TransferDashedDivider(),
                       const SizedBox(height: 14),
                       _buildRow('Tên người nhận', _fullName ?? "?"),
-                      _buildRow('Ngân hàng', "Mio"),
+                      _buildRow('Ngân hàng', "LumaPay"),
                       _buildRow('Số tài khoản', _phone ?? "0xxxxxxxxx"),
                     ],
                   ),
@@ -254,7 +254,7 @@ class _CreateQRScreenState extends State<CreateQRScreen> {
       ),
       child: Column(
         children: [
-          Text("Mio", style: _mioBrandStyle),
+          Text("LumaPay", style: _lumaPayBrandStyle),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(12),
@@ -397,7 +397,7 @@ class _CreateQRScreenState extends State<CreateQRScreen> {
       }
 
       final String fileName =
-          'mio_qr_${DateTime.now().millisecondsSinceEpoch}.png';
+          'lumapay_qr_${DateTime.now().millisecondsSinceEpoch}.png';
 
       try {
         await _galleryChannel.invokeMethod<String>('saveImage', {

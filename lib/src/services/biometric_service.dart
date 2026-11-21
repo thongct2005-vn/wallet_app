@@ -24,10 +24,10 @@ class BiometricService {
 
   static const FlutterSecureStorage _storage = FlutterSecureStorage(
     aOptions: AndroidOptions(
-      storageNamespace: 'mio_biometric_secure_prefs',
+      storageNamespace: 'lumapay_biometric_secure_prefs',
     ),
     iOptions: IOSOptions(
-      accountName: 'mio_biometric_secure_prefs',
+      accountName: 'lumapay_biometric_secure_prefs',
     ),
   );
 

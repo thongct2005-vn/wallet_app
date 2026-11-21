@@ -309,7 +309,7 @@ class TransactionDetailScreen extends StatelessWidget {
                       _infoRow(
                         transactionModel.fundingSource == 'BANK'
                             ? "Tài khoản/thẻ"
-                            : "Ví Mio",
+                            : "Ví LumaPay",
                         walletName,
                       ),
                       if (transactionModel.counterpartyPhone.isNotEmpty)

@@ -146,7 +146,7 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet>
       }
 
       final authRes = await _biometricService.authenticate(
-        reason: 'Đặt vân tay để xác thực giao dịch Ví Mio',
+        reason: 'Đặt vân tay để xác thực giao dịch Ví LumaPay',
       );
       if (!mounted) return;
       if (authRes.isSuccess) {

@@ -129,8 +129,8 @@ class _ResultTranferScreenState extends State<ResultTranferScreen> {
                                         ? "Thanh toán qua ${data['bankName']}"
                                         : "Chuyển tiền qua ${data['bankName']}")
                                   : widget.isMerchant
-                                  ? "Thanh toán qua Mio"
-                                  : "Chuyển tiền qua Mio",
+                                  ? "Thanh toán qua LumaPay"
+                                  : "Chuyển tiền qua LumaPay",
                             ),
                             if (data['fundingSource'] == 'POSTPAID' &&
                                 data['postpaidAvailableAfter'] != null)
@@ -222,7 +222,7 @@ class _ResultTranferScreenState extends State<ResultTranferScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              "${data['destinationUserName'] ?? ''} đã nhận được tiền qua Mio",
+              "${data['destinationUserName'] ?? ''} đã nhận được tiền qua LumaPay",
               style: GoogleFonts.roboto(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -261,12 +261,18 @@ class _ResultTranferScreenState extends State<ResultTranferScreen> {
                   shape: BoxShape.circle,
                   color: kTfPink,
                 ),
-                child: Text(
-                  'Mio',
-                  style: GoogleFonts.roboto(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 10,
-                    color: Colors.white,
+                child: Padding(
+                  padding: const EdgeInsets.all(3),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'LumaPay',
+                      style: GoogleFonts.roboto(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 10,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ),
               ),

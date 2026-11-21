@@ -10,10 +10,19 @@ class DialogUtils {
     required String title,
     required String message,
     String closeText = 'Đóng',
+    bool barrierDismissible = false,
     VoidCallback? onClose,
   }) {
+    var closedHandled = false;
+    void invokeOnClose() {
+      if (closedHandled) return;
+      closedHandled = true;
+      onClose?.call();
+    }
+
     return showDialog(
       context: context,
+      barrierDismissible: barrierDismissible,
       builder: (context) => _DialogShell(
         title: title,
         message: message,
@@ -22,12 +31,12 @@ class DialogUtils {
             text: closeText,
             onPressed: () {
               Navigator.of(context).pop();
-              onClose?.call();
+              invokeOnClose();
             },
           ),
         ],
       ),
-    );
+    ).whenComplete(invokeOnClose);
   }
 
   static Future<void> showConfirmation(

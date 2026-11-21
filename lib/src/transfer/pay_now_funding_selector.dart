@@ -68,12 +68,18 @@ class PayNowFundingSelector extends StatelessWidget {
                   shape: BoxShape.circle,
                   color: kTfPink,
                 ),
-                child: Text(
-                  'Mio',
-                  style: GoogleFonts.roboto(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 11,
-                    color: Colors.white,
+                child: Padding(
+                  padding: const EdgeInsets.all(3),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'LumaPay',
+                      style: GoogleFonts.roboto(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -83,7 +89,7 @@ class PayNowFundingSelector extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Ví Mio',
+                      'Ví LumaPay',
                       style: GoogleFonts.roboto(
                         fontSize: 14,
                         color: kTfMuted,

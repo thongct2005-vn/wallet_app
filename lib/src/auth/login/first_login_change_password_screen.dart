@@ -201,7 +201,7 @@ class _FirstLoginChangePasswordScreenState
               badgeText: badgeText,
               title: 'Thiết lập mật khẩu mới',
               subtitle:
-                  'Đây là lần đăng nhập đầu tiên. Vui lòng tạo mật khẩu mới gồm 6 chữ số để bảo vệ tài khoản Ví Mio.',
+                  'Đây là lần đăng nhập đầu tiên. Vui lòng tạo mật khẩu mới gồm 6 chữ số để bảo vệ tài khoản Ví LumaPay.',
             ),
             const SizedBox(height: 22),
             RepaintBoundary(

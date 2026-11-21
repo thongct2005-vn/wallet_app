@@ -141,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (context.mounted) {
                   SnackbarUtils.info(
                     context,
-                    "Cần quyền camara để sử dụng chức năng này",
+                    "Cần quyền camera để sử dụng chức năng này",
                   );
                 }
               }

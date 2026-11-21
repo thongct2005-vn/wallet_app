@@ -127,7 +127,7 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
           context,
           title: 'Đăng ký tài khoản mới',
           message:
-              'Bạn có muốn dùng số điện thoại $phone để đăng ký tài khoản Ví Mio không?',
+              'Bạn có muốn dùng số điện thoại $phone để đăng ký tài khoản Ví LumaPay không?',
           cancelText: 'Đổi SĐT',
           confirmText: 'Xác nhận',
           onConfirm: () {
@@ -184,7 +184,7 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
             const SizedBox(height: 8),
             const AuthHeroBanner(
               icon: Iconsax.wallet_3,
-              badgeText: 'Ví điện tử Mio',
+              badgeText: 'Ví điện tử LumaPay',
               title: 'Bắt đầu với số điện thoại',
               subtitle:
                   'Nhập số điện thoại để đăng nhập hoặc mở ví mới hoàn toàn miễn phí chỉ trong 1 phút.',

@@ -256,7 +256,7 @@ class _ConfirmTopUpWithdrawScreenState
               Expanded(
                 child: Text(
                   widget.isTopUpTab
-                      ? "Nạp tiền vào ví Mio"
+                      ? "Nạp tiền vào ví LumaPay"
                       : "Rút tiền về ngân hàng",
                   style: GoogleFonts.roboto(
                     fontWeight: FontWeight.w700,

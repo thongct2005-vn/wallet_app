@@ -77,7 +77,7 @@ class MainActivity : FlutterFragmentActivity() {
                 if (call.method == "saveImage") {
                     val bytes = call.argument<ByteArray>("bytes")
                     val fileName = call.argument<String>("fileName")
-                        ?: "mio_qr_${System.currentTimeMillis()}.png"
+                        ?: "lumapay_qr_${System.currentTimeMillis()}.png"
                     if (bytes == null || bytes.isEmpty()) {
                         result.error("INVALID_ARGS", "Empty image bytes", null)
                         return@setMethodCallHandler
@@ -125,7 +125,7 @@ class MainActivity : FlutterFragmentActivity() {
                 put(MediaStore.Images.Media.MIME_TYPE, "image/png")
                 put(
                     MediaStore.Images.Media.RELATIVE_PATH,
-                    "${Environment.DIRECTORY_PICTURES}/Mio"
+                    "${Environment.DIRECTORY_PICTURES}/LumaPay"
                 )
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }
@@ -143,7 +143,7 @@ class MainActivity : FlutterFragmentActivity() {
             @Suppress("DEPRECATION")
             val dir = File(
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
-                "Mio"
+                "LumaPay"
             )
             if (!dir.exists()) dir.mkdirs()
             val file = File(dir, fileName)

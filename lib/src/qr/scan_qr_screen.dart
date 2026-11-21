@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:app/core/utils/dialog_utils.dart';
 import 'package:app/core/utils/format_utils.dart';
 import 'package:app/src/services/bank_service.dart';
@@ -17,7 +18,8 @@ class ScanQRScreen extends StatefulWidget {
   State<ScanQRScreen> createState() => _ScanQRScreenState();
 }
 
-class _ScanQRScreenState extends State<ScanQRScreen> {
+class _ScanQRScreenState extends State<ScanQRScreen>
+    with WidgetsBindingObserver {
   final PaymentService _paymentService = PaymentService();
   final WalletService _walletService = WalletService();
   final BankService _bankService = BankService();
@@ -31,22 +33,97 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
     detectionTimeoutMs: 1000,
   );
 
+  static final RegExp _staticQrPattern = RegExp(
+    r'^(?:LumaPay|Mio):[A-Za-z0-9]{8,64}$',
+  );
+  static final RegExp _dynamicQrPattern = RegExp(r'^[A-Za-z0-9]{8,64}$');
+
   // Chặn xử lý trùng trong lúc đang gọi API / đang mở màn hình khác
   bool _isProcessing = false;
+  bool _isDialogOpen = false;
+  bool _isDisposed = false;
+  Future<void>? _pauseFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_isDisposed) return;
+    switch (state) {
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+        unawaited(_pauseCamera());
+        break;
+      case AppLifecycleState.resumed:
+        if (!_isProcessing && !_isDialogOpen) {
+          unawaited(_resumeScan());
+        }
+        break;
+      case AppLifecycleState.detached:
+        break;
+    }
+  }
 
   @override
   void dispose() {
+    _isDisposed = true;
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
   }
 
+  Future<void> _pauseCamera() {
+    if (_isDisposed) return Future.value();
+    final existing = _pauseFuture;
+    if (existing != null) return existing;
+
+    final future = () async {
+      try {
+        await _controller.pause();
+      } catch (_) {
+        // Bỏ qua lỗi khi camera đang dừng hoặc chưa khởi tạo xong
+      } finally {
+        _pauseFuture = null;
+      }
+    }();
+    _pauseFuture = future;
+    return future;
+  }
+
   // Cho phép quét lại. Dùng thay cho mọi chỗ gọi _controller.start().
-  void _resumeScan() {
-    _isProcessing = false;
-    if (mounted) _controller.start();
+  Future<void> _resumeScan() async {
+    _isDialogOpen = false;
+    final pendingPause = _pauseFuture;
+    if (pendingPause != null) {
+      try {
+        await pendingPause;
+      } catch (_) {}
+    }
+    if (!mounted || _isDisposed) {
+      _isProcessing = false;
+      return;
+    }
+    try {
+      await _controller.start();
+    } catch (_) {
+      // Camera có thể chưa sẵn sàng hoặc đang bị đóng
+    } finally {
+      _isProcessing = false;
+    }
   }
 
   void _showError(String message) {
+    if (!mounted || _isDisposed) {
+      _isProcessing = false;
+      return;
+    }
+    if (_isDialogOpen) return;
+    _isDialogOpen = true;
     DialogUtils.showNotification(
       context,
       title: "Thông báo",
@@ -56,22 +133,25 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
   }
 
   Future<void> _onDetect(BarcodeCapture capture) async {
-    if (_isProcessing) return;
+    if (_isProcessing || _isDisposed || !mounted) return;
     if (capture.barcodes.isEmpty) return;
-    final String? qrData = capture.barcodes.first.rawValue;
-    if (qrData == null) return;
+    final String? qrData = capture.barcodes.first.rawValue?.trim();
+    if (qrData == null || qrData.isEmpty) return;
 
     _isProcessing = true;
-    _controller.stop();
+    await _pauseCamera();
+    if (!mounted || _isDisposed) return;
 
     try {
-      if (qrData.startsWith('Mio')) {
+      if (_staticQrPattern.hasMatch(qrData)) {
         await _handleStaticQr(qrData);
-      } else {
+      } else if (_dynamicQrPattern.hasMatch(qrData)) {
         await _handleDynamicQr(qrData);
+      } else {
+        _showError("Mã QR không hợp lệ hoặc không thuộc hệ thống LumaPay");
       }
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || _isDisposed) return;
       _showError("Không đọc được mã QR. Vui lòng thử lại");
     }
   }
@@ -85,8 +165,19 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
       return;
     }
 
-    final info = result['user_info'];
-    if (info['role'] != 'USER') {
+    final rawInfo = result['user_info'];
+    if (rawInfo is! Map || rawInfo['role'] != 'USER') {
+      _showError("Mã QR không hợp lệ");
+      return;
+    }
+    final info = rawInfo;
+
+    final receiverId = info['user_id']?.toString();
+    final receiverFullName = info['full_name']?.toString();
+    final receiverPhone = info['phone']?.toString();
+    if (receiverId == null ||
+        receiverFullName == null ||
+        receiverPhone == null) {
       _showError("Mã QR không hợp lệ");
       return;
     }
@@ -95,9 +186,9 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => AmountInputScreen(
-          receiverId: info['user_id'],
-          receiverFullName: info['full_name'],
-          receiverPhone: info['phone'],
+          receiverId: receiverId,
+          receiverFullName: receiverFullName,
+          receiverPhone: receiverPhone,
         ),
       ),
     ).then((_) => _resumeScan());
@@ -105,23 +196,34 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
 
   Future<void> _handleDynamicQr(String qrData) async {
     final result = await _paymentService.getUserInfoByDynamicQR(qrData);
-    if (!mounted) return;
+    if (!mounted || _isDisposed) return;
 
     if (result['is_success'] != true) {
-      _showError(result['message'] ?? "Mã QR không hợp lệ");
+      _showError(result['message']?.toString() ?? "Mã QR không hợp lệ");
       return;
     }
 
-    final info = result['user_info'];
+    final rawInfo = result['user_info'];
+    if (rawInfo is! Map) {
+      _showError("Mã QR không hợp lệ");
+      return;
+    }
+    final info = rawInfo;
     final role = info['role'];
     if (role != 'USER' && role != 'MERCHANT') {
       _showError("Mã QR không hợp lệ");
       return;
     }
 
-    final receiverPhone = info['destination_phone'];
-    final receiverId = info['destination_user_id'];
-    final receiverFullName = info['destination_name'];
+    final receiverPhone = info['destination_phone']?.toString();
+    final receiverId = info['destination_user_id']?.toString();
+    final receiverFullName = info['destination_name']?.toString();
+    if (receiverPhone == null ||
+        receiverId == null ||
+        receiverFullName == null) {
+      _showError("Mã QR không hợp lệ");
+      return;
+    }
     final String? amount = info['amount']?.toString();
     final String? description = info['description']?.toString();
     final bool isMerchant = role == 'MERCHANT';
@@ -158,7 +260,7 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
       neededAmount: needed,
       isQrPayment: true,
     );
-    if (!mounted) return;
+    if (!mounted || _isDisposed) return;
 
     if (!resolution.canProceed) {
       _showError(resolution.errorMessage ?? "Số dư trong ví không đủ");
@@ -215,7 +317,42 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
       ),
       body: Stack(
         children: [
-          MobileScanner(controller: _controller, onDetect: _onDetect),
+          MobileScanner(
+            controller: _controller,
+            onDetect: _onDetect,
+            onDetectError: (error, stackTrace) {},
+            errorBuilder: (context, error) {
+              return Container(
+                color: Colors.black,
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.videocam_off_outlined,
+                      color: Colors.white70,
+                      size: 48,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      "Không thể khởi động camera. Vui lòng kiểm tra quyền truy cập và thử lại.",
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.roboto(
+                        color: Colors.white,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: _resumeScan,
+                      child: const Text("Thử lại"),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
 
           // Lớp phủ tối, khoét lỗ vuông ở giữa
           Positioned.fill(

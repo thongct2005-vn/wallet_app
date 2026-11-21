@@ -58,7 +58,7 @@ class KycResultScreen extends StatelessWidget {
     final subtitleText = msg.trim().isNotEmpty
         ? msg
         : (isSuccess
-              ? 'Hồ sơ định danh của bạn đã được ghi nhận trên hệ thống Ví Mio.'
+              ? 'Hồ sơ định danh của bạn đã được ghi nhận trên hệ thống Ví LumaPay.'
               : 'Chưa thể đối chiếu thông tin. Vui lòng kiểm tra lại ảnh chụp và thử lại.');
 
     return Scaffold(
