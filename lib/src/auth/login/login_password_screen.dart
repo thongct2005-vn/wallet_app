@@ -266,7 +266,7 @@ class _LoginPasswordScreenState extends State<LoginPasswordScreen> {
             badgeText: phoneDisplay,
             title: 'Nhập mật khẩu của bạn',
             subtitle:
-                'Nhập mật khẩu gồm 6 chữ số để tiếp tục đăng nhập vào Ví Mio.',
+                'Nhập mật khẩu gồm 6 chữ số để tiếp tục đăng nhập vào Ví LumaPay.',
           ),
           const SizedBox(height: 22),
           RepaintBoundary(

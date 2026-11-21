@@ -8,7 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 export 'package:app/src/transfer/transfer_ui.dart'
     show FreezeKeyboardMediaQuery, KeyboardTranslate, requestKeyboardFocus;
 
-// Bảng màu thống nhất cho toàn bộ luồng Xác thực (Auth) của Ví Mio.
+// Bảng màu thống nhất cho toàn bộ luồng Xác thực (Auth) của Ví LumaPay.
 const Color kAuthPink = Color(0xFFEC407A);
 const Color kAuthPinkDark = Color(0xFFD81B60);
 const Color kAuthPinkLight = Color(0xFFF48FB1);
@@ -355,7 +355,7 @@ class AuthHeroBanner extends StatelessWidget {
   }
 }
 
-/// Nút chính dạng gradient hồng chuẩn Ví Mio.
+/// Nút chính dạng gradient hồng chuẩn Ví LumaPay.
 class AuthPrimaryButton extends StatelessWidget {
   final String label;
   final VoidCallback? onTap;

@@ -160,7 +160,7 @@ class _LinkBankScreenState extends State<LinkBankScreen> {
                                       ],
                                     ),
                                     child: Text(
-                                      "Liên kết ngân hàng của bạn để thanh toán/chuyển tiền qua Mio.",
+                                      "Liên kết ngân hàng của bạn để thanh toán/chuyển tiền qua LumaPay.",
                                       style: GoogleFonts.roboto(
                                         fontSize: 15,
                                         height: 1.4,

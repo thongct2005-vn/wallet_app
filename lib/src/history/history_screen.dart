@@ -1364,13 +1364,13 @@ class _PreparedTransaction {
       walletName: isPostpaidCreditEvent
           ? 'Ví trả sau'
           : isPostpaidRepay
-          ? (t.bankName.trim().isNotEmpty ? bankLabel : 'Ví Mio')
+          ? (t.bankName.trim().isNotEmpty ? bankLabel : 'Ví LumaPay')
           : (isBankFunded ||
                     (t.type != 'TRANSFER' &&
                         t.type != 'PAYMENT' &&
                         !isPostpaidRepay)
                 ? bankLabel
-                : 'Ví Mio'),
+                : 'Ví LumaPay'),
       formattedTime: FormatUtils.formatDateTime(t.createdAt),
       signedAmount: '$amountPrefix${FormatUtils.formatDisplayNumber(t.amount)}đ',
       formattedFee: t.fee > 0

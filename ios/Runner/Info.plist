@@ -27,7 +27,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Sử dụng sinh trắc học để xác thực giao dịch Ví Mio</string>
+	<string>Sử dụng sinh trắc học để xác thực giao dịch Ví LumaPay</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

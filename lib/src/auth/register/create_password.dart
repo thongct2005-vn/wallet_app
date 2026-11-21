@@ -175,7 +175,7 @@ class _CreatePasswordScreenState extends State<CreatePasswordScreen> {
             badgeText: 'Bước 2/3 • Thiết lập bảo mật',
             title: 'Tạo mật khẩu đăng nhập',
             subtitle:
-                'Thiết lập mật khẩu gồm 6 chữ số để bảo vệ tài khoản Ví Mio của bạn.',
+                'Thiết lập mật khẩu gồm 6 chữ số để bảo vệ tài khoản Ví LumaPay của bạn.',
           ),
           const SizedBox(height: 24),
           RepaintBoundary(

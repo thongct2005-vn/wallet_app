@@ -249,23 +249,30 @@ class _OtpScreenState extends State<OtpScreen> with SmoothAutoFocusMixin {
     );
 
     if (!mounted) return;
-    _isLoadingNotifier.value = false;
 
     if (result['is_success'] == true) {
+      await _completeLogin(result);
+      return;
+    }
+
+    _isLoadingNotifier.value = false;
+
+    if (result['status_code'] == 401) {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
           builder: (_) => LoginPhoneScreen(
-            initialPhoneNumber: widget.phoneNumber,
-            isRegisterSucess: true,
+            isForceLogout: true,
+            msg: result['message'] ?? 'Phiên xác thực đã hết hạn',
           ),
         ),
         (r) => false,
       );
-    } else {
-      _clearOtpFields();
-      _msgNotifier.value = result['message'] ?? 'Xác thực đăng ký thất bại';
+      return;
     }
+
+    _clearOtpFields();
+    _msgNotifier.value = result['message'] ?? 'Xác thực đăng ký thất bại';
   }
 
   Future<void> _completeLogin(Map<String, dynamic> result) async {

@@ -66,8 +66,20 @@ class _SecurityScreenState extends State<SecurityScreen> {
   }
 
   Future<void> _onTapChangePin() async {
-    final ready = await _ensureHasPin();
+    bool hadPinBefore = _userController.hasPin.value;
+    if (!hadPinBefore) {
+      hadPinBefore = await _userService.checkPinStatus();
+      if (hadPinBefore) {
+        _userController.hasPin.value = true;
+      }
+    }
+    final ready = hadPinBefore ? true : await _ensureHasPin();
     if (!ready || !mounted) return;
+    if (!hadPinBefore) {
+      SnackbarUtils.success(context, 'Tạo mã PIN thành công');
+      await _loadBiometricState();
+      return;
+    }
     await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -183,9 +195,9 @@ class _SecurityScreenState extends State<SecurityScreen> {
           const AuthHeroBanner(
             icon: Iconsax.shield_security,
             badgeText: 'An toàn tài khoản',
-            title: 'Quản lý bảo mật Ví Mio',
+            title: 'Quản lý bảo mật Ví LumaPay',
             subtitle:
-                'Thay đổi mã PIN giao dịch, mật khẩu đăng nhập và cài đặt xác thực bằng vân tay.',
+                'Quản lý mã PIN giao dịch, mật khẩu đăng nhập và cài đặt xác thực bằng vân tay.',
           ),
           const SizedBox(height: 22),
           Container(
@@ -193,12 +205,17 @@ class _SecurityScreenState extends State<SecurityScreen> {
             decoration: authCardDeco(radius: 22),
             child: Column(
               children: [
-                _buildActionItem(
-                  icon: Iconsax.key,
-                  title: 'Đổi mã PIN',
-                  subtitle: 'Thay đổi mã PIN 6 số dùng khi giao dịch',
-                  onTap: _onTapChangePin,
-                ),
+                Obx(() {
+                  final hasPin = _userController.hasPin.value;
+                  return _buildActionItem(
+                    icon: Iconsax.key,
+                    title: hasPin ? 'Đổi mã PIN' : 'Tạo mã PIN',
+                    subtitle: hasPin
+                        ? 'Thay đổi mã PIN 6 số dùng khi giao dịch'
+                        : 'Thiết lập mã PIN 6 số dùng khi giao dịch',
+                    onTap: _onTapChangePin,
+                  );
+                }),
                 _buildDivider(),
                 _buildActionItem(
                   icon: Iconsax.lock_1,
@@ -383,7 +400,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
                   ),
                 )
               else
-                _MioCompactSwitch(
+                _LumaPayCompactSwitch(
                   value: _biometricEnabled,
                   onChanged: _onToggleBiometric,
                 ),
@@ -395,11 +412,11 @@ class _SecurityScreenState extends State<SecurityScreen> {
   }
 }
 
-class _MioCompactSwitch extends StatelessWidget {
+class _LumaPayCompactSwitch extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
 
-  const _MioCompactSwitch({
+  const _LumaPayCompactSwitch({
     required this.value,
     required this.onChanged,
   });

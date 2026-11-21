@@ -65,8 +65,12 @@ class ApiErrorHandler {
       }
 
       final data = e.response?.data;
-      if (data is Map<String, dynamic> && data['message'] != null) {
-        return {'is_success': false, 'message': data['message']};
+      if (data is Map && data['message'] != null) {
+        return {
+          'is_success': false,
+          'message': data['message'].toString(),
+          'status_code': e.response?.statusCode,
+        };
       }
 
       return {

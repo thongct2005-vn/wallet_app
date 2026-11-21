@@ -624,7 +624,7 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Mio PayLater',
+                        'LumaPay PayLater',
                         style: GoogleFonts.roboto(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,

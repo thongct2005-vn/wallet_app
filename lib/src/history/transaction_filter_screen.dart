@@ -15,7 +15,7 @@ class TransactionFilterCriteria {
   final DateTime? endDate;
   final int? minAmount;
   final int? maxAmount;
-  final String? fundingSource; // 'MIO' | 'POSTPAID'
+  final String? fundingSource; // 'LUMAPAY' | 'POSTPAID'
   final String? transactionType; // 'TOPUP' | 'WITHDRAW' | 'TRANSFER' | 'PAYMENT'
   final String? direction; // 'IN' | 'OUT' (khi transactionType == 'TRANSFER')
   final String? status; // 'SUCCESS' | 'FAILED' | 'PENDING'
@@ -165,8 +165,8 @@ class TransactionFilterScreen extends StatefulWidget {
 
   static const List<_FilterPillOption> _accountOptions = [
     _FilterPillOption(
-      value: 'MIO',
-      label: 'Ví Mio',
+      value: 'LUMAPAY',
+      label: 'Ví LumaPay',
       icon: Iconsax.wallet_25,
       color: kTfPink,
     ),

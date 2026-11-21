@@ -178,7 +178,7 @@ class _RegisterEmailScreenState extends State<RegisterEmailScreen> {
                           AuthTextField(
                             controller: _emailController,
                             focusNode: _focusNode,
-                            hintText: 'vidu@gmail.com',
+                            hintText: 'me@gmail.com',
                             leadingIcon: Icons.mail_outline_rounded,
                             keyboardType: TextInputType.emailAddress,
                             hasError: err.isNotEmpty,

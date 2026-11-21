@@ -17,7 +17,7 @@
         </intent>
     </queries>
     <application
-        android:label="Ví Mio"
+        android:label="LumaPay"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

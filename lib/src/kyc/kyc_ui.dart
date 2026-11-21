@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
-// Bảng màu đồng bộ với hệ thống thiết kế Ví Mio (transfer_ui / topup_withdraw).
+// Bảng màu đồng bộ với hệ thống thiết kế Ví LumaPay (transfer_ui / topup_withdraw).
 const Color kKycPink = Color(0xFFEC407A);
 const Color kKycPinkDark = Color(0xFFD81B60);
 const Color kKycPinkLight = Color(0xFFF48FB1);
@@ -112,7 +112,7 @@ class KycCircleButton extends StatelessWidget {
   }
 }
 
-/// Nút chính gradient hồng đặc trưng của Ví Mio.
+/// Nút chính gradient hồng đặc trưng của Ví LumaPay.
 class KycPrimaryButton extends StatelessWidget {
   final String label;
   final VoidCallback? onTap;

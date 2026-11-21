@@ -64,7 +64,7 @@ class QrDownloadCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Mio',
+            'LumaPay',
             style: GoogleFonts.roboto(
               fontSize: 34,
               fontWeight: FontWeight.w900,
