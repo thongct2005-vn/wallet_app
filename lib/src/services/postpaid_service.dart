@@ -104,5 +104,49 @@ class PostpaidService {
       return ApiErrorHandler.handleError(e);
     }
   }
+
+  Future<Map<String, dynamic>> getLatestUnlockRequest() async {
+    try {
+      final result = await api.get(ApiConfig.postpaidUnlockRequestsLatest);
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'data': result.data['data'],
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> submitUnlockRequest({
+    required List<String> filePaths,
+    String? userNote,
+  }) async {
+    try {
+      final files = <MultipartFile>[];
+      for (final p in filePaths) {
+        files.add(await MultipartFile.fromFile(p));
+      }
+
+      final map = <String, dynamic>{
+        'proof_images': files,
+        if (userNote != null && userNote.trim().isNotEmpty)
+          'user_note': userNote.trim(),
+      };
+      final formData = FormData.fromMap(map);
+
+      final result = await api.post(
+        ApiConfig.postpaidUnlockRequests,
+        data: formData,
+      );
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'data': result.data['data'],
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
 }
 

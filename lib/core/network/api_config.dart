@@ -42,6 +42,9 @@ class ApiConfig {
   static const String postpaidActivate = '$baseUrl/postpaid/activate';
   static const String postpaidEntries = '$baseUrl/postpaid/entries';
   static const String postpaidRepay = '$baseUrl/postpaid/repay';
+  static const String postpaidUnlockRequests = '$baseUrl/postpaid/unlock-requests';
+  static const String postpaidUnlockRequestsLatest =
+      '$baseUrl/postpaid/unlock-requests/latest';
 
   static const String findUser = '$baseUrl/user/find-user';
   static const String checkContact = '$baseUrl/user/check-contact';

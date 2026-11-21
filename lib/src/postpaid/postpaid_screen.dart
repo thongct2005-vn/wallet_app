@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:app/core/controller/user_controller.dart';
@@ -17,6 +18,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
 class PostpaidScreen extends StatefulWidget {
@@ -813,6 +815,7 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
               ],
             ),
           ),
+          _buildFreezeUnlockSection(),
           const SizedBox(height: 20),
           Row(
             children: [
@@ -927,6 +930,237 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
     );
   }
 
+  Widget _buildFreezeUnlockSection() {
+    final wallet = _wallet;
+    if (wallet == null) return const SizedBox.shrink();
+
+    final status = (wallet['status'] ?? 'ACTIVE').toString().toUpperCase();
+    final lockReason = (wallet['lock_reason'] ?? '').toString().toUpperCase();
+    final overdueCount = _toInt(wallet['overdue_count']);
+    final overdueDebt =
+        _toInt(wallet['billed_amount']) +
+        _toInt(wallet['service_fee_amount']) +
+        _toInt(wallet['late_fee_amount']);
+    final rawLatest = wallet['latest_unlock_request'];
+    final latestReq = rawLatest is Map
+        ? Map<String, dynamic>.from(rawLatest)
+        : null;
+
+    if (status != 'FROZEN' && latestReq == null) {
+      return const SizedBox.shrink();
+    }
+
+    final reqStatus = (latestReq?['status'] ?? '').toString().toUpperCase();
+    final adminNote = (latestReq?['admin_note'] ?? '').toString().trim();
+    final userNote = (latestReq?['user_note'] ?? '').toString().trim();
+    final proofCount = _toInt(latestReq?['proof_count']);
+    final isRepeatLock = status == 'FROZEN' && lockReason == 'OVERDUE_REPEAT';
+    final canSubmitUnlock =
+        isRepeatLock && reqStatus != 'PENDING' && overdueDebt == 0;
+
+    String titleText = 'Trạng thái Ví trả sau';
+    String descText = '';
+    Color accentColor = Colors.orange.shade800;
+    Color bgColor = const Color(0xFFFFF8E1);
+    Color borderColor = const Color(0xFFFFE082);
+
+    if (status == 'FROZEN') {
+      if (isRepeatLock) {
+        titleText = 'Ví bị khóa do quá hạn lặp lại (Lần $overdueCount)';
+        descText =
+            'Để bảo vệ hạn mức tín dụng, hệ thống tạm khóa tính năng thanh toán QR từ lần quá hạn thứ 2 trở đi. Sau khi trả hết dư nợ quá hạn, hãy gửi 1–3 ảnh chứng minh thu nhập để Quản trị viên xét duyệt mở lại.';
+        accentColor = Colors.red.shade800;
+        bgColor = const Color(0xFFFFEBEE);
+        borderColor = const Color(0xFFFFCDD2);
+      } else if (lockReason == 'ADMIN_FREEZE') {
+        titleText = 'Ví đã bị Quản trị viên tạm khóa';
+        descText =
+            'Tính năng chi tiêu QR đang tạm khóa theo quyết định quản trị. Bạn vẫn có thể thanh toán dư nợ bình thường.';
+      } else {
+        titleText = 'Ví trả sau đang tạm khóa';
+        descText = 'Bạn vẫn có thể thanh toán dư nợ hiện tại bình thường.';
+      }
+    } else if (latestReq != null) {
+      titleText = 'Hồ sơ xét duyệt mở lại Ví trả sau';
+      descText = 'Trạng thái hồ sơ gần nhất của bạn:';
+      accentColor = kTfPinkDark;
+      bgColor = const Color(0xFFFDF2F8);
+      borderColor = const Color(0xFFFBCFE8);
+    }
+
+    String reqLabel(String st) {
+      switch (st) {
+        case 'PENDING':
+          return 'Đang chờ Quản trị viên duyệt';
+        case 'APPROVED':
+          return 'Đã duyệt mở lại ví';
+        case 'REJECTED':
+          return 'Đã từ chối — Cần bổ sung hồ sơ';
+        default:
+          return st;
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: borderColor),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  status == 'FROZEN'
+                      ? Iconsax.lock_1
+                      : Iconsax.document_text,
+                  size: 20,
+                  color: accentColor,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    titleText,
+                    style: GoogleFonts.roboto(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: accentColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (descText.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                descText,
+                style: GoogleFonts.roboto(
+                  fontSize: 13,
+                  height: 1.45,
+                  color: kTfText,
+                ),
+              ),
+            ],
+            if (latestReq != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderColor.withValues(alpha: 0.7)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Hồ sơ gần nhất: ${reqLabel(reqStatus)} ($proofCount ảnh)',
+                      style: GoogleFonts.roboto(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: reqStatus == 'REJECTED'
+                            ? Colors.red.shade700
+                            : reqStatus == 'APPROVED'
+                                ? kTfSuccess
+                                : Colors.orange.shade800,
+                      ),
+                    ),
+                    if (userNote.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Ghi chú của bạn: $userNote',
+                        style: GoogleFonts.roboto(fontSize: 12.5, color: kTfMuted),
+                      ),
+                    ],
+                    if (adminNote.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Phản hồi Admin: $adminNote',
+                        style: GoogleFonts.roboto(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: kTfText,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+            if (isRepeatLock) ...[
+              const SizedBox(height: 12),
+              if (overdueDebt > 0)
+                Text(
+                  'Còn ${FormatUtils.formatDisplayNumber(overdueDebt)}đ dư nợ quá hạn cần tất toán trước khi gửi ảnh chứng minh thu nhập.',
+                  style: GoogleFonts.roboto(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.red.shade800,
+                  ),
+                )
+              else if (reqStatus == 'PENDING')
+                Text(
+                  'Hồ sơ chứng minh thu nhập đang được Quản trị viên kiểm tra. Vui lòng chờ kết quả.',
+                  style: GoogleFonts.roboto(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.orange.shade900,
+                  ),
+                )
+              else
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: ElevatedButton.icon(
+                    onPressed: canSubmitUnlock ? _openUnlockRequestSheet : null,
+                    icon: const Icon(Iconsax.gallery_add, size: 18),
+                    label: Text(
+                      reqStatus == 'REJECTED'
+                          ? 'Gửi lại ảnh chứng minh thu nhập'
+                          : 'Gửi yêu cầu mở khóa & chứng minh thu nhập',
+                      style: GoogleFonts.roboto(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kTfPink,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openUnlockRequestSheet() async {
+    final submitted = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => _PostpaidUnlockRequestSheet(service: _postpaidService),
+    );
+    if (submitted == true && mounted) {
+      await _loadData();
+    }
+  }
 }
 
 class _PostpaidInfoSheet extends StatefulWidget {
@@ -1119,7 +1353,16 @@ class _PostpaidInfoSheetState extends State<_PostpaidInfoSheet> {
     final billingDay = _toInt(statement['billing_day'] ?? config['billing_day']);
     final dueDay = _toInt(statement['due_day'] ?? config['due_day']);
     final minLateFee = _toInt(feeRules['min_late_fee'] ?? config['min_late_fee']);
-    final lateFeePercent = (feeRules['late_fee_percent'] ?? config['late_fee_percent'] ?? 0).toString();
+    final lateFeePercent =
+        (feeRules['late_fee_percent'] ?? config['late_fee_percent'] ?? 0).toString();
+    final rawTiers = feeRules['late_fee_tiers'];
+    final lateFeeTiers = rawTiers is List
+        ? rawTiers
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList()
+        : const <Map<String, dynamic>>[];
+    final serviceFeeRuleText = (feeRules['service_fee_rule'] ?? '').toString();
     final activationFee = _toInt(feeRules['activation_fee']);
     final qrPaymentFee = _toInt(feeRules['qr_payment_fee']);
     final repaymentFee = _toInt(feeRules['repayment_fee']);
@@ -1148,11 +1391,52 @@ class _PostpaidInfoSheetState extends State<_PostpaidInfoSheet> {
               const SizedBox(height: 8),
               _buildMetricRow('Hạn thanh toán', 'Ngày $dueDay tháng kế tiếp'),
               const SizedBox(height: 8),
-              _buildMetricRow(
-                'Phí trễ hạn',
-                '$lateFeePercent% (tối thiểu ${FormatUtils.formatDisplayNumber(minLateFee)}đ)',
-                valueColor: const Color(0xFFD32F2F),
-              ),
+              if (lateFeeTiers.isNotEmpty) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Biểu phí chậm trả (4 bậc ngày quá hạn)',
+                    style: GoogleFonts.roboto(
+                      fontSize: 13,
+                      color: kTfMuted,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ...lateFeeTiers.map((tier) {
+                  final label = (tier['label'] ?? 'Bậc ${tier['tier']}').toString();
+                  final pct = (tier['percent_text'] ?? tier['percent'] ?? 0).toString();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: _buildMetricRow(
+                      '  • $label',
+                      '$pct% dư nợ quá hạn',
+                      valueColor: const Color(0xFFD32F2F),
+                    ),
+                  );
+                }),
+              ] else
+                _buildMetricRow(
+                  'Phí trễ hạn',
+                  minLateFee > 0
+                      ? '$lateFeePercent% (tối thiểu ${FormatUtils.formatDisplayNumber(minLateFee)}đ)'
+                      : '$lateFeePercent%',
+                  valueColor: const Color(0xFFD32F2F),
+                ),
+              if (serviceFeeRuleText.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    serviceFeeRuleText,
+                    style: GoogleFonts.roboto(
+                      fontSize: 12.5,
+                      color: kTfMuted,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -1615,6 +1899,323 @@ class _RepayPostpaidSheetState extends State<_RepayPostpaidSheet> {
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PostpaidUnlockRequestSheet extends StatefulWidget {
+  const _PostpaidUnlockRequestSheet({required this.service});
+
+  final PostpaidService service;
+
+  @override
+  State<_PostpaidUnlockRequestSheet> createState() =>
+      _PostpaidUnlockRequestSheetState();
+}
+
+class _PostpaidUnlockRequestSheetState
+    extends State<_PostpaidUnlockRequestSheet> {
+  final ImagePicker _picker = ImagePicker();
+  final TextEditingController _noteCtrl = TextEditingController();
+  final List<XFile> _selectedImages = [];
+  bool _isSubmitting = false;
+  String? _errorText;
+
+  @override
+  void dispose() {
+    _noteCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickFromGallery() async {
+    final remaining = 3 - _selectedImages.length;
+    if (remaining <= 0) {
+      setState(() => _errorText = 'Tối đa 3 ảnh chứng minh thu nhập');
+      return;
+    }
+    try {
+      final picked = await _picker.pickMultiImage(imageQuality: 85);
+      if (picked.isEmpty || !mounted) return;
+      setState(() {
+        _errorText = null;
+        _selectedImages.addAll(picked.take(remaining));
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _errorText = 'Không thể truy cập Thư viện ảnh');
+    }
+  }
+
+  Future<void> _pickFromCamera() async {
+    if (_selectedImages.length >= 3) {
+      setState(() => _errorText = 'Tối đa 3 ảnh chứng minh thu nhập');
+      return;
+    }
+    try {
+      final photo = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 85,
+      );
+      if (photo == null || !mounted) return;
+      setState(() {
+        _errorText = null;
+        _selectedImages.add(photo);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _errorText = 'Không thể mở Camera để chụp ảnh');
+    }
+  }
+
+  Future<void> _submit() async {
+    if (_isSubmitting) return;
+    if (_selectedImages.isEmpty) {
+      setState(
+        () => _errorText =
+            'Vui lòng chọn ít nhất 1 ảnh chứng minh thu nhập (tối đa 3 ảnh)',
+      );
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _errorText = null;
+    });
+
+    final res = await widget.service.submitUnlockRequest(
+      filePaths: _selectedImages.map((e) => e.path).toList(),
+      userNote: _noteCtrl.text,
+    );
+    if (!mounted) return;
+
+    setState(() => _isSubmitting = false);
+    if (res['is_success'] == true) {
+      SnackbarUtils.success(
+        context,
+        res['message']?.toString() ??
+            'Đã gửi yêu cầu mở khóa Ví trả sau thành công!',
+      );
+      Navigator.of(context).pop(true);
+    } else {
+      setState(() {
+        _errorText =
+            res['message']?.toString() ?? 'Không thể gửi yêu cầu mở khóa';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottomInset),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Mở lại Ví trả sau',
+                      style: GoogleFonts.roboto(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: kTfText,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _isSubmitting
+                        ? null
+                        : () => Navigator.of(context).pop(false),
+                    icon: const Icon(Icons.close_rounded, color: kTfMuted),
+                  ),
+                ],
+              ),
+              Text(
+                'Tải lên 1–3 ảnh (JPEG/PNG) sao kê nhận lương hoặc ảnh chứng minh thu nhập để Quản trị viên xét duyệt. Lưu ý: hạn mức sau khi mở lại vẫn giữ mức hiện tại.',
+                style: GoogleFonts.roboto(
+                  fontSize: 13,
+                  height: 1.45,
+                  color: kTfMuted,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _isSubmitting ? null : _pickFromGallery,
+                      icon: const Icon(Iconsax.gallery, size: 18),
+                      label: Text(
+                        'Thư viện ảnh',
+                        style: GoogleFonts.roboto(fontWeight: FontWeight.w600),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: kTfPinkDark,
+                        side: BorderSide(color: kTfPink.withValues(alpha: 0.45)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _isSubmitting ? null : _pickFromCamera,
+                      icon: const Icon(Iconsax.camera, size: 18),
+                      label: Text(
+                        'Chụp Camera',
+                        style: GoogleFonts.roboto(fontWeight: FontWeight.w600),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: kTfPinkDark,
+                        side: BorderSide(color: kTfPink.withValues(alpha: 0.45)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (_selectedImages.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Text(
+                  'Ảnh đã chọn (${_selectedImages.length}/3):',
+                  style: GoogleFonts.roboto(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: kTfText,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: List.generate(_selectedImages.length, (i) {
+                    return Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(
+                            File(_selectedImages[i].path),
+                            width: 88,
+                            height: 88,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Positioned(
+                          right: 4,
+                          top: 4,
+                          child: GestureDetector(
+                            onTap: _isSubmitting
+                                ? null
+                                : () => setState(
+                                      () => _selectedImages.removeAt(i),
+                                    ),
+                            child: Container(
+                              width: 22,
+                              height: 22,
+                              decoration: const BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.close,
+                                size: 14,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
+                ),
+              ],
+              const SizedBox(height: 14),
+              TextField(
+                controller: _noteCtrl,
+                enabled: !_isSubmitting,
+                maxLines: 3,
+                maxLength: 500,
+                decoration: InputDecoration(
+                  labelText: 'Ghi chú bổ sung (không bắt buộc)',
+                  hintText: 'Ví dụ: Sao kê lương tháng 11 nhận qua ngân hàng...',
+                  filled: true,
+                  fillColor: kTfBg,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              if (_errorText != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _errorText!,
+                  style: GoogleFonts.roboto(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.red.shade700,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: _isSubmitting ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kTfPink,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          'Gửi hồ sơ xét duyệt',
+                          style: GoogleFonts.roboto(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
