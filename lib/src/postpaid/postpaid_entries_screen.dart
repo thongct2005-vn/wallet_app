@@ -59,6 +59,11 @@ class _PostpaidEntriesScreenState extends State<PostpaidEntriesScreen> {
       icon: Iconsax.money_recive5,
     ),
     _EntryActionFilter(
+      action: 'SERVICE_FEE',
+      label: 'Phí dịch vụ',
+      icon: Icons.receipt_long_rounded,
+    ),
+    _EntryActionFilter(
       action: 'LATE_FEE',
       label: 'Phí trễ hạn',
       icon: Icons.event_busy_rounded,
@@ -207,6 +212,7 @@ class _PostpaidEntriesScreenState extends State<PostpaidEntriesScreen> {
     if (_selectedAction == null || _selectedAction!.isEmpty) return true;
     if (_selectedAction == 'REPAY') {
       return entryAction == 'REPAY_PRINCIPAL' ||
+          entryAction == 'REPAY_SERVICE_FEE' ||
           entryAction == 'REPAY_LATE_FEE';
     }
     return entryAction == _selectedAction;

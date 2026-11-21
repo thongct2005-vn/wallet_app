@@ -10,8 +10,10 @@ class TransactionService {
     String amount,
     String description,
     String idempotencyKey,
-    String pinToken,
-  ) async {
+    String pinToken, {
+    String fundingSource = 'MAIN_WALLET',
+    String? linkedBankAccountId,
+  }) async {
     try {
       final result = await api.post(
         ApiConfig.transfer,
@@ -19,6 +21,9 @@ class TransactionService {
           'destination_user_id': destinationUserId,
           'amount': amount,
           'description': description,
+          if (fundingSource != 'MAIN_WALLET') 'funding_source': fundingSource,
+          if (linkedBankAccountId != null && linkedBankAccountId.isNotEmpty)
+            'linked_bank_account_id': linkedBankAccountId,
         },
         options: Options(
           headers: {'idempotency-key': idempotencyKey, 'x-pin-token': pinToken},
@@ -87,13 +92,16 @@ class TransactionService {
     String idempotencyKey,
     String pinToken, {
     String fundingSource = 'MAIN_WALLET',
+    String? linkedBankAccountId,
   }) async {
     try {
       final result = await api.post(
         ApiConfig.payment,
         data: {
           'reference_code': referenceCode,
-          if (fundingSource == 'POSTPAID') 'funding_source': 'POSTPAID',
+          if (fundingSource != 'MAIN_WALLET') 'funding_source': fundingSource,
+          if (linkedBankAccountId != null && linkedBankAccountId.isNotEmpty)
+            'linked_bank_account_id': linkedBankAccountId,
         },
         options: Options(
           headers: {'idempotency-key': idempotencyKey, 'x-pin-token': pinToken},
@@ -145,6 +153,10 @@ class TransactionService {
     String? direction,
     DateTime? startDate,
     DateTime? endDate,
+    String? fundingSource,
+    int? minAmount,
+    int? maxAmount,
+    String? status,
   }) async {
     try {
       final result = await api.get(
@@ -159,6 +171,11 @@ class TransactionService {
             'direction': direction,
           if (startDate != null) 'start_date': _dateOnly(startDate),
           if (endDate != null) 'end_date': _dateOnly(endDate),
+          if (fundingSource != null && fundingSource.isNotEmpty)
+            'funding_source': fundingSource,
+          'min_amount': ?minAmount,
+          'max_amount': ?maxAmount,
+          if (status != null && status.isNotEmpty) 'status': status,
         },
       );
       return {

@@ -40,6 +40,9 @@ class ApiConfig {
   static const String postpaidInfo = '$baseUrl/postpaid/info';
   static const String postpaidWallet = '$baseUrl/postpaid/wallet';
   static const String postpaidActivate = '$baseUrl/postpaid/activate';
+  static const String postpaidFreeze = '$baseUrl/postpaid/freeze';
+  static const String postpaidUnfreeze = '$baseUrl/postpaid/unfreeze';
+  static const String postpaidClose = '$baseUrl/postpaid/close';
   static const String postpaidEntries = '$baseUrl/postpaid/entries';
   static const String postpaidRepay = '$baseUrl/postpaid/repay';
   static const String postpaidUnlockRequests = '$baseUrl/postpaid/unlock-requests';

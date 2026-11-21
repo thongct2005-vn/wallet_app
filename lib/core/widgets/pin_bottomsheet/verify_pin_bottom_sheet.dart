@@ -11,6 +11,7 @@ import 'package:app/src/services/biometric_service.dart';
 import 'package:app/src/services/socket_service.dart';
 import 'package:app/src/services/wallet_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get/get.dart';
 
@@ -37,18 +38,32 @@ class CheckPinBottomSheet extends StatefulWidget {
   final Future<void> Function(String pinToken) onSuccess;
   final bool allowBiometric;
   final String? customTitle;
+  final BiometricService? biometricService;
+  final Future<void> Function()? waitForWindowFocus;
+  final Duration postFocusSettleDuration;
+  final Duration keyboardRecheckDuration;
+
   const CheckPinBottomSheet({
     super.key,
     required this.onCheckPin,
     required this.onSuccess,
     this.allowBiometric = true,
     this.customTitle,
+    this.biometricService,
+    this.waitForWindowFocus,
+    this.postFocusSettleDuration = const Duration(milliseconds: 180),
+    this.keyboardRecheckDuration = const Duration(milliseconds: 240),
   });
   @override
   State<CheckPinBottomSheet> createState() => _CheckPinBottomSheetState();
 }
 
-class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
+class _CheckPinBottomSheetState extends State<CheckPinBottomSheet>
+    with WidgetsBindingObserver {
+  static const MethodChannel _windowFocusChannel = MethodChannel(
+    'com.example.app/window_focus',
+  );
+
   final TextEditingController _pinController = TextEditingController();
   final FocusNode _pinFocusNode = FocusNode();
   final GlobalKey<PinCodeInputPillState> _pinInputKey =
@@ -57,6 +72,8 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
   String _errorMsg = '';
   bool _isLoading = false;
   bool _canUseBiometric = false;
+  bool _isBiometricInProgress = false;
+  Completer<void>? _resumeCompleter;
 
   // Trạng thái thử thách bảo mật bổ sung (Step-Up OTP Challenge) khi điểm rủi ro cao
   bool _isChallengeStep = false;
@@ -66,14 +83,25 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
   int _resendCountdown = 0;
   Timer? _resendTimer;
   final WalletService _walletService = WalletService();
-  final BiometricService _biometricService = BiometricService();
+  late final BiometricService _biometricService =
+      widget.biometricService ?? BiometricService();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initPinOrBiometric();
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        _resumeCompleter != null &&
+        !_resumeCompleter!.isCompleted) {
+      _resumeCompleter!.complete();
+    }
   }
 
   Future<void> _initPinOrBiometric() async {
@@ -94,29 +122,107 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
   }
 
   Future<void> _triggerBiometricAuth() async {
-    if (_isLoading || _isChallengeStep) return;
-    FocusManager.instance.primaryFocus?.unfocus();
-    final storedPin = await _biometricService.getStoredPin();
-    if (!mounted) return;
-    if (storedPin == null || storedPin.length != 6) {
-      setState(() => _canUseBiometric = false);
-      _pinInputKey.currentState?.requestKeyboard();
-      return;
+    if (_isLoading || _isChallengeStep || _isBiometricInProgress) return;
+    _isBiometricInProgress = true;
+    var shouldRestoreKeyboard = false;
+    String? verifiedStoredPin;
+
+    try {
+      final hadKeyboardOpen =
+          mounted && View.of(context).viewInsets.bottom > 0;
+      FocusManager.instance.primaryFocus?.unfocus();
+      if (hadKeyboardOpen) {
+        // Đợi bàn phím hạ hẳn trước khi mở BiometricPrompt để tránh xung đột focus cửa sổ.
+        await Future.delayed(const Duration(milliseconds: 160));
+        if (!mounted) return;
+      }
+
+      final storedPin = await _biometricService.getStoredPin();
+      if (!mounted) return;
+      if (storedPin == null || storedPin.length != 6) {
+        setState(() => _canUseBiometric = false);
+        shouldRestoreKeyboard = true;
+        return;
+      }
+
+      final authRes = await _biometricService.authenticate(
+        reason: 'Đặt vân tay để xác thực giao dịch Ví Mio',
+      );
+      if (!mounted) return;
+      if (authRes.isSuccess) {
+        verifiedStoredPin = storedPin;
+      } else {
+        shouldRestoreKeyboard = true;
+      }
+    } finally {
+      _isBiometricInProgress = false;
     }
 
-    final authRes = await _biometricService.authenticate(
-      reason: 'Đặt vân tay để xác thực giao dịch Ví Mio',
-    );
     if (!mounted) return;
-    if (authRes.isSuccess) {
-      await _onPinCompleted(storedPin);
+    if (verifiedStoredPin != null) {
+      await _onPinCompleted(verifiedStoredPin);
+    } else if (shouldRestoreKeyboard) {
+      await _restoreKeyboardAfterBiometric();
+    }
+  }
+
+  Future<void> _restoreKeyboardAfterBiometric() async {
+    if (!mounted || _isLoading || _isBiometricInProgress) return;
+
+    // 1) Nếu BiometricPrompt khiến app tạm inactive, đợi quay lại resumed trước.
+    if (WidgetsBinding.instance.lifecycleState != null &&
+        WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      final completer = Completer<void>();
+      _resumeCompleter = completer;
+      await completer.future.timeout(
+        const Duration(milliseconds: 450),
+        onTimeout: () {},
+      );
+      if (identical(_resumeCompleter, completer)) {
+        _resumeCompleter = null;
+      }
+      if (!mounted) return;
+    }
+
+    // 2) Đợi MainActivity thực sự nhận lại WindowFocus khi BiometricPrompt đã đóng.
+    if (widget.waitForWindowFocus != null) {
+      await widget.waitForWindowFocus!();
     } else {
-      _pinInputKey.currentState?.requestKeyboard();
+      try {
+        await _windowFocusChannel.invokeMethod<bool>('waitForFocus');
+      } catch (_) {}
+    }
+    if (!mounted) return;
+
+    // 3) Chờ thêm ngắn để SystemUI hoàn tất animation đóng BiometricPrompt
+    //    và InputMethodManager ổn định trên cửa sổ chính, tránh bàn phím nháy rồi tự tắt.
+    if (widget.postFocusSettleDuration > Duration.zero) {
+      await Future.delayed(widget.postFocusSettleDuration);
+    }
+    if (!mounted || _isLoading || _isBiometricInProgress) return;
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) return;
+
+    _pinInputKey.currentState?.requestKeyboard();
+
+    // Dự phòng trên một số ROM Android nếu lần showSoftInput đầu bị nuốt ngay khi vừa chuyển focus.
+    if (widget.keyboardRecheckDuration > Duration.zero) {
+      await Future.delayed(widget.keyboardRecheckDuration);
+      if (!mounted || _isLoading || _isBiometricInProgress) return;
+      final currentRoute = ModalRoute.of(context);
+      if (currentRoute != null && !currentRoute.isCurrent) return;
+      if (_pinFocusNode.hasFocus && View.of(context).viewInsets.bottom == 0) {
+        SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+      }
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    if (_resumeCompleter != null && !_resumeCompleter!.isCompleted) {
+      _resumeCompleter!.complete();
+    }
     _resendTimer?.cancel();
     _pinController.dispose();
     _pinFocusNode.dispose();
@@ -368,8 +474,8 @@ class _CheckPinBottomSheetState extends State<CheckPinBottomSheet> {
                             ),
                             child: Text(
                               _otpMethod == 'totp'
-                                  ? 'Phát hiện dấu hiệu bất thường. Vui lòng nhập mã 6 số từ ứng dụng Google Authenticator.'
-                                  : 'Phát hiện dấu hiệu bất thường. Vui lòng nhập mã OTP 6 số đã gửi tới email $_maskedEmail.',
+                                  ? 'Vui lòng nhập mã 6 số từ ứng dụng Google Authenticator.'
+                                  : 'Vui lòng nhập mã OTP 6 số đã gửi tới email $_maskedEmail.',
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                 fontSize: 13,

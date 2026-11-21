@@ -1,9 +1,12 @@
 import 'package:app/core/utils/format_utils.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/verify_pin_bottom_sheet.dart';
+import 'package:app/src/services/bank_service.dart';
 import 'package:app/src/services/postpaid_service.dart';
 import 'package:app/src/services/transaction_service.dart';
+import 'package:app/src/transfer/pay_now_funding_selector.dart';
 import 'package:app/src/transfer/result_tranfer_screen.dart';
+import 'package:app/src/transfer/transfer_funding_helper.dart';
 import 'package:app/src/transfer/transfer_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -22,6 +25,9 @@ class ConfirmTranferScreen extends StatefulWidget {
   final bool isMerchant;
   final String? orderId;
   final String initialFundingSource;
+  final String? initialLinkedBankAccountId;
+  final List<Map<String, dynamic>>? initialLinkedBanks;
+  final TransactionService? transactionService;
 
   const ConfirmTranferScreen({
     super.key,
@@ -35,6 +41,9 @@ class ConfirmTranferScreen extends StatefulWidget {
     this.isMerchant = false,
     this.orderId,
     this.initialFundingSource = 'MAIN_WALLET',
+    this.initialLinkedBankAccountId,
+    this.initialLinkedBanks,
+    this.transactionService,
   });
 
   @override
@@ -43,16 +52,21 @@ class ConfirmTranferScreen extends StatefulWidget {
 
 class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
   final WalletService _walletService = WalletService();
-  final TransactionService _transactionService = TransactionService();
+  late final TransactionService _transactionService =
+      widget.transactionService ?? TransactionService();
   final PostpaidService _postpaidService = PostpaidService();
+  final BankService _bankService = BankService();
   bool _isProcessingTransfer = false;
   bool _isLoadingFeePreview = false;
   bool _isLoadingPostpaid = false;
+  bool _isLoadingBanks = false;
   Map<String, dynamic>? _feePreview;
   Map<String, dynamic>? _postpaidWallet;
+  List<Map<String, dynamic>> _linkedBanks = [];
   late String _fundingSource;
+  String? _selectedLinkedBankAccountId;
   final Uuid _uuid = const Uuid();
-  late final String idempotencyKey;
+  late String _idempotencyKey;
 
   bool get _isQrPayment =>
       widget.referenceCode != null && widget.referenceCode!.isNotEmpty;
@@ -60,15 +74,85 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
   @override
   void initState() {
     super.initState();
-    idempotencyKey = _uuid.v7();
-    _fundingSource =
-        (_isQrPayment && widget.initialFundingSource == 'POSTPAID')
-        ? 'POSTPAID'
-        : 'MAIN_WALLET';
+    _idempotencyKey = _uuid.v7();
+    if (_isQrPayment && widget.initialFundingSource == 'POSTPAID') {
+      _fundingSource = 'POSTPAID';
+    } else if (widget.initialFundingSource == 'BANK') {
+      _fundingSource = 'BANK';
+    } else {
+      _fundingSource = 'MAIN_WALLET';
+    }
+    _selectedLinkedBankAccountId = widget.initialLinkedBankAccountId;
+    if (widget.initialLinkedBanks != null) {
+      _linkedBanks = widget.initialLinkedBanks!;
+    } else {
+      _loadLinkedBanks();
+    }
     _loadFeePreview();
     if (_isQrPayment) {
       _loadPostpaidWallet();
     }
+  }
+
+  Future<void> _loadLinkedBanks() async {
+    if (mounted) {
+      setState(() => _isLoadingBanks = true);
+    }
+    final res = await _bankService.getBankLinkStatus();
+    if (!mounted) return;
+    setState(() {
+      _isLoadingBanks = false;
+      if (res['is_success'] == true && res['data'] is Map) {
+        final accounts = (res['data'] as Map)['linked_accounts'];
+        if (accounts is List) {
+          _linkedBanks = accounts
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          if (_fundingSource == 'BANK' &&
+              (_selectedLinkedBankAccountId == null ||
+                  _selectedLinkedBankAccountId!.isEmpty) &&
+              _linkedBanks.isNotEmpty) {
+            final baseAmount = FormatUtils.formatAmountToNum(widget.amount ?? '0');
+            final totalPay = _computeTotalPay();
+            final preferred = _linkedBanks.firstWhere(
+              (b) => isLinkedBankSelectable(
+                b,
+                totalPay,
+                transactionAmount: baseAmount,
+              ),
+              orElse: () => _linkedBanks.first,
+            );
+            _selectedLinkedBankAccountId = preferred['id']?.toString();
+          }
+        }
+      }
+    });
+  }
+
+  num _computeTotalPay() {
+    final baseAmount = FormatUtils.formatAmountToNum(widget.amount ?? '0');
+    final isSenderPayer =
+        _fundingSource != 'POSTPAID' &&
+        !widget.isMerchant &&
+        _feePreview?['fee_payer']?.toString() == 'SENDER';
+    final payerFee = isSenderPayer
+        ? ((_feePreview?['fee_amount'] as num?) ?? 0)
+        : 0;
+    return isSenderPayer
+        ? ((_feePreview?['total_debit_from_payer'] as num?) ??
+              (baseAmount + payerFee))
+        : baseAmount;
+  }
+
+  Map<String, dynamic>? get _selectedLinkedBank {
+    if (_selectedLinkedBankAccountId == null) return null;
+    for (final bank in _linkedBanks) {
+      if (bank['id']?.toString() == _selectedLinkedBankAccountId) {
+        return bank;
+      }
+    }
+    return null;
   }
 
   Future<void> _loadPostpaidWallet() async {
@@ -259,7 +343,7 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
                       _feePreview?['fee_payer']?.toString() == 'SENDER' &&
                       ((_feePreview?['fee_amount'] as num?) ?? 0) > 0)
                 ? '${FormatUtils.formatDisplayNumber((_feePreview?['fee_amount'] as num?) ?? 0)}đ'
-                : 'Miễn phí (0đ)',
+                : 'Miễn phí',
           ),
           _buildInfoRow(
             label: widget.isMerchant ? 'Cửa hàng' : 'Người nhận',
@@ -332,10 +416,8 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
   }
 
   Widget _buildContainerWalletInfo(BuildContext context) {
-    final baseAmount = FormatUtils.formatAmountToNum(widget.amount ?? '0');
+    final totalPay = _computeTotalPay();
     final mainBalance = num.tryParse(widget.walletBalance ?? '0') ?? 0;
-    final mainSelected = _fundingSource == 'MAIN_WALLET';
-    final mainEnough = mainBalance >= baseAmount;
 
     final ppData = _postpaidWallet;
     final ppActivated = ppData?['activated'] == true;
@@ -343,7 +425,7 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
     final ppAvailable =
         num.tryParse(ppData?['available_limit']?.toString() ?? '0') ?? 0;
     final ppEligible =
-        ppActivated && ppStatus == 'ACTIVE' && ppAvailable >= baseAmount;
+        ppActivated && ppStatus == 'ACTIVE' && ppAvailable >= totalPay;
     final ppSelected = _fundingSource == 'POSTPAID';
 
     String ppSubtitle;
@@ -355,25 +437,30 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
       ppSubtitle = 'Ví đang quá hạn thanh toán';
     } else if (ppStatus != 'ACTIVE') {
       ppSubtitle = 'Ví trả sau đang tạm khóa';
-    } else if (ppAvailable < baseAmount) {
-      ppSubtitle =
-          'Còn ${FormatUtils.formatDisplayNumber(ppAvailable)}đ (Không đủ)';
     } else {
-      ppSubtitle =
-          '${FormatUtils.formatDisplayNumber(ppAvailable)}đ';
+      ppSubtitle = '${FormatUtils.formatDisplayNumber(ppAvailable)}đ';
     }
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: transferCardDeco(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return PayNowFundingSelector(
+      mainBalance: mainBalance,
+      totalPay: totalPay,
+      transactionAmount: FormatUtils.formatAmountToNum(widget.amount ?? '0'),
+      fundingSource: _fundingSource,
+      selectedLinkedBankAccountId: _selectedLinkedBankAccountId,
+      linkedBanks: _linkedBanks,
+      isLoadingBanks: _isLoadingBanks,
+      onSelectMainWallet: () => setState(() => _fundingSource = 'MAIN_WALLET'),
+      onSelectBank: (bankId) => setState(() {
+        _fundingSource = 'BANK';
+        _selectedLinkedBankAccountId = bankId;
+      }),
+      extraSections: [
+        if (_isQrPayment) ...[
+          const SizedBox(height: 16),
           Padding(
-            padding: const EdgeInsets.fromLTRB(2, 0, 2, 12),
+            padding: const EdgeInsets.fromLTRB(2, 0, 2, 10),
             child: Text(
-              "Trả ngay",
+              "Trả sau",
               style: GoogleFonts.roboto(
                 fontWeight: FontWeight.w700,
                 fontSize: 17,
@@ -381,88 +468,9 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
               ),
             ),
           ),
-          InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: _isQrPayment && mainEnough
-                ? () => setState(() => _fundingSource = 'MAIN_WALLET')
-                : null,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: mainSelected
-                    ? kTfPink.withValues(alpha: 0.05)
-                    : Colors.grey.shade50,
-                border: Border.all(
-                  width: mainSelected ? 1.5 : 1,
-                  color: mainSelected
-                      ? kTfPink
-                      : Colors.grey.withValues(alpha: 0.28),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    alignment: Alignment.center,
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: mainEnough ? kTfPink : Colors.grey.shade400,
-                    ),
-                    child: Text(
-                      'Mio',
-                      style: GoogleFonts.roboto(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 11,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Ví Mio',
-                          style: GoogleFonts.roboto(
-                            fontSize: 14,
-                            color: kTfMuted,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${FormatUtils.formatDisplayNumber(mainBalance)}đ${mainEnough ? '' : ' (Không đủ)'}',
-                          style: GoogleFonts.roboto(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                            color: mainEnough ? kTfText : kTfMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _buildSourceRadio(selected: mainSelected, enabled: mainEnough),
-                ],
-              ),
-            ),
-          ),
-          if (_isQrPayment) ...[
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(2, 0, 2, 10),
-              child: Text(
-                "Trả sau",
-                style: GoogleFonts.roboto(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 17,
-                  color: kTfText,
-                ),
-              ),
-            ),
-            InkWell(
+          Opacity(
+            opacity: ppEligible ? 1.0 : 0.48,
+            child: InkWell(
               borderRadius: BorderRadius.circular(16),
               onTap: ppEligible
                   ? () => setState(() => _fundingSource = 'POSTPAID')
@@ -491,11 +499,9 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
                       alignment: Alignment.center,
                       width: 36,
                       height: 36,
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         shape: BoxShape.circle,
-                        color: ppEligible
-                            ? const Color(0xFFDB2777)
-                            : Colors.grey.shade400,
+                        color: Color(0xFFDB2777),
                       ),
                       child: const Icon(
                         Icons.credit_score_rounded,
@@ -521,68 +527,25 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
                             style: GoogleFonts.roboto(
                               fontWeight: FontWeight.w700,
                               fontSize: 15,
-                              color: ppEligible ? kTfText : kTfMuted,
+                              color: kTfText,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    _buildSourceRadio(
-                      selected: ppSelected,
-                      enabled: ppEligible,
-                    ),
+                    SourceRadioDot(selected: ppSelected),
                   ],
                 ),
               ),
             ),
-          ],
+          ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSourceRadio({required bool selected, required bool enabled}) {
-    return Container(
-      width: 22,
-      height: 22,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: selected
-              ? kTfPink
-              : enabled
-              ? Colors.grey.shade400
-              : Colors.grey.shade300,
-          width: 2,
-        ),
-      ),
-      child: selected
-          ? Container(
-              width: 11,
-              height: 11,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: kTfPink,
-              ),
-            )
-          : null,
+      ],
     );
   }
 
   Widget _buildContainerConfirmButton(BuildContext context) {
-    final baseAmount = FormatUtils.formatAmountToNum(widget.amount ?? '0');
-    final isSenderPayer =
-        _fundingSource != 'POSTPAID' &&
-        !widget.isMerchant &&
-        _feePreview?['fee_payer']?.toString() == 'SENDER';
-    final payerFee = isSenderPayer
-        ? ((_feePreview?['fee_amount'] as num?) ?? 0)
-        : 0;
-    final totalPay = isSenderPayer
-        ? ((_feePreview?['total_debit_from_payer'] as num?) ??
-              (baseAmount + payerFee))
-        : baseAmount;
+    final totalPay = _computeTotalPay();
 
     final mainBalance = num.tryParse(widget.walletBalance ?? '0') ?? 0;
     final ppData = _postpaidWallet;
@@ -592,11 +555,24 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
         ppData['status'] == 'ACTIVE' &&
         (num.tryParse(ppData['available_limit']?.toString() ?? '0') ?? 0) >=
             totalPay;
-    final canConfirm = _fundingSource == 'POSTPAID'
-        ? (ppData == null && _isLoadingPostpaid
-              ? widget.initialFundingSource == 'POSTPAID'
-              : ppEligible)
-        : mainBalance >= totalPay;
+    final baseAmount = FormatUtils.formatAmountToNum(widget.amount ?? '0');
+    final bool canConfirm;
+    if (_fundingSource == 'POSTPAID') {
+      canConfirm = (ppData == null && _isLoadingPostpaid)
+          ? widget.initialFundingSource == 'POSTPAID'
+          : ppEligible;
+    } else if (_fundingSource == 'BANK') {
+      final selectedBank = _selectedLinkedBank;
+      canConfirm =
+          selectedBank != null &&
+          isLinkedBankSelectable(
+            selectedBank,
+            totalPay,
+            transactionAmount: baseAmount,
+          );
+    } else {
+      canConfirm = mainBalance >= totalPay;
+    }
 
     return Container(
       width: double.infinity,
@@ -667,7 +643,7 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
               final isQr = widget.referenceCode != null;
               final res = await _walletService.checkPin(
                 pin,
-                idempotencyKey,
+                _idempotencyKey,
                 action: isQr ? 'QR_PAYMENT' : 'TRANSFER',
                 params: isQr
                     ? {'reference_code': widget.referenceCode!}
@@ -695,20 +671,26 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
     final numAmount = FormatUtils.formatAmountToNum(
       widget.amount ?? '0',
     ).toString();
+    final bankIdToUse = _fundingSource == 'BANK'
+        ? _selectedLinkedBankAccountId
+        : null;
     try {
       final result = widget.referenceCode == null
           ? await _transactionService.transferMoney(
               widget.receiverId ?? "",
               numAmount,
               widget.description ?? "",
-              idempotencyKey,
+              _idempotencyKey,
               pinToken,
+              fundingSource: _fundingSource,
+              linkedBankAccountId: bankIdToUse,
             )
           : await _transactionService.processQRPayment(
               widget.referenceCode!,
-              idempotencyKey,
+              _idempotencyKey,
               pinToken,
               fundingSource: _fundingSource,
+              linkedBankAccountId: bankIdToUse,
             );
       setState(() {
         _isProcessingTransfer = false;
@@ -726,10 +708,16 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
           (Route<dynamic> route) => false,
         );
       } else {
+        setState(() {
+          _idempotencyKey = _uuid.v7();
+        });
         SnackbarUtils.failure(context, result['message']);
       }
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        _idempotencyKey = _uuid.v7();
+      });
       SnackbarUtils.failure(context, "Có lỗi xảy ra. Vui lòng thử lại");
     } finally {
       if (mounted) setState(() => _isProcessingTransfer = false);

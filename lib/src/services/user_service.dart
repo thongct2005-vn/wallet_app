@@ -299,7 +299,7 @@ class UserService {
 
   Future<void> updateFcmToken(String token) async {
     try {
-      api.patch(ApiConfig.updateFcmToken, data: {'fcm_token': token});
+      await api.patch(ApiConfig.updateFcmToken, data: {'fcm_token': token});
     } catch (e) {
       ApiErrorHandler.handleError(e);
     }

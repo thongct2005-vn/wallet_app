@@ -1,4 +1,5 @@
 import 'package:app/core/controller/user_controller.dart';
+import 'package:app/core/services/firebase_bootstrap.dart';
 import 'package:app/src/services/user_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -10,34 +11,46 @@ class NotificationService {
   NotificationService._internal();
 
   final UserService _userService = UserService();
-  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
+  // Lazy getter để không đụng Firebase.app() trước khi ensureFirebaseInitialized() xong.
+  FirebaseMessaging get _fcm => FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
+  bool _listenersRegistered = false;
 
   Future<String?> init() async {
-    await _fcm.requestPermission(alert: true, badge: true, sound: true);
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const initSettings = InitializationSettings(android: androidInit);
-    await _localNotificationsPlugin.initialize(settings: initSettings);
+    try {
+      await ensureFirebaseInitialized();
+      await _fcm.requestPermission(alert: true, badge: true, sound: true);
+      const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const initSettings = InitializationSettings(android: androidInit);
+      await _localNotificationsPlugin.initialize(settings: initSettings);
 
-    FirebaseMessaging.onMessage.listen((message) {
-      _showLocalNotification(message);
-      _handleDataUpdate(message.data);
-    });
+      if (!_listenersRegistered) {
+        _listenersRegistered = true;
+        FirebaseMessaging.onMessage.listen((message) {
+          _showLocalNotification(message);
+          _handleDataUpdate(message.data);
+        });
 
-    _fcm.onTokenRefresh.listen((newToken) {
-      _sendTokenToServer(newToken);
-    });
+        _fcm.onTokenRefresh.listen((newToken) {
+          _sendTokenToServer(newToken);
+        });
+      }
 
-    final token = await _fcm.getToken();
-    return token;
+      return await _fcm.getToken();
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> checkInitialMessage() async {
-    final initialMessage = await _fcm.getInitialMessage();
-    if (initialMessage != null) {
-      _handleDataUpdate(initialMessage.data);
-    }
+    try {
+      await ensureFirebaseInitialized();
+      final initialMessage = await _fcm.getInitialMessage();
+      if (initialMessage != null) {
+        _handleDataUpdate(initialMessage.data);
+      }
+    } catch (_) {}
   }
 
   void _showLocalNotification(RemoteMessage message) {

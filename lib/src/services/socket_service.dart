@@ -15,9 +15,20 @@ class SocketService {
 
   sk.Socket? socket;
   final _storage = const FlutterSecureStorage();
+  Future<void>? _connectFuture;
 
-  Future<void> connect() async {
-    final token = await _storage.read(key: 'access_token');
+  Future<void> connect({String? accessToken}) {
+    if (socket != null && socket!.connected) {
+      return Future.value();
+    }
+    return _connectFuture ??= _connectInternal(accessToken: accessToken)
+        .whenComplete(() {
+          _connectFuture = null;
+        });
+  }
+
+  Future<void> _connectInternal({String? accessToken}) async {
+    final token = accessToken ?? await _storage.read(key: 'access_token');
     if (token == null) {
       return;
     }

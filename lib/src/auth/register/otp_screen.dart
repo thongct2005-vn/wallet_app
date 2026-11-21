@@ -148,7 +148,6 @@ class _OtpScreenState extends State<OtpScreen> with SmoothAutoFocusMixin {
     final result = widget.isLogin == true
         ? await _authService.resendLoginOtp(widget.otpToken ?? '')
         : await _otpService.generateOtp(
-            phone: widget.phoneNumber,
             email: widget.email,
           );
 
@@ -411,7 +410,7 @@ class _OtpScreenState extends State<OtpScreen> with SmoothAutoFocusMixin {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Phát hiện dấu hiệu bất thường. Vui lòng nhập thêm 4 số cuối của CCCD đã đăng ký.',
+                                  'Vui lòng nhập thêm 4 số cuối của CCCD đã đăng ký.',
                                   style: GoogleFonts.roboto(
                                     fontSize: 12.5,
                                     color: const Color(0xFF8D4E00),

@@ -16,6 +16,7 @@ class TransactionModel {
   final String? orderId;
   final String fundingSource;
   final String? postpaidAction;
+  final String? userMessage;
 
   TransactionModel({
     required this.id,
@@ -35,35 +36,44 @@ class TransactionModel {
     this.orderId,
     this.fundingSource = 'MAIN_WALLET',
     this.postpaidAction,
+    this.userMessage,
   });
 
+  bool get isFailed => status.toUpperCase() == 'FAILED';
+  bool get isPending => status.toUpperCase() == 'PENDING';
+
   factory TransactionModel.fromJson(Map<String, dynamic> json) {
-    final direction = json['direction'] as String;
+    final direction = (json['direction'] ?? 'OUT').toString();
     final isOut = direction == 'OUT';
     return TransactionModel(
-      id: json['id'] is String ? int.parse(json['id']) : json['id'],
-      type: json['transaction_type'] ?? '',
+      id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
+      type: (json['transaction_type'] ?? '').toString(),
       direction: direction,
-      description: json['description'],
+      description: json['description']?.toString(),
       counterpartyName: isOut
-          ? (json['destination_display_name'] ?? 'Người nhận')
-          : (json['source_display_name'] ?? 'Người gửi'),
+          ? (json['destination_display_name'] ?? 'Người nhận').toString()
+          : (json['source_display_name'] ?? 'Người gửi').toString(),
       counterpartyPhone: isOut
-          ? json['destination_display_phone'] ?? ''
-          : json['source_display_phone'] ?? '',
+          ? (json['destination_display_phone'] ?? '').toString()
+          : (json['source_display_phone'] ?? '').toString(),
       counterpartyId: isOut
-          ? json['destination_user_id'] ?? ''
-          : json['source_user_id'] ?? '',
-      amount: num.tryParse(json['amount'].toString()) ?? 0,
-      fee: num.tryParse(json['fee'].toString()) ?? 0,
-      status: json['status'] ?? '',
-      createdAt: DateTime.parse(json['created_at']),
-      balanceBefore: num.tryParse(json['balance_before'].toString()) ?? 0,
-      balanceAfter: num.tryParse(json['balance_after'].toString()) ?? 0,
-      bankName: json['bank_name'] ?? '',
-      orderId: json['order_id'],
-      fundingSource: json['funding_source'] ?? 'MAIN_WALLET',
-      postpaidAction: json['postpaid_action'],
+          ? (json['destination_user_id'] ?? '').toString()
+          : (json['source_user_id'] ?? '').toString(),
+      amount: num.tryParse(json['amount']?.toString() ?? '') ?? 0,
+      fee: num.tryParse(json['fee']?.toString() ?? '') ?? 0,
+      status: (json['status'] ?? '').toString(),
+      createdAt:
+          DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+          DateTime.now(),
+      balanceBefore:
+          num.tryParse(json['balance_before']?.toString() ?? '') ?? 0,
+      balanceAfter:
+          num.tryParse(json['balance_after']?.toString() ?? '') ?? 0,
+      bankName: (json['bank_name'] ?? '').toString(),
+      orderId: json['order_id']?.toString(),
+      fundingSource: (json['funding_source'] ?? 'MAIN_WALLET').toString(),
+      postpaidAction: json['postpaid_action']?.toString(),
+      userMessage: json['user_message']?.toString(),
     );
   }
 }

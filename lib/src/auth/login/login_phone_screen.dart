@@ -4,7 +4,6 @@ import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/src/auth/auth_ui.dart';
 import 'package:app/src/auth/register/register_email.dart';
 import 'package:app/src/services/auth_service.dart';
-import 'package:app/src/services/otp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
@@ -31,12 +30,10 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
-  final OtpService _otpService = OtpService();
   final AuthService _authService = AuthService();
 
   final ValueNotifier<String> _errorNotifier = ValueNotifier<String>('');
   final ValueNotifier<bool> _isLoadingNotifier = ValueNotifier<bool>(false);
-  final ValueNotifier<bool> _isSendingOtpNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<bool> _hasFocusNotifier = ValueNotifier<bool>(false);
 
   @override
@@ -100,7 +97,6 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
     _scrollController.dispose();
     _errorNotifier.dispose();
     _isLoadingNotifier.dispose();
-    _isSendingOtpNotifier.dispose();
     _hasFocusNotifier.dispose();
     super.dispose();
   }
@@ -134,11 +130,7 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
               'Bạn có muốn dùng số điện thoại $phone để đăng ký tài khoản Ví Mio không?',
           cancelText: 'Đổi SĐT',
           confirmText: 'Xác nhận',
-          onConfirm: () async {
-            _isSendingOtpNotifier.value = true;
-            await _otpService.generateOtp(phone: phone, email: null);
-            if (!mounted) return;
-            _isSendingOtpNotifier.value = false;
+          onConfirm: () {
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -184,13 +176,6 @@ class _LoginPhoneScreenState extends State<LoginPhoneScreen> {
               loading: isLoading,
               onTap: _onContinue,
             );
-          },
-        ),
-        overlay: ValueListenableBuilder<bool>(
-          valueListenable: _isSendingOtpNotifier,
-          builder: (context, isSending, _) {
-            if (!isSending) return const SizedBox.shrink();
-            return const AuthLoadingOverlay(label: 'Đang khởi tạo đăng ký...');
           },
         ),
         child: Column(

@@ -1,11 +1,13 @@
 import 'package:app/core/utils/currency_formatter.dart';
 import 'package:app/core/utils/format_utils.dart';
+import 'package:app/src/home/home_screen.dart';
+import 'package:app/src/services/bank_service.dart';
 import 'package:app/src/transfer/confirm_tranfer_screen.dart';
+import 'package:app/src/transfer/transfer_funding_helper.dart';
 import 'package:app/src/transfer/transfer_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:app/src/services/postpaid_service.dart';
 import 'package:app/src/services/wallet_service.dart';
 
 class AmountInputScreen extends StatefulWidget {
@@ -98,6 +100,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
   final FocusNode _amountFocusNode = FocusNode();
   final FocusNode _desFocusNode = FocusNode();
   final WalletService _walletService = WalletService();
+  final BankService _bankService = BankService();
 
   final ValueNotifier<String> _msgNotifier = ValueNotifier<String>('');
   final ValueNotifier<int> _selectedDesHint = ValueNotifier<int>(0);
@@ -251,6 +254,22 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
             title: TransferAppBarTitle(
               widget.isMerchant ? "Thanh toán tới" : "Chuyển tiền tới",
             ),
+            actions: [
+              TransferCircleButton(
+                icon: Iconsax.home_2,
+                padding: const EdgeInsets.only(right: 16, top: 8, bottom: 8),
+                onPressed: () {
+                  FocusManager.instance.primaryFocus?.unfocus();
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const HomeScreen(),
+                    ),
+                    (r) => false,
+                  );
+                },
+              ),
+            ],
           ),
           body: Stack(
             children: [
@@ -734,51 +753,28 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                       onTap: () async {
                         FocusManager.instance.primaryFocus?.unfocus();
                         _isLoadingNotifier.value = true;
-                        final result = await _walletService
-                            .checkTransferEligibility(_amountController.text);
-                        String initialFundingSource = 'MAIN_WALLET';
-                        if (result['is_success']) {
-                          _walletBalance = result['wallet_balance'];
-                          if (!result['is_eligible']) {
-                            final isQr =
-                                widget.referenceCode != null &&
-                                widget.referenceCode!.isNotEmpty;
-                            bool canUsePostpaid = false;
-                            if (isQr) {
-                              final ppRes = await PostpaidService().getWallet();
-                              final ppData =
-                                  ppRes['is_success'] == true &&
-                                      ppRes['data'] is Map
-                                  ? ppRes['data'] as Map
-                                  : null;
-                              final needed = FormatUtils.formatAmountToNum(
-                                _amountController.text,
-                              );
-                              canUsePostpaid =
-                                  ppData != null &&
-                                  ppData['activated'] == true &&
-                                  ppData['status'] == 'ACTIVE' &&
-                                  (num.tryParse(
-                                            ppData['available_limit']
-                                                    ?.toString() ??
-                                                '0',
-                                          ) ??
-                                          0) >=
-                                      needed;
-                            }
-                            if (canUsePostpaid) {
-                              initialFundingSource = 'POSTPAID';
-                            } else {
-                              _msgNotifier.value = 'Số dư trong ví không đủ';
-                            }
-                          }
-                        } else {
+                        final isQr =
+                            widget.referenceCode != null &&
+                            widget.referenceCode!.isNotEmpty;
+                        final needed = FormatUtils.formatAmountToNum(
+                          _amountController.text,
+                        );
+                        final resolution =
+                            await evaluateTransferFundingBeforeConfirm(
+                              walletService: _walletService,
+                              bankService: _bankService,
+                              rawAmount: _amountController.text,
+                              neededAmount: needed,
+                              isQrPayment: isQr,
+                            );
+                        _walletBalance = resolution.walletBalance;
+                        if (!resolution.canProceed) {
                           _msgNotifier.value =
-                              'Hệ thống đang bảo trì. Vui lòng thử lại sau';
+                              resolution.errorMessage ?? 'Số dư trong ví không đủ';
                         }
                         _isLoadingNotifier.value = false;
                         if (!context.mounted) return;
-                        if (_msgNotifier.value.isEmpty) {
+                        if (resolution.canProceed && _msgNotifier.value.isEmpty) {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -792,7 +788,11 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                                 referenceCode: widget.referenceCode,
                                 isMerchant: widget.isMerchant,
                                 orderId: widget.orderId,
-                                initialFundingSource: initialFundingSource,
+                                initialFundingSource:
+                                    resolution.initialFundingSource,
+                                initialLinkedBankAccountId:
+                                    resolution.initialLinkedBankAccountId,
+                                initialLinkedBanks: resolution.linkedBanks,
                               ),
                             ),
                           );

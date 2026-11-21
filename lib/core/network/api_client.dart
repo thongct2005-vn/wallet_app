@@ -13,6 +13,7 @@ class ApiClient {
   late Dio dio;
   final _storage = const FlutterSecureStorage();
   String? _cachedDeviceId;
+  Future<String>? _deviceIdFuture;
 
   static const Map<String, String> _ngrokHeaders = {
     'ngrok-skip-browser-warning': 'true',
@@ -23,17 +24,23 @@ class ApiClient {
 
   factory ApiClient() => _instance;
 
-  Future<String> _getOrCreateDeviceId() async {
+  Future<String> _getOrCreateDeviceId() {
     if (_cachedDeviceId != null && _cachedDeviceId!.isNotEmpty) {
-      return _cachedDeviceId!;
+      return Future.value(_cachedDeviceId!);
     }
-    String? stored = await _storage.read(key: 'device_id');
-    if (stored == null || stored.isEmpty) {
-      stored = 'dev-${const Uuid().v4()}';
-      await _storage.write(key: 'device_id', value: stored);
-    }
-    _cachedDeviceId = stored;
-    return stored;
+    return _deviceIdFuture ??= () async {
+      try {
+        String? stored = await _storage.read(key: 'device_id');
+        if (stored == null || stored.isEmpty) {
+          stored = 'dev-${const Uuid().v4()}';
+          await _storage.write(key: 'device_id', value: stored);
+        }
+        _cachedDeviceId = stored;
+        return stored;
+      } finally {
+        _deviceIdFuture = null;
+      }
+    }();
   }
 
   ApiClient._internal() {

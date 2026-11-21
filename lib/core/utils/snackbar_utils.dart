@@ -1,3 +1,4 @@
+import 'package:app/core/services/connectivity_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -57,12 +58,15 @@ class SnackbarUtils {
     _activeKey = key;
     late final ScaffoldFeatureController<SnackBar, SnackBarClosedReason>
         controller;
+    final double bottomMargin =
+        ConnectivityService.instance.isBannerVisible ? 74 : 12;
+
     controller = messenger.showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
         backgroundColor: config.background,
         elevation: 6,
-        margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        margin: EdgeInsets.fromLTRB(14, 12, 14, bottomMargin),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),

@@ -3,15 +3,20 @@ import 'dart:math' as math;
 
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/format_utils.dart';
+import 'package:app/core/utils/route_transition_utils.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/pin_bottomsheet/create_pin_bottom_sheet.dart';
 import 'package:app/core/widgets/pin_bottomsheet/verify_pin_bottom_sheet.dart';
 import 'package:app/src/kyc/kyc_guide_screen.dart';
+import 'package:app/src/link_bank/manage_linked_banks_screen.dart';
+import 'package:app/src/postpaid/confirm_postpaid_repay_screen.dart';
 import 'package:app/src/postpaid/postpaid_entries_screen.dart';
 import 'package:app/src/postpaid/postpaid_entry_widgets.dart';
+import 'package:app/src/services/bank_service.dart';
 import 'package:app/src/services/postpaid_service.dart';
 import 'package:app/src/services/user_service.dart';
 import 'package:app/src/services/wallet_service.dart';
+import 'package:app/src/transfer/transfer_funding_helper.dart';
 import 'package:app/src/transfer/transfer_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,19 +27,34 @@ import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
 class PostpaidScreen extends StatefulWidget {
-  const PostpaidScreen({super.key});
+  const PostpaidScreen({
+    super.key,
+    this.postpaidService,
+    this.walletService,
+    this.bankService,
+  });
+
+  final PostpaidService? postpaidService;
+  final WalletService? walletService;
+  final BankService? bankService;
 
   @override
   State<PostpaidScreen> createState() => _PostpaidScreenState();
 }
 
 class _PostpaidScreenState extends State<PostpaidScreen> {
-  final PostpaidService _postpaidService = PostpaidService();
-  final WalletService _walletService = WalletService();
+  late final PostpaidService _postpaidService =
+      widget.postpaidService ?? PostpaidService();
+  late final WalletService _walletService =
+      widget.walletService ?? WalletService();
+  late final BankService _bankService = widget.bankService ?? BankService();
   final Uuid _uuid = const Uuid();
 
   bool _isLoading = true;
   bool _isActivating = false;
+  bool _isProcessingLifecycle = false;
+  bool _didScheduleInitialLoad = false;
+  VoidCallback? _cancelDeferredLoad;
   String? _errorMsg;
 
   Map<String, dynamic>? _wallet;
@@ -42,9 +62,19 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
   bool _hasMoreEntries = false;
 
   @override
-  void initState() {
-    super.initState();
-    _loadData();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_didScheduleInitialLoad) {
+      _didScheduleInitialLoad = true;
+      // Đợi hiệu ứng mở màn hình hoàn tất rồi mới tải API Ví trả sau.
+      _cancelDeferredLoad = runAfterRouteTransition(context, _loadData);
+    }
+  }
+
+  @override
+  void dispose() {
+    _cancelDeferredLoad?.call();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -61,7 +91,8 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
     if (walletRes['is_success'] != true) {
       setState(() {
         _isLoading = false;
-        _errorMsg = walletRes['message'] ?? 'Không thể tải thông tin Ví trả sau';
+        _errorMsg =
+            walletRes['message'] ?? 'Không thể tải thông tin Ví trả sau';
       });
       return;
     }
@@ -99,23 +130,268 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
     );
   }
 
-  Future<void> _handleActivate() async {
-    if (_isActivating) return;
-    setState(() => _isActivating = true);
-
-    final res = await _postpaidService.activate();
-    if (!mounted) return;
-
-    setState(() => _isActivating = false);
-    if (res['is_success'] == true) {
-      SnackbarUtils.success(context, 'Kích hoạt Ví trả sau thành công!');
-      await _loadData();
-    } else {
-      SnackbarUtils.failure(
-        context,
-        res['message'] ?? 'Không thể kích hoạt Ví trả sau',
+  bool _ensurePinReady(VoidCallback onPinCreated) {
+    if (Get.isRegistered<UserController>() &&
+        !Get.find<UserController>().hasPin.value) {
+      showSmoothPinBottomSheet(
+        context: context,
+        builder: (sheetCtx) => CreatePinBottomSheet(
+          onCreatePin: (pin) => UserService().createPin(pin),
+          onSuccess: () {
+            if (Get.isRegistered<UserController>()) {
+              Get.find<UserController>().hasPin.value = true;
+            }
+            if (!mounted) return;
+            SnackbarUtils.success(context, 'Tạo mã PIN thành công');
+            onPinCreated();
+          },
+        ),
       );
+      return false;
     }
+    return true;
+  }
+
+  void _runPinVerifiedAction({
+    required String checkTitle,
+    required String action,
+    Map<String, dynamic> params = const <String, dynamic>{},
+    required Future<Map<String, dynamic>> Function(
+      String idempotencyKey,
+      String pinToken,
+    )
+    request,
+    required String Function(Map<String, dynamic> res) successMessage,
+    required String defaultErrorMessage,
+    void Function(Map<String, dynamic> res)? onSuccessResult,
+    bool Function()? isBusy,
+    ValueChanged<bool>? setBusy,
+  }) {
+    if (isBusy?.call() == true || _isProcessingLifecycle) return;
+    if (!_ensurePinReady(() {
+      _runPinVerifiedAction(
+        checkTitle: checkTitle,
+        action: action,
+        params: params,
+        request: request,
+        successMessage: successMessage,
+        defaultErrorMessage: defaultErrorMessage,
+        onSuccessResult: onSuccessResult,
+        isBusy: isBusy,
+        setBusy: setBusy,
+      );
+    })) {
+      return;
+    }
+
+    final idempotencyKey = _uuid.v7();
+
+    showCheckPinDialog(
+      context: context,
+      customTitle: checkTitle,
+      onCheckPin: (pin) => _walletService.checkPin(
+        pin,
+        idempotencyKey,
+        action: action,
+        params: params,
+      ),
+      onSuccess: (pinToken) async {
+        if (!mounted || isBusy?.call() == true || _isProcessingLifecycle) {
+          return;
+        }
+        setState(() {
+          _isProcessingLifecycle = true;
+          setBusy?.call(true);
+        });
+        try {
+          final res = await request(idempotencyKey, pinToken);
+          if (!mounted) return;
+          if (res['is_success'] == true) {
+            onSuccessResult?.call(res);
+            SnackbarUtils.success(context, successMessage(res));
+            await _loadData();
+          } else {
+            SnackbarUtils.failure(
+              context,
+              res['message'] ?? defaultErrorMessage,
+            );
+          }
+        } finally {
+          if (mounted) {
+            setState(() {
+              _isProcessingLifecycle = false;
+              setBusy?.call(false);
+            });
+          }
+        }
+      },
+    );
+  }
+
+  Future<void> _handleActivate() async {
+    _runPinVerifiedAction(
+      checkTitle: 'Xác thực kích hoạt Ví trả sau',
+      action: 'POSTPAID_ACTIVATE',
+      isBusy: () => _isActivating,
+      setBusy: (busy) => _isActivating = busy,
+      request: (idempotencyKey, pinToken) => _postpaidService.activate(
+        idempotencyKey: idempotencyKey,
+        pinToken: pinToken,
+      ),
+      successMessage: (_) => 'Kích hoạt Ví trả sau thành công!',
+      defaultErrorMessage: 'Không thể kích hoạt Ví trả sau',
+    );
+  }
+
+  void _openManageWalletSheet() {
+    final wallet = _wallet;
+    if (wallet == null || wallet['activated'] != true) return;
+
+    final status = (wallet['status'] ?? 'ACTIVE').toString();
+    final lockReason = (wallet['lock_reason'] ?? '').toString();
+    final usedAmount = _toInt(wallet['used_amount']);
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetCtx) => _ManagePostpaidWalletSheet(
+        status: status,
+        lockReason: lockReason,
+        usedAmount: usedAmount,
+        onFreezeTap: () {
+          Navigator.pop(sheetCtx);
+          _confirmFreezeWallet();
+        },
+        onUnfreezeTap: () {
+          Navigator.pop(sheetCtx);
+          _confirmUnfreezeWallet();
+        },
+        onCloseTap: () {
+          Navigator.pop(sheetCtx);
+          if (usedAmount > 0) {
+            SnackbarUtils.info(
+              context,
+              'Vui lòng thanh toán hết dư nợ trước khi hủy Ví trả sau',
+            );
+            return;
+          }
+          _openCloseWalletFlow();
+        },
+      ),
+    );
+  }
+
+  Future<void> _confirmFreezeWallet() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dlgCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text(
+          'Tạm khóa Ví trả sau?',
+          style: GoogleFonts.roboto(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: kTfText,
+          ),
+        ),
+        content: Text(
+          'Trong thời gian tạm khóa, bạn sẽ không thể dùng Ví trả sau để thanh toán QR. Hạn mức và lịch sử sao kê vẫn được giữ nguyên, và bạn vẫn có thể thanh toán dư nợ hoặc mở khóa bất cứ lúc nào.',
+          style: GoogleFonts.roboto(
+            fontSize: 14,
+            height: 1.45,
+            color: kTfMuted,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dlgCtx, false),
+            child: Text(
+              'Hủy',
+              style: GoogleFonts.roboto(
+                fontWeight: FontWeight.w600,
+                color: kTfMuted,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dlgCtx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kTfPink,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: Text(
+              'Tiếp tục',
+              style: GoogleFonts.roboto(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    _runPinVerifiedAction(
+      checkTitle: 'Xác thực tạm khóa Ví trả sau',
+      action: 'POSTPAID_FREEZE',
+      request: (idempotencyKey, pinToken) => _postpaidService.freezeWallet(
+        idempotencyKey: idempotencyKey,
+        pinToken: pinToken,
+      ),
+      successMessage: (res) =>
+          res['message']?.toString() ?? 'Đã tạm khóa Ví trả sau',
+      defaultErrorMessage: 'Không thể tạm khóa Ví trả sau',
+    );
+  }
+
+  void _confirmUnfreezeWallet() {
+    _runPinVerifiedAction(
+      checkTitle: 'Xác thực mở khóa Ví trả sau',
+      action: 'POSTPAID_UNFREEZE',
+      request: (idempotencyKey, pinToken) => _postpaidService.unfreezeWallet(
+        idempotencyKey: idempotencyKey,
+        pinToken: pinToken,
+      ),
+      successMessage: (res) =>
+          res['message']?.toString() ?? 'Đã mở khóa Ví trả sau',
+      defaultErrorMessage: 'Không thể mở khóa Ví trả sau',
+    );
+  }
+
+  Future<void> _openCloseWalletFlow() async {
+    final usedAmount = _toInt(_wallet?['used_amount']);
+    if (usedAmount > 0) {
+      SnackbarUtils.info(
+        context,
+        'Vui lòng thanh toán hết dư nợ trước khi hủy Ví trả sau',
+      );
+      return;
+    }
+
+    final reason = await showSmoothPinBottomSheet<String>(
+      context: context,
+      builder: (_) => const _ClosePostpaidWalletSheet(),
+    );
+
+    if (reason == null || !mounted) return;
+    _runPinVerifiedAction(
+      checkTitle: 'Xác thực hủy Ví trả sau',
+      action: 'POSTPAID_CLOSE',
+      request: (idempotencyKey, pinToken) => _postpaidService.closeWallet(
+        idempotencyKey: idempotencyKey,
+        pinToken: pinToken,
+        reason: reason,
+      ),
+      successMessage: (res) =>
+          res['message']?.toString() ?? 'Đã hủy kích hoạt Ví trả sau',
+      defaultErrorMessage: 'Không thể hủy Ví trả sau',
+    );
   }
 
   int _toInt(dynamic v) {
@@ -155,88 +431,60 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
       return;
     }
 
-    if (Get.isRegistered<UserController>() &&
-        !Get.find<UserController>().hasPin.value) {
-      showSmoothPinBottomSheet(
-        context: context,
-        builder: (sheetCtx) => CreatePinBottomSheet(
-          onCreatePin: (pin) => UserService().createPin(pin),
-          onSuccess: () {
-            if (Get.isRegistered<UserController>()) {
-              Get.find<UserController>().hasPin.value = true;
-            }
-            if (!mounted) return;
-            SnackbarUtils.success(context, 'Tạo mã PIN thành công');
-            _openRepaySheet();
-          },
-        ),
-      );
-      return;
-    }
+    if (!_ensurePinReady(_openRepaySheet)) return;
 
     final billedAmount = _toInt(wallet['billed_amount']);
+    final serviceFeeAmount = _toInt(wallet['service_fee_amount']);
     final lateFeeAmount = _toInt(wallet['late_fee_amount']);
     final mainBalance = _toInt(wallet['main_balance']);
-    final dueTotal = billedAmount + lateFeeAmount;
+    final dueTotal = billedAmount + serviceFeeAmount + lateFeeAmount;
     final defaultAmount = dueTotal > 0 ? dueTotal : usedAmount;
+    final unbilledAmount = math.max(0, usedAmount - dueTotal);
 
-    final parsedAmount = await showSmoothPinBottomSheet<int>(
+    final selection = await showSmoothPinBottomSheet<_RepaySelectionResult>(
       context: context,
       builder: (_) => _RepayPostpaidSheet(
         usedAmount: usedAmount,
         dueTotal: dueTotal,
         mainBalance: mainBalance,
         defaultAmount: defaultAmount,
+        bankService: _bankService,
       ),
     );
 
-    if (parsedAmount != null && mounted) {
-      _confirmPinAndRepay(parsedAmount);
+    if (selection == null || !mounted) return;
+
+    final isServiceFeeOnly =
+        serviceFeeAmount > 0 &&
+        lateFeeAmount == 0 &&
+        billedAmount == 0 &&
+        unbilledAmount == 0 &&
+        selection.amount <= serviceFeeAmount;
+
+    final repayRes = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ConfirmPostpaidRepayScreen(
+          amount: selection.amount,
+          mainBalance: mainBalance,
+          isServiceFeeOnly: isServiceFeeOnly,
+          initialFundingSource: selection.resolution.initialFundingSource,
+          initialLinkedBankAccountId:
+              selection.resolution.initialLinkedBankAccountId,
+          initialLinkedBanks: selection.resolution.linkedBanks,
+        ),
+      ),
+    );
+
+    if (repayRes != null && repayRes['is_success'] == true && mounted) {
+      SnackbarUtils.success(
+        context,
+        isServiceFeeOnly
+            ? 'Đã thanh toán ${FormatUtils.formatDisplayNumber(selection.amount)}đ phí dịch vụ Ví trả sau'
+            : 'Đã thanh toán ${FormatUtils.formatDisplayNumber(selection.amount)}đ dư nợ Ví trả sau',
+      );
+      await _loadData();
     }
-  }
-
-  void _confirmPinAndRepay(int amountInt) {
-    final idempotencyKey = _uuid.v7();
-
-    showCheckPinDialog(
-      context: context,
-      customTitle:
-          'Xác thực thanh toán ${FormatUtils.formatDisplayNumber(amountInt)}đ',
-      onCheckPin: (pin) => _walletService.checkPin(
-        pin,
-        idempotencyKey,
-        action: 'POSTPAID_REPAY',
-        params: {'amount': amountInt},
-      ),
-      onSuccess: (pinToken) async {
-        final res = await _postpaidService.repayDebt(
-          amount: amountInt,
-          idempotencyKey: idempotencyKey,
-          pinToken: pinToken,
-        );
-        if (!mounted) return;
-
-        if (res['is_success'] == true) {
-          final data = res['data'];
-          if (data is Map &&
-              data['mainBalanceAfter'] != null &&
-              Get.isRegistered<UserController>()) {
-            Get.find<UserController>().balance.value = data['mainBalanceAfter']
-                .toString();
-          }
-          SnackbarUtils.success(
-            context,
-            'Đã thanh toán ${FormatUtils.formatDisplayNumber(amountInt)}đ dư nợ Ví trả sau',
-          );
-          await _loadData();
-        } else {
-          SnackbarUtils.failure(
-            context,
-            res['message'] ?? 'Thanh toán dư nợ thất bại',
-          );
-        }
-      },
-    );
   }
 
   @override
@@ -277,9 +525,7 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: kTfPink),
-      );
+      return const Center(child: CircularProgressIndicator(color: kTfPink));
     }
 
     if (_errorMsg != null) {
@@ -328,6 +574,10 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
     final billingDay = _toInt(config['billing_day'] ?? 20);
     final dueDay = _toInt(config['due_day'] ?? 5);
     final isKyc = wallet['is_kyc'] == true;
+    final hasLinkedBank = wallet['has_linked_bank'] == true;
+    final isAgeEligible = wallet['is_account_age_eligible'] != false;
+    final ageHours = _toInt(wallet['account_age_hours'] ?? 0);
+    final minHours = _toInt(wallet['min_account_hours'] ?? 24);
     final eligible = wallet['eligible_to_activate'] == true;
     final reason = wallet['ineligible_reason']?.toString();
 
@@ -450,63 +700,65 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
             ),
           ),
           const SizedBox(height: 18),
-          if (!isKyc) ...[
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF8E1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFFFE082)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Iconsax.personalcard,
-                    color: Color(0xFFF57C00),
-                    size: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Bạn cần hoàn tất xác thực danh tính (eKYC) để kích hoạt Ví trả sau.',
-                      style: GoogleFonts.roboto(
-                        fontSize: 13.5,
-                        color: const Color(0xFF795548),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 52,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const KycGuideScreen()),
-                  ).then((_) => _loadData());
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kTfPink,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  elevation: 0,
-                ),
-                child: Text(
-                  'Xác thực eKYC ngay',
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: transferCardDeco(radius: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Điều kiện mở ví',
                   style: GoogleFonts.roboto(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
+                    color: kTfText,
                   ),
                 ),
-              ),
+                const SizedBox(height: 12),
+                _buildConditionRow(
+                  met: isKyc,
+                  title: 'Xác thực danh tính (eKYC)',
+                  subtitle: isKyc
+                      ? 'Đã xác thực'
+                      : 'Chưa hoàn tất xác thực eKYC',
+                ),
+                const SizedBox(height: 10),
+                _buildConditionRow(
+                  met: hasLinkedBank,
+                  title: 'Liên kết ít nhất 1 tài khoản ngân hàng',
+                  subtitle: hasLinkedBank
+                      ? 'Đã liên kết ngân hàng'
+                      : 'Chưa có tài khoản ngân hàng liên kết',
+                ),
+                const SizedBox(height: 10),
+                _buildConditionRow(
+                  met: isAgeEligible,
+                  title: 'Tài khoản hoạt động tối thiểu $minHours giờ',
+                  subtitle: isAgeEligible
+                      ? 'Đã đủ thời gian hoạt động'
+                      : 'Tài khoản mới tạo $ageHours/$minHours giờ',
+                ),
+              ],
             ),
-          ] else if (eligible) ...[
+          ),
+          const SizedBox(height: 18),
+          if (!isKyc)
+            ..._buildOnboardingActionPrompt(
+              icon: Iconsax.personalcard,
+              message:
+                  'Bạn cần hoàn tất xác thực danh tính (eKYC) để kích hoạt Ví trả sau.',
+              buttonLabel: 'Xác thực eKYC ngay',
+              destinationBuilder: () => const KycGuideScreen(),
+            )
+          else if (!hasLinkedBank)
+            ..._buildOnboardingActionPrompt(
+              icon: Iconsax.bank,
+              message:
+                  'Bạn cần liên kết ít nhất 1 tài khoản ngân hàng để kích hoạt Ví trả sau.',
+              buttonLabel: 'Liên kết ngân hàng ngay',
+              destinationBuilder: () => const ManageLinkedBanksScreen(),
+            )
+          else if (eligible) ...[
             SizedBox(
               height: 52,
               child: ElevatedButton(
@@ -560,6 +812,111 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
     );
   }
 
+  List<Widget> _buildOnboardingActionPrompt({
+    required IconData icon,
+    required String message,
+    required String buttonLabel,
+    required Widget Function() destinationBuilder,
+  }) {
+    return [
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF8E1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFFE082)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: const Color(0xFFF57C00), size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: GoogleFonts.roboto(
+                  fontSize: 13.5,
+                  color: const Color(0xFF795548),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 16),
+      SizedBox(
+        height: 52,
+        child: ElevatedButton(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => destinationBuilder()),
+            ).then((_) => _loadData());
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: kTfPink,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            elevation: 0,
+          ),
+          child: Text(
+            buttonLabel,
+            style: GoogleFonts.roboto(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    ];
+  }
+
+  Widget _buildConditionRow({
+    required bool met,
+    required String title,
+    required String subtitle,
+  }) {
+    final Color statusColor = met
+        ? const Color(0xFF2E9E5B)
+        : const Color(0xFFF57C00);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          met ? Icons.check_circle_rounded : Icons.schedule_rounded,
+          color: statusColor,
+          size: 20,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.roboto(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: kTfText,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: GoogleFonts.roboto(
+                  fontSize: 12.5,
+                  color: met ? const Color(0xFF2E9E5B) : kTfMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildFeatureRow(IconData icon, String title, String subtitle) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -610,6 +967,7 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
     final usedAmount = _toInt(wallet['used_amount']);
     final availableLimit = _toInt(wallet['available_limit']);
     final billedAmount = _toInt(wallet['billed_amount']);
+    final serviceFeeAmount = _toInt(wallet['service_fee_amount']);
     final lateFeeAmount = _toInt(wallet['late_fee_amount']);
     final unbilledAmount = _toInt(wallet['unbilled_amount']);
     final dueDateStr = _formatDateOnly(wallet['due_date']?.toString());
@@ -632,14 +990,20 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
                 end: Alignment.bottomRight,
                 colors: isPastDue
                     ? [const Color(0xFFEF5350), const Color(0xFFC62828)]
+                    : isFrozen
+                    ? [const Color(0xFF64748B), const Color(0xFF475569)]
                     : [const Color(0xFFF06292), kTfPinkDark],
               ),
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: (isPastDue ? Colors.red : kTfPink).withValues(
-                    alpha: 0.26,
-                  ),
+                  color:
+                      (isPastDue
+                              ? Colors.red
+                              : isFrozen
+                              ? const Color(0xFF475569)
+                              : kTfPink)
+                          .withValues(alpha: 0.26),
                   blurRadius: 18,
                   offset: const Offset(0, 8),
                 ),
@@ -672,8 +1036,8 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
                         isPastDue
                             ? 'Quá hạn thanh toán'
                             : isFrozen
-                                ? 'Đang tạm khóa'
-                                : 'Đang hoạt động',
+                            ? 'Đang tạm khóa'
+                            : 'Đang hoạt động',
                         style: GoogleFonts.roboto(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w700,
@@ -745,7 +1109,8 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
                         color: kTfText,
                       ),
                     ),
-                    if (cycleMonth != null && billedAmount > 0)
+                    if (cycleMonth != null &&
+                        (billedAmount + serviceFeeAmount) > 0)
                       Text(
                         'Kỳ ${formatPostpaidCycleMonth(cycleMonth)} • Hạn $dueDateStr',
                         style: GoogleFonts.roboto(
@@ -761,6 +1126,14 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
                   'Dư nợ đã chốt sao kê',
                   '${FormatUtils.formatDisplayNumber(billedAmount)}đ',
                 ),
+                if (serviceFeeAmount > 0) ...[
+                  const SizedBox(height: 10),
+                  _buildDebtRow(
+                    'Phí dịch vụ tháng',
+                    '${FormatUtils.formatDisplayNumber(serviceFeeAmount)}đ',
+                    valueColor: const Color(0xFFD97706),
+                  ),
+                ],
                 if (lateFeeAmount > 0) ...[
                   const SizedBox(height: 10),
                   _buildDebtRow(
@@ -816,6 +1189,73 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
             ),
           ),
           _buildFreezeUnlockSection(),
+          const SizedBox(height: 12),
+          InkWell(
+            onTap: _isProcessingLifecycle ? null : _openManageWalletSheet,
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: transferCardDeco(radius: 18),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: kTfPink.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Iconsax.setting_2,
+                      color: kTfPinkDark,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Quản lý Ví trả sau',
+                          style: GoogleFonts.roboto(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w700,
+                            color: kTfText,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          isFrozen
+                              ? ((wallet['lock_reason'] ?? '')
+                                              .toString()
+                                              .toUpperCase() ==
+                                          'ADMIN_FREEZE' ||
+                                      (wallet['lock_reason'] ?? '')
+                                              .toString()
+                                              .toUpperCase() ==
+                                          'OVERDUE_REPEAT')
+                                  ? 'Ví đang khóa chi tiêu • Xem thông tin trạng thái'
+                                  : 'Ví đang tạm khóa chi tiêu • Nhấn để mở khóa hoặc hủy ví'
+                              : 'Tạm khóa chi tiêu hoặc hủy dịch vụ Ví trả sau',
+                          style: GoogleFonts.roboto(
+                            fontSize: 12.5,
+                            color: kTfMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 14,
+                    color: kTfMuted,
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 20),
           Row(
             children: [
@@ -955,6 +1395,8 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
     final userNote = (latestReq?['user_note'] ?? '').toString().trim();
     final proofCount = _toInt(latestReq?['proof_count']);
     final isRepeatLock = status == 'FROZEN' && lockReason == 'OVERDUE_REPEAT';
+    final isUserFreeze =
+        status == 'FROZEN' && (lockReason.isEmpty || lockReason == 'USER_FREEZE');
     final canSubmitUnlock =
         isRepeatLock && reqStatus != 'PENDING' && overdueDebt == 0;
 
@@ -1017,9 +1459,7 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
             Row(
               children: [
                 Icon(
-                  status == 'FROZEN'
-                      ? Iconsax.lock_1
-                      : Iconsax.document_text,
+                  status == 'FROZEN' ? Iconsax.lock_1 : Iconsax.document_text,
                   size: 20,
                   color: accentColor,
                 ),
@@ -1068,15 +1508,18 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
                         color: reqStatus == 'REJECTED'
                             ? Colors.red.shade700
                             : reqStatus == 'APPROVED'
-                                ? kTfSuccess
-                                : Colors.orange.shade800,
+                            ? kTfSuccess
+                            : Colors.orange.shade800,
                       ),
                     ),
                     if (userNote.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(
                         'Ghi chú của bạn: $userNote',
-                        style: GoogleFonts.roboto(fontSize: 12.5, color: kTfMuted),
+                        style: GoogleFonts.roboto(
+                          fontSize: 12.5,
+                          color: kTfMuted,
+                        ),
                       ),
                     ],
                     if (adminNote.isNotEmpty) ...[
@@ -1141,6 +1584,35 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
                   ),
                 ),
             ],
+            if (isUserFreeze) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 36,
+                child: ElevatedButton.icon(
+                  key: const Key('btn-postpaid-quick-unfreeze'),
+                  onPressed: _isProcessingLifecycle
+                      ? null
+                      : _confirmUnfreezeWallet,
+                  icon: const Icon(Iconsax.unlock, size: 15),
+                  label: Text(
+                    'Mở khóa ví',
+                    style: GoogleFonts.roboto(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFD97706),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -1197,7 +1669,8 @@ class _PostpaidInfoSheetState extends State<_PostpaidInfoSheet> {
       });
     } else {
       setState(() {
-        _error = (res['message'] ?? 'Không thể tải thông tin Ví trả sau').toString();
+        _error = (res['message'] ?? 'Không thể tải thông tin Ví trả sau')
+            .toString();
         _loading = false;
       });
     }
@@ -1321,7 +1794,9 @@ class _PostpaidInfoSheetState extends State<_PostpaidInfoSheet> {
                           icon: const Icon(Icons.refresh_rounded, size: 18),
                           label: Text(
                             'Thử lại',
-                            style: GoogleFonts.roboto(fontWeight: FontWeight.w600),
+                            style: GoogleFonts.roboto(
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
@@ -1350,25 +1825,31 @@ class _PostpaidInfoSheetState extends State<_PostpaidInfoSheet> {
     final activation = _asMap(info['activation_rules']);
 
     final creditLimit = _toInt(config['default_credit_limit']);
-    final billingDay = _toInt(statement['billing_day'] ?? config['billing_day']);
+    final billingDay = _toInt(
+      statement['billing_day'] ?? config['billing_day'],
+    );
     final dueDay = _toInt(statement['due_day'] ?? config['due_day']);
-    final minLateFee = _toInt(feeRules['min_late_fee'] ?? config['min_late_fee']);
+    final minLateFee = _toInt(
+      feeRules['min_late_fee'] ?? config['min_late_fee'],
+    );
     final lateFeePercent =
-        (feeRules['late_fee_percent'] ?? config['late_fee_percent'] ?? 0).toString();
+        (feeRules['late_fee_percent'] ?? config['late_fee_percent'] ?? 0)
+            .toString();
     final rawTiers = feeRules['late_fee_tiers'];
     final lateFeeTiers = rawTiers is List
         ? rawTiers
-            .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList()
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
         : const <Map<String, dynamic>>[];
     final serviceFeeRuleText = (feeRules['service_fee_rule'] ?? '').toString();
     final activationFee = _toInt(feeRules['activation_fee']);
     final qrPaymentFee = _toInt(feeRules['qr_payment_fee']);
     final repaymentFee = _toInt(feeRules['repayment_fee']);
 
-    String formatFee(int amount) =>
-        amount == 0 ? 'Miễn phí (0đ)' : '${FormatUtils.formatDisplayNumber(amount)}đ';
+    String formatFee(int amount) => amount == 0
+        ? 'Miễn phí'
+        : '${FormatUtils.formatDisplayNumber(amount)}đ';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1387,7 +1868,10 @@ class _PostpaidInfoSheetState extends State<_PostpaidInfoSheet> {
                 '${FormatUtils.formatDisplayNumber(creditLimit)}đ',
               ),
               const SizedBox(height: 8),
-              _buildMetricRow('Ngày chốt sao kê', 'Ngày $billingDay hàng tháng'),
+              _buildMetricRow(
+                'Ngày chốt sao kê',
+                'Ngày $billingDay hàng tháng',
+              ),
               const SizedBox(height: 8),
               _buildMetricRow('Hạn thanh toán', 'Ngày $dueDay tháng kế tiếp'),
               const SizedBox(height: 8),
@@ -1405,8 +1889,10 @@ class _PostpaidInfoSheetState extends State<_PostpaidInfoSheet> {
                 ),
                 const SizedBox(height: 6),
                 ...lateFeeTiers.map((tier) {
-                  final label = (tier['label'] ?? 'Bậc ${tier['tier']}').toString();
-                  final pct = (tier['percent_text'] ?? tier['percent'] ?? 0).toString();
+                  final label = (tier['label'] ?? 'Bậc ${tier['tier']}')
+                      .toString();
+                  final pct = (tier['percent_text'] ?? tier['percent'] ?? 0)
+                      .toString();
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 4),
                     child: _buildMetricRow(
@@ -1430,10 +1916,7 @@ class _PostpaidInfoSheetState extends State<_PostpaidInfoSheet> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     serviceFeeRuleText,
-                    style: GoogleFonts.roboto(
-                      fontSize: 12.5,
-                      color: kTfMuted,
-                    ),
+                    style: GoogleFonts.roboto(fontSize: 12.5, color: kTfMuted),
                   ),
                 ),
               ],
@@ -1597,17 +2080,26 @@ class _PostpaidInfoSheetState extends State<_PostpaidInfoSheet> {
   }
 }
 
+class _RepaySelectionResult {
+  final int amount;
+  final TransferFundingResolution resolution;
+
+  const _RepaySelectionResult({required this.amount, required this.resolution});
+}
+
 class _RepayPostpaidSheet extends StatefulWidget {
   final int usedAmount;
   final int dueTotal;
   final int mainBalance;
   final int defaultAmount;
+  final BankService? bankService;
 
   const _RepayPostpaidSheet({
     required this.usedAmount,
     required this.dueTotal,
     required this.mainBalance,
     required this.defaultAmount,
+    this.bankService,
   });
 
   @override
@@ -1660,6 +2152,9 @@ class _RepayPostpaidSheetState extends State<_RepayPostpaidSheet> {
   final ValueNotifier<String?> _inlineErrorNotifier = ValueNotifier<String?>(
     null,
   );
+  late final BankService _bankService = widget.bankService ?? BankService();
+  late final Future<List<Map<String, dynamic>>> _linkedBanksFuture;
+  bool _isCheckingFunding = false;
 
   @override
   void initState() {
@@ -1667,6 +2162,21 @@ class _RepayPostpaidSheetState extends State<_RepayPostpaidSheet> {
     _amountCtrl = TextEditingController(
       text: FormatUtils.formatDisplayNumber(widget.defaultAmount),
     );
+    _linkedBanksFuture = _fetchLinkedBanks();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchLinkedBanks() async {
+    final res = await _bankService.getBankLinkStatus();
+    if (res['is_success'] == true && res['data'] is Map) {
+      final accounts = (res['data'] as Map)['linked_accounts'];
+      if (accounts is List) {
+        return accounts
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+    }
+    return const [];
   }
 
   @override
@@ -1704,8 +2214,11 @@ class _RepayPostpaidSheetState extends State<_RepayPostpaidSheet> {
     _clearError();
   }
 
-  void _submit() {
-    final parsedAmount = FormatUtils.formatAmountToNum(_amountCtrl.text).round();
+  Future<void> _submit() async {
+    if (_isCheckingFunding) return;
+    final parsedAmount = FormatUtils.formatAmountToNum(
+      _amountCtrl.text,
+    ).round();
     if (parsedAmount <= 0) {
       _inlineErrorNotifier.value = 'Số tiền phải lớn hơn 0';
       return;
@@ -1715,12 +2228,27 @@ class _RepayPostpaidSheetState extends State<_RepayPostpaidSheet> {
           'Không vượt quá tổng dư nợ (${FormatUtils.formatDisplayNumber(widget.usedAmount)}đ)';
       return;
     }
-    if (parsedAmount > widget.mainBalance) {
+    setState(() => _isCheckingFunding = true);
+    final linkedBanks = await _linkedBanksFuture;
+    if (!mounted) return;
+    setState(() => _isCheckingFunding = false);
+
+    final resolution = resolveTransferFundingOption(
+      walletEligible: widget.mainBalance >= parsedAmount,
+      walletBalance: widget.mainBalance.toString(),
+      neededAmount: parsedAmount,
+      linkedBanks: linkedBanks,
+      postpaidEligible: false,
+    );
+    if (!resolution.canProceed) {
       _inlineErrorNotifier.value =
-          'Số dư ví chính không đủ (${FormatUtils.formatDisplayNumber(widget.mainBalance)}đ)';
+          resolution.errorMessage ?? 'Số dư trong ví không đủ';
       return;
     }
-    Navigator.pop(context, parsedAmount);
+    Navigator.pop(
+      context,
+      _RepaySelectionResult(amount: parsedAmount, resolution: resolution),
+    );
   }
 
   Widget _buildPresetChip(String label, VoidCallback onTap) {
@@ -1802,7 +2330,8 @@ class _RepayPostpaidSheetState extends State<_RepayPostpaidSheet> {
                     child: ValueListenableBuilder<String?>(
                       valueListenable: _inlineErrorNotifier,
                       builder: (context, errorMsg, _) {
-                        final hasError = errorMsg != null && errorMsg.isNotEmpty;
+                        final hasError =
+                            errorMsg != null && errorMsg.isNotEmpty;
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
@@ -1848,7 +2377,9 @@ class _RepayPostpaidSheetState extends State<_RepayPostpaidSheet> {
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(14),
                                   borderSide: BorderSide(
-                                    color: hasError ? kPostpaidExpense : kTfPink,
+                                    color: hasError
+                                        ? kPostpaidExpense
+                                        : kTfPink,
                                     width: 1.5,
                                   ),
                                 ),
@@ -1856,10 +2387,7 @@ class _RepayPostpaidSheetState extends State<_RepayPostpaidSheet> {
                             ),
                             if (hasError)
                               Padding(
-                                padding: const EdgeInsets.only(
-                                  top: 8,
-                                  left: 4,
-                                ),
+                                padding: const EdgeInsets.only(top: 8, left: 4),
                                 child: Row(
                                   children: [
                                     const Icon(
@@ -1884,7 +2412,7 @@ class _RepayPostpaidSheetState extends State<_RepayPostpaidSheet> {
                     width: double.infinity,
                     height: 52,
                     child: ElevatedButton(
-                      onPressed: _submit,
+                      onPressed: _isCheckingFunding ? null : _submit,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: kTfPink,
                         foregroundColor: Colors.white,
@@ -1893,7 +2421,16 @@ class _RepayPostpaidSheetState extends State<_RepayPostpaidSheet> {
                         ),
                         elevation: 0,
                       ),
-                      child: Text('Tiếp tục', style: _submitStyle),
+                      child: _isCheckingFunding
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text('Tiếp tục', style: _submitStyle),
                     ),
                   ),
                 ],
@@ -2071,7 +2608,9 @@ class _PostpaidUnlockRequestSheetState
                       ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: kTfPinkDark,
-                        side: BorderSide(color: kTfPink.withValues(alpha: 0.45)),
+                        side: BorderSide(
+                          color: kTfPink.withValues(alpha: 0.45),
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -2090,7 +2629,9 @@ class _PostpaidUnlockRequestSheetState
                       ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: kTfPinkDark,
-                        side: BorderSide(color: kTfPink.withValues(alpha: 0.45)),
+                        side: BorderSide(
+                          color: kTfPink.withValues(alpha: 0.45),
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -2133,8 +2674,8 @@ class _PostpaidUnlockRequestSheetState
                             onTap: _isSubmitting
                                 ? null
                                 : () => setState(
-                                      () => _selectedImages.removeAt(i),
-                                    ),
+                                    () => _selectedImages.removeAt(i),
+                                  ),
                             child: Container(
                               width: 22,
                               height: 22,
@@ -2163,7 +2704,8 @@ class _PostpaidUnlockRequestSheetState
                 maxLength: 500,
                 decoration: InputDecoration(
                   labelText: 'Ghi chú bổ sung (không bắt buộc)',
-                  hintText: 'Ví dụ: Sao kê lương tháng 11 nhận qua ngân hàng...',
+                  hintText:
+                      'Ví dụ: Sao kê lương tháng 11 nhận qua ngân hàng...',
                   filled: true,
                   fillColor: kTfBg,
                   border: OutlineInputBorder(
@@ -2223,3 +2765,453 @@ class _PostpaidUnlockRequestSheetState
   }
 }
 
+class _ManagePostpaidWalletSheet extends StatelessWidget {
+  const _ManagePostpaidWalletSheet({
+    required this.status,
+    required this.lockReason,
+    required this.usedAmount,
+    required this.onFreezeTap,
+    required this.onUnfreezeTap,
+    required this.onCloseTap,
+  });
+
+  final String status;
+  final String lockReason;
+  final int usedAmount;
+  final VoidCallback onFreezeTap;
+  final VoidCallback onUnfreezeTap;
+  final VoidCallback onCloseTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final normStatus = status.trim().toUpperCase();
+    final normReason = lockReason.trim().toUpperCase();
+    final isFrozen = normStatus == 'FROZEN';
+    final isPastDue = normStatus == 'PAST_DUE';
+    final isSystemOrAdminLocked =
+        isFrozen &&
+        (normReason == 'ADMIN_FREEZE' || normReason == 'OVERDUE_REPEAT');
+    final canUnfreeze = isFrozen && !isSystemOrAdminLocked;
+    final canFreeze = !isFrozen && !isPastDue;
+    final canClose = !isSystemOrAdminLocked;
+
+    return SafeArea(
+      key: const Key('sheet-manage-postpaid-wallet'),
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Quản lý Ví trả sau',
+              style: GoogleFonts.roboto(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: kTfText,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Tùy chọn tạm khóa chi tiêu tạm thời, mở khóa hoặc hủy dịch vụ Ví trả sau.',
+              style: GoogleFonts.roboto(
+                fontSize: 13,
+                height: 1.4,
+                color: kTfMuted,
+              ),
+            ),
+            if (isSystemOrAdminLocked) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF8E1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFFE082)),
+                ),
+                child: Text(
+                  normReason == 'OVERDUE_REPEAT'
+                      ? 'Ví đang khóa do quá hạn lặp lại. Bạn cần tất toán dư nợ (nếu còn) và gửi ảnh chứng minh thu nhập để Quản trị viên duyệt mở lại; không thể tự mở khóa hoặc tự hủy ví.'
+                      : 'Ví đang bị Quản trị viên tạm khóa; bạn không thể tự mở khóa hoặc tự hủy ví.',
+                  style: GoogleFonts.roboto(
+                    fontSize: 12.5,
+                    height: 1.4,
+                    color: const Color(0xFF92400E),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            if (!isFrozen)
+              _buildActionTile(
+                key: const Key('btn-manage-freeze'),
+                icon: Iconsax.lock_1,
+                iconColor: const Color(0xFFD97706),
+                title: 'Tạm khóa Ví trả sau',
+                subtitle: isPastDue
+                    ? 'Vui lòng tất toán kỳ quá hạn trước khi tạm khóa'
+                    : 'Chặn thanh toán QR tạm thời, giữ nguyên hạn mức & lịch sử',
+                enabled: canFreeze,
+                onTap: canFreeze ? onFreezeTap : null,
+              )
+            else
+              _buildActionTile(
+                key: const Key('btn-manage-unfreeze'),
+                icon: Iconsax.unlock,
+                iconColor: kTfSuccess,
+                title: 'Mở khóa Ví trả sau',
+                subtitle: isSystemOrAdminLocked
+                    ? (normReason == 'OVERDUE_REPEAT'
+                          ? 'Cần xét duyệt ảnh chứng minh thu nhập'
+                          : 'Do Quản trị viên quản lý mở khóa')
+                    : 'Kích hoạt lại tính năng thanh toán QR bằng Ví trả sau',
+                enabled: canUnfreeze,
+                onTap: canUnfreeze ? onUnfreezeTap : null,
+              ),
+            const SizedBox(height: 10),
+            _buildActionTile(
+              key: const Key('btn-manage-close'),
+              icon: Iconsax.close_circle,
+              iconColor: kPostpaidExpense,
+              title: 'Hủy dịch vụ Ví trả sau',
+              subtitle: isSystemOrAdminLocked
+                  ? 'Không thể tự hủy khi ví đang bị khóa hệ thống / Quản trị viên'
+                  : usedAmount > 0
+                  ? 'Cần tất toán hết ${FormatUtils.formatDisplayNumber(usedAmount)}đ dư nợ trước khi hủy'
+                  : 'Đóng Ví trả sau sau khi xác thực mã PIN',
+              enabled: canClose,
+              onTap: canClose ? onCloseTap : null,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionTile({
+    required Key key,
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required bool enabled,
+    VoidCallback? onTap,
+  }) {
+    final effectiveIconColor = enabled ? iconColor : Colors.grey.shade400;
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.6,
+      child: InkWell(
+        key: key,
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: kTfBg,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: effectiveIconColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: effectiveIconColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: GoogleFonts.roboto(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: kTfText,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: GoogleFonts.roboto(
+                        fontSize: 12.5,
+                        height: 1.35,
+                        color: kTfMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (enabled) ...[
+                const SizedBox(width: 8),
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 14,
+                  color: kTfMuted,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ClosePostpaidWalletSheet extends StatefulWidget {
+  const _ClosePostpaidWalletSheet();
+
+  @override
+  State<_ClosePostpaidWalletSheet> createState() =>
+      _ClosePostpaidWalletSheetState();
+}
+
+class _ClosePostpaidWalletSheetState extends State<_ClosePostpaidWalletSheet> {
+  static const List<String> _presetReasons = [
+    'Ít sử dụng dịch vụ',
+    'Muốn kiểm soát chi tiêu',
+    'Đã có phương thức khác',
+    'Lý do khác',
+  ];
+
+  final TextEditingController _reasonCtrl = TextEditingController();
+  String? _selectedPreset;
+
+  @override
+  void dispose() {
+    _reasonCtrl.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    final custom = _reasonCtrl.text.trim();
+    final effective = custom.isNotEmpty
+        ? custom
+        : (_selectedPreset != null && _selectedPreset != 'Lý do khác'
+              ? _selectedPreset!
+              : '');
+    Navigator.pop(context, effective);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final maxHeight = math.max(
+      240.0,
+      media.size.height - media.viewPadding.top - 24,
+    );
+
+    return SmoothKeyboardSheet(
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxHeight),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Hủy Ví trả sau',
+                    style: GoogleFonts.roboto(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: kTfText,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFFECACA)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(top: 1),
+                          child: Icon(
+                            Iconsax.warning_2,
+                            size: 18,
+                            color: kPostpaidExpense,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Sau khi hủy, Ví trả sau sẽ ngừng hoạt động. Lịch sử biến động hạn mức vẫn được lưu giữ để đối soát và bạn có thể kích hoạt lại sau này nếu đủ điều kiện.',
+                            style: GoogleFonts.roboto(
+                              fontSize: 12.5,
+                              height: 1.4,
+                              color: const Color(0xFF991B1B),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Lý do hủy ví (không bắt buộc)',
+                    style: GoogleFonts.roboto(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: kTfText,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _presetReasons.map((reason) {
+                      final isSelected = _selectedPreset == reason;
+                      return ChoiceChip(
+                        label: Text(
+                          reason,
+                          style: GoogleFonts.roboto(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w500,
+                            color: isSelected ? kTfPinkDark : kTfText,
+                          ),
+                        ),
+                        selected: isSelected,
+                        selectedColor: kTfPink.withValues(alpha: 0.14),
+                        backgroundColor: kTfBg,
+                        side: BorderSide(
+                          color: isSelected ? kTfPink : Colors.grey.shade300,
+                        ),
+                        onSelected: (selected) {
+                          setState(() {
+                            _selectedPreset = selected ? reason : null;
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _reasonCtrl,
+                    maxLength: 200,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      hintText: 'Nhập thêm lý do hoặc góp ý của bạn...',
+                      hintStyle: GoogleFonts.roboto(
+                        fontSize: 13.5,
+                        color: kTfMuted,
+                      ),
+                      filled: true,
+                      fillColor: kTfBg,
+                      counterStyle: GoogleFonts.roboto(
+                        fontSize: 11,
+                        color: kTfMuted,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: kTfPink),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 48,
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: kTfText,
+                              side: BorderSide(color: Colors.grey.shade300),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: Text(
+                              'Giữ lại ví',
+                              style: GoogleFonts.roboto(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SizedBox(
+                          height: 48,
+                          child: ElevatedButton(
+                            onPressed: _confirm,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: kPostpaidExpense,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: Text(
+                              'Xác nhận hủy ví',
+                              style: GoogleFonts.roboto(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
