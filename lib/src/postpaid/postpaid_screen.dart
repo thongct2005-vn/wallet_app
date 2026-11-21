@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:app/core/controller/user_controller.dart';
@@ -11,6 +12,7 @@ import 'package:app/src/link_bank/manage_linked_banks_screen.dart';
 import 'package:app/src/postpaid/confirm_postpaid_repay_screen.dart';
 import 'package:app/src/postpaid/postpaid_entries_screen.dart';
 import 'package:app/src/postpaid/postpaid_entry_widgets.dart';
+import 'package:app/src/postpaid/postpaid_unlock_sheet.dart';
 import 'package:app/src/services/bank_service.dart';
 import 'package:app/src/services/postpaid_service.dart';
 import 'package:app/src/services/user_service.dart';
@@ -38,15 +40,29 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
   final Uuid _uuid = const Uuid();
 
   bool _isLoading = true;
+  bool _isSilentRefreshing = false;
   bool _isActivating = false;
   bool _isProcessingLifecycle = false;
   bool _didScheduleInitialLoad = false;
   VoidCallback? _cancelDeferredLoad;
+  Worker? _postpaidSocketWorker;
   String? _errorMsg;
 
   Map<String, dynamic>? _wallet;
   List<Map<String, dynamic>> _entries = [];
   bool _hasMoreEntries = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (Get.isRegistered<UserController>()) {
+      final userController = Get.find<UserController>();
+      _postpaidSocketWorker = ever<int>(
+        userController.postpaidRefreshTick,
+        (_) => _handlePostpaidSocketUpdate(userController),
+      );
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -61,52 +77,83 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
   @override
   void dispose() {
     _cancelDeferredLoad?.call();
+    _postpaidSocketWorker?.dispose();
     super.dispose();
   }
 
-  Future<void> _loadData() async {
-    if (mounted) {
+  void _handlePostpaidSocketUpdate(UserController userController) {
+    if (!mounted) return;
+    final currentWallet = _wallet;
+    if (currentWallet != null) {
+      final updatedWallet = Map<String, dynamic>.from(currentWallet);
+      final nextUsed = userController.postpaidUsedAmount.value;
+      final nextAvail = userController.postpaidAvailableLimit.value;
+      final nextStatus = userController.postpaidStatus.value;
+      if (nextUsed != null) updatedWallet['used_amount'] = nextUsed;
+      if (nextAvail != null) updatedWallet['available_limit'] = nextAvail;
+      if (nextStatus != null && nextStatus.isNotEmpty) {
+        updatedWallet['status'] = nextStatus;
+      }
+      setState(() => _wallet = updatedWallet);
+    }
+    unawaited(_loadData(silent: true));
+  }
+
+  Future<void> _loadData({bool silent = false}) async {
+    if (silent) {
+      if (_isSilentRefreshing) return;
+      _isSilentRefreshing = true;
+    } else if (mounted) {
       setState(() {
         _isLoading = true;
         _errorMsg = null;
       });
     }
 
-    final walletRes = await _postpaidService.getWallet();
-    if (!mounted) return;
-
-    if (walletRes['is_success'] != true) {
-      setState(() {
-        _isLoading = false;
-        _errorMsg = walletRes['message'] ?? 'Không thể tải thông tin Ví trả sau';
-      });
-      return;
-    }
-
-    final walletData = Map<String, dynamic>.from(walletRes['data'] as Map);
-    List<Map<String, dynamic>> entries = [];
-    bool hasMoreEntries = false;
-
-    if (walletData['activated'] == true) {
-      final entriesRes = await _postpaidService.getEntries(limit: 5);
+    try {
+      final walletRes = await _postpaidService.getWallet();
       if (!mounted) return;
-      if (entriesRes['is_success'] == true && entriesRes['data'] is Map) {
-        final rawList = (entriesRes['data']['entries'] as List?) ?? const [];
-        entries = rawList
-            .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList();
-        hasMoreEntries = entriesRes['data']['next_cursor'] != null;
+
+      if (walletRes['is_success'] != true) {
+        if (!silent) {
+          setState(() {
+            _isLoading = false;
+            _errorMsg =
+                walletRes['message'] ?? 'Không thể tải thông tin Ví trả sau';
+          });
+        }
+        return;
+      }
+
+      final walletData = Map<String, dynamic>.from(walletRes['data'] as Map);
+      List<Map<String, dynamic>> entries = [];
+      bool hasMoreEntries = false;
+
+      if (walletData['activated'] == true) {
+        final entriesRes = await _postpaidService.getEntries(limit: 5);
+        if (!mounted) return;
+        if (entriesRes['is_success'] == true && entriesRes['data'] is Map) {
+          final rawList = (entriesRes['data']['entries'] as List?) ?? const [];
+          entries = rawList
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          hasMoreEntries = entriesRes['data']['next_cursor'] != null;
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _wallet = walletData;
+        _entries = entries;
+        _hasMoreEntries = hasMoreEntries;
+        _isLoading = false;
+      });
+    } finally {
+      if (silent) {
+        _isSilentRefreshing = false;
       }
     }
-
-    if (!mounted) return;
-    setState(() {
-      _wallet = walletData;
-      _entries = entries;
-      _hasMoreEntries = hasMoreEntries;
-      _isLoading = false;
-    });
   }
 
   void _openEntriesScreen() {
@@ -229,12 +276,77 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
     );
   }
 
+  Future<void> _openUnlockRequestSheet() async {
+    final wallet = _wallet;
+    if (wallet == null) return;
+    final rawLatest = wallet['latest_unlock_request'];
+    final previousRejected =
+        rawLatest is Map && rawLatest['status']?.toString() == 'REJECTED'
+        ? Map<String, dynamic>.from(rawLatest)
+        : null;
+
+    final result = await showSmoothPinBottomSheet<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => PostpaidUnlockRequestSheet(
+        service: _postpaidService,
+        previousRejectedRequest: previousRejected,
+      ),
+    );
+
+    if (result != null && result['is_success'] == true && mounted) {
+      SnackbarUtils.success(
+        context,
+        result['message']?.toString() ??
+            'Đã gửi yêu cầu mở khóa Ví trả sau kèm ảnh chứng minh thu nhập',
+      );
+      await _loadData(silent: true);
+    }
+  }
+
+  Future<void> _refreshUnlockRequestStatus() async {
+    final res = await _postpaidService.getLatestUnlockRequest();
+    if (!mounted) return;
+    await _loadData(silent: true);
+    if (!mounted) return;
+    if (res['is_success'] == true) {
+      final reqData = res['data'] is Map
+          ? Map<String, dynamic>.from(res['data'] as Map)
+          : null;
+      final reqStatus = reqData?['status']?.toString();
+      if (reqStatus == 'PENDING') {
+        SnackbarUtils.info(
+          context,
+          'Yêu cầu mở khóa vẫn đang chờ Quản trị viên xét duyệt',
+        );
+      } else if (reqStatus == 'APPROVED') {
+        SnackbarUtils.success(context, 'Ví trả sau của bạn đã được duyệt mở lại');
+      } else if (reqStatus == 'REJECTED') {
+        final adminNote = reqData?['admin_note']?.toString().trim();
+        SnackbarUtils.failure(
+          context,
+          adminNote != null && adminNote.isNotEmpty
+              ? 'Yêu cầu bị từ chối: $adminNote'
+              : 'Yêu cầu mở khóa trước đó bị từ chối, bạn có thể gửi lại hồ sơ mới',
+        );
+      }
+    }
+  }
+
   void _openManageWalletSheet() {
     final wallet = _wallet;
     if (wallet == null || wallet['activated'] != true) return;
 
     final status = (wallet['status'] ?? 'ACTIVE').toString();
+    final lockReason = wallet['lock_reason']?.toString();
     final usedAmount = _toInt(wallet['used_amount']);
+    final overdueDebtTotal =
+        _toInt(wallet['billed_amount']) +
+        _toInt(wallet['service_fee_amount']) +
+        _toInt(wallet['late_fee_amount']);
+    final latestReq = wallet['latest_unlock_request'];
+    final latestUnlockStatus = latestReq is Map
+        ? latestReq['status']?.toString()
+        : null;
 
     showModalBottomSheet<void>(
       context: context,
@@ -245,7 +357,10 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
       ),
       builder: (sheetCtx) => _ManagePostpaidWalletSheet(
         status: status,
+        lockReason: lockReason,
         usedAmount: usedAmount,
+        overdueDebtTotal: overdueDebtTotal,
+        latestUnlockStatus: latestUnlockStatus,
         onFreezeTap: () {
           Navigator.pop(sheetCtx);
           _confirmFreezeWallet();
@@ -253,6 +368,10 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
         onUnfreezeTap: () {
           Navigator.pop(sheetCtx);
           _confirmUnfreezeWallet();
+        },
+        onUnlockRequestTap: () {
+          Navigator.pop(sheetCtx);
+          _openUnlockRequestSheet();
         },
         onCloseTap: () {
           Navigator.pop(sheetCtx);
@@ -955,6 +1074,12 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
     final unbilledAmount = _toInt(wallet['unbilled_amount']);
     final dueDateStr = _formatDateOnly(wallet['due_date']?.toString());
     final cycleMonth = wallet['current_cycle_month']?.toString();
+    final lockReason = wallet['lock_reason']?.toString();
+    final rawLatestReq = wallet['latest_unlock_request'];
+    final latestUnlockRequest = rawLatestReq is Map
+        ? Map<String, dynamic>.from(rawLatestReq)
+        : null;
+    final overdueDebtTotal = billedAmount + serviceFeeAmount + lateFeeAmount;
     final progress = creditLimit > 0
         ? (usedAmount / creditLimit).clamp(0.0, 1.0)
         : 0.0;
@@ -1076,79 +1201,10 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
           ),
           if (isFrozen) ...[
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFFBEB),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFFDE68A)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.only(top: 2),
-                    child: Icon(
-                      Iconsax.lock_1,
-                      size: 20,
-                      color: Color(0xFFB45309),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Ví trả sau đang tạm khóa chi tiêu',
-                          style: GoogleFonts.roboto(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF92400E),
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          'Bạn không thể thanh toán QR lúc này. Hạn mức, lịch sử được giữ nguyên và bạn vẫn có thể trả dư nợ.',
-                          style: GoogleFonts.roboto(
-                            fontSize: 12.5,
-                            height: 1.4,
-                            color: const Color(0xFF78350F),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        SizedBox(
-                          height: 34,
-                          child: ElevatedButton.icon(
-                            onPressed: _isProcessingLifecycle
-                                ? null
-                                : _confirmUnfreezeWallet,
-                            icon: const Icon(Iconsax.unlock, size: 15),
-                            label: Text(
-                              'Mở khóa ví',
-                              style: GoogleFonts.roboto(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFD97706),
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+            _buildFrozenBanner(
+              lockReason: lockReason,
+              overdueDebtTotal: overdueDebtTotal,
+              latestUnlockRequest: latestUnlockRequest,
             ),
           ],
           const SizedBox(height: 16),
@@ -1286,7 +1342,11 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
                         const SizedBox(height: 2),
                         Text(
                           isFrozen
-                              ? 'Ví đang tạm khóa chi tiêu • Nhấn để mở khóa hoặc hủy ví'
+                              ? (lockReason == 'OVERDUE_REPEAT'
+                                    ? 'Khóa do quá hạn lặp lại • Xem chi tiết hoặc gửi hồ sơ'
+                                    : lockReason == 'ADMIN_FREEZE'
+                                    ? 'Ví đang bị Quản trị viên tạm khóa'
+                                    : 'Ví đang tạm khóa chi tiêu • Nhấn để mở khóa hoặc hủy ví')
                               : 'Tạm khóa chi tiêu hoặc hủy dịch vụ Ví trả sau',
                           style: GoogleFonts.roboto(
                             fontSize: 12.5,
@@ -1386,6 +1446,272 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFrozenBanner({
+    required String? lockReason,
+    required int overdueDebtTotal,
+    required Map<String, dynamic>? latestUnlockRequest,
+  }) {
+    final reqStatus = latestUnlockRequest?['status']?.toString();
+    final proofCount = _toInt(latestUnlockRequest?['proof_count']);
+    final userNote = latestUnlockRequest?['user_note']?.toString().trim();
+    final adminNote = latestUnlockRequest?['admin_note']?.toString().trim();
+
+    if (lockReason == 'OVERDUE_REPEAT') {
+      final isPending = reqStatus == 'PENDING';
+      final isRejected = reqStatus == 'REJECTED';
+      final needsRepay = overdueDebtTotal > 0;
+
+      final Color bgColor = isRejected
+          ? const Color(0xFFFEF2F2)
+          : isPending
+          ? const Color(0xFFEFF6FF)
+          : const Color(0xFFFFFBEB);
+      final Color borderColor = isRejected
+          ? const Color(0xFFFECACA)
+          : isPending
+          ? const Color(0xFFBFDBFE)
+          : const Color(0xFFFDE68A);
+      final Color accentColor = isRejected
+          ? const Color(0xFFB91C1C)
+          : isPending
+          ? const Color(0xFF1D4ED8)
+          : const Color(0xFFB45309);
+      final Color textColor = isRejected
+          ? const Color(0xFF991B1B)
+          : isPending
+          ? const Color(0xFF1E3A8A)
+          : const Color(0xFF78350F);
+
+      final String title = needsRepay
+          ? 'Ví bị khóa do quá hạn từ lần thứ 2 trở lên'
+          : isPending
+          ? 'Hồ sơ mở khóa đang chờ xét duyệt'
+          : isRejected
+          ? 'Yêu cầu mở khóa trước đó bị từ chối'
+          : 'Cần gửi ảnh chứng minh thu nhập để mở lại ví';
+
+      final String body = needsRepay
+          ? 'Vui lòng thanh toán hết dư nợ kỳ quá hạn (${FormatUtils.formatDisplayNumber(overdueDebtTotal)}đ) trước khi gửi 1–3 ảnh chứng minh thu nhập cho Quản trị viên duyệt mở lại.'
+          : isPending
+          ? 'Đã gửi $proofCount ảnh chứng minh thu nhập${userNote != null && userNote.isNotEmpty ? ' • Ghi chú: "$userNote"' : ''}. Quản trị viên đang kiểm tra và sẽ phản hồi sớm.'
+          : isRejected
+          ? '${adminNote != null && adminNote.isNotEmpty ? 'Lý do từ chối: $adminNote. ' : ''}Bạn có thể bổ sung 1–3 ảnh chứng minh thu nhập rõ ràng hơn để gửi lại yêu cầu.'
+          : 'Bạn đã tất toán kỳ nợ quá hạn. Vui lòng gửi 1–3 ảnh chứng minh thu nhập (bảng lương, sao kê ngân hàng...) để Quản trị viên mở khóa lại Ví trả sau.';
+
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(
+                isPending ? Iconsax.document_text : Iconsax.lock_1,
+                size: 20,
+                color: accentColor,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.roboto(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: accentColor,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    body,
+                    style: GoogleFonts.roboto(
+                      fontSize: 12.5,
+                      height: 1.4,
+                      color: textColor,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 36,
+                    child: ElevatedButton.icon(
+                      onPressed: _isProcessingLifecycle
+                          ? null
+                          : needsRepay
+                          ? _openRepaySheet
+                          : isPending
+                          ? _refreshUnlockRequestStatus
+                          : _openUnlockRequestSheet,
+                      icon: Icon(
+                        needsRepay
+                            ? Iconsax.wallet_check
+                            : isPending
+                            ? Icons.refresh_rounded
+                            : Iconsax.document_upload,
+                        size: 16,
+                      ),
+                      label: Text(
+                        needsRepay
+                            ? 'Thanh toán dư nợ ngay'
+                            : isPending
+                            ? 'Kiểm tra trạng thái duyệt'
+                            : isRejected
+                            ? 'Gửi lại hồ sơ mở khóa'
+                            : 'Gửi ảnh chứng minh thu nhập',
+                        style: GoogleFonts.roboto(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: accentColor,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (lockReason == 'ADMIN_FREEZE') {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEF2F2),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFECACA)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(top: 2),
+              child: Icon(
+                Iconsax.shield_cross,
+                size: 20,
+                color: Color(0xFFB91C1C),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Ví trả sau đang bị Quản trị viên tạm khóa',
+                    style: GoogleFonts.roboto(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF991B1B),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Bạn không thể tự mở khóa hoặc thanh toán QR lúc này, nhưng vẫn có thể trả dư nợ. Vui lòng liên hệ bộ phận hỗ trợ nếu cần kiểm tra mở lại.',
+                    style: GoogleFonts.roboto(
+                      fontSize: 12.5,
+                      height: 1.4,
+                      color: const Color(0xFF7F1D1D),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 2),
+            child: Icon(
+              Iconsax.lock_1,
+              size: 20,
+              color: Color(0xFFB45309),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Ví trả sau đang tạm khóa chi tiêu',
+                  style: GoogleFonts.roboto(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF92400E),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Bạn không thể thanh toán QR lúc này. Hạn mức, lịch sử được giữ nguyên và bạn vẫn có thể trả dư nợ.',
+                  style: GoogleFonts.roboto(
+                    fontSize: 12.5,
+                    height: 1.4,
+                    color: const Color(0xFF78350F),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 34,
+                  child: ElevatedButton.icon(
+                    onPressed: _isProcessingLifecycle
+                        ? null
+                        : _confirmUnfreezeWallet,
+                    icon: const Icon(Iconsax.unlock, size: 15),
+                    label: Text(
+                      'Mở khóa ví',
+                      style: GoogleFonts.roboto(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD97706),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -1611,8 +1937,15 @@ class _PostpaidInfoSheetState extends State<_PostpaidInfoSheet> {
     final creditLimit = _toInt(config['default_credit_limit']);
     final billingDay = _toInt(statement['billing_day'] ?? config['billing_day']);
     final dueDay = _toInt(statement['due_day'] ?? config['due_day']);
+    final rawTiers = feeRules['late_fee_tiers'];
+    final tiers = rawTiers is List
+        ? rawTiers.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+        : const <Map<String, dynamic>>[];
     final minLateFee = _toInt(feeRules['min_late_fee'] ?? config['min_late_fee']);
     final lateFeePercent = (feeRules['late_fee_percent'] ?? config['late_fee_percent'] ?? 0).toString();
+    final String lateFeeDisplay = tiers.isNotEmpty
+        ? '${tiers.first['percent_text'] ?? tiers.first['percent']}% – ${tiers.last['percent_text'] ?? tiers.last['percent']}% (${tiers.length} bậc ngày)'
+        : '$lateFeePercent% (tối thiểu ${FormatUtils.formatDisplayNumber(minLateFee)}đ)';
     final activationFee = _toInt(feeRules['activation_fee']);
     final qrPaymentFee = _toInt(feeRules['qr_payment_fee']);
     final repaymentFee = _toInt(feeRules['repayment_fee']);
@@ -1629,7 +1962,7 @@ class _PostpaidInfoSheetState extends State<_PostpaidInfoSheet> {
     final serviceFeeLabel = monthlyServiceFee <= 0
         ? 'Miễn phí'
         : freeTxCount > 0
-        ? '${FormatUtils.formatDisplayNumber(monthlyServiceFee)}đ/tháng (kỳ có GD, miễn $freeTxCount GD đầu)'
+        ? '${FormatUtils.formatDisplayNumber(monthlyServiceFee)}đ/tháng (miễn $freeTxCount GD đầu)'
         : '${FormatUtils.formatDisplayNumber(monthlyServiceFee)}đ/tháng (kỳ có GD)';
 
     return Column(
@@ -1657,7 +1990,7 @@ class _PostpaidInfoSheetState extends State<_PostpaidInfoSheet> {
               const SizedBox(height: 8),
               _buildMetricRow(
                 'Phí trễ hạn',
-                '$lateFeePercent% (tối thiểu ${FormatUtils.formatDisplayNumber(minLateFee)}đ)',
+                lateFeeDisplay,
                 valueColor: const Color(0xFFD32F2F),
               ),
             ],
@@ -1684,6 +2017,8 @@ class _PostpaidInfoSheetState extends State<_PostpaidInfoSheet> {
             'Phí kích hoạt ví: ${formatFee(activationFee)}',
             'Phí thanh toán QR bằng Ví trả sau: ${formatFee(qrPaymentFee)}',
             'Phí thanh toán dư nợ: ${formatFee(repaymentFee)}',
+            for (final tier in tiers)
+              'Phí chậm trả bậc ${tier['tier']} (${tier['label']}): ${tier['percent_text'] ?? tier['percent']}% tổng dư nợ kỳ sao kê',
             if ((feeRules['summary'] ?? '').toString().isNotEmpty)
               feeRules['summary'].toString(),
           ],
@@ -2186,16 +2521,24 @@ class _RepayPostpaidSheetState extends State<_RepayPostpaidSheet> {
 
 class _ManagePostpaidWalletSheet extends StatelessWidget {
   final String status;
+  final String? lockReason;
   final int usedAmount;
+  final int overdueDebtTotal;
+  final String? latestUnlockStatus;
   final VoidCallback onFreezeTap;
   final VoidCallback onUnfreezeTap;
+  final VoidCallback onUnlockRequestTap;
   final VoidCallback onCloseTap;
 
   const _ManagePostpaidWalletSheet({
     required this.status,
+    required this.lockReason,
     required this.usedAmount,
+    required this.overdueDebtTotal,
+    required this.latestUnlockStatus,
     required this.onFreezeTap,
     required this.onUnfreezeTap,
+    required this.onUnlockRequestTap,
     required this.onCloseTap,
   });
 
@@ -2203,7 +2546,11 @@ class _ManagePostpaidWalletSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final isFrozen = status == 'FROZEN';
     final isPastDue = status == 'PAST_DUE';
+    final isOverdueRepeatLock = isFrozen && lockReason == 'OVERDUE_REPEAT';
+    final isAdminFreeze = isFrozen && lockReason == 'ADMIN_FREEZE';
     final hasDebt = usedAmount > 0;
+    final hasOverdueDebt = overdueDebtTotal > 0;
+    final isUnlockPending = latestUnlockStatus == 'PENDING';
 
     final Color statusBg;
     final Color statusFg;
@@ -2213,14 +2560,46 @@ class _ManagePostpaidWalletSheet extends StatelessWidget {
       statusFg = const Color(0xFFB91C1C);
       statusLabel = 'Quá hạn';
     } else if (isFrozen) {
-      statusBg = const Color(0xFFFEF3C7);
-      statusFg = const Color(0xFFB45309);
+      statusBg = isAdminFreeze
+          ? const Color(0xFFFEE2E2)
+          : const Color(0xFFFEF3C7);
+      statusFg = isAdminFreeze
+          ? const Color(0xFFB91C1C)
+          : const Color(0xFFB45309);
       statusLabel = 'Đang tạm khóa';
     } else {
       statusBg = const Color(0xFFDCFCE7);
       statusFg = const Color(0xFF15803D);
       statusLabel = 'Đang hoạt động';
     }
+
+    final bool primaryActionEnabled =
+        !isPastDue &&
+        !isAdminFreeze &&
+        (!isOverdueRepeatLock || (!hasOverdueDebt && !isUnlockPending));
+
+    final String primaryTitle = isOverdueRepeatLock
+        ? 'Gửi yêu cầu mở khóa ví'
+        : isFrozen
+        ? 'Mở khóa Ví trả sau'
+        : 'Tạm khóa Ví trả sau';
+
+    final String primarySubtitle = isPastDue
+        ? 'Không thể tạm khóa khi ví đang có dư nợ quá hạn'
+        : isAdminFreeze
+        ? 'Ví đang bị Quản trị viên tạm khóa, không thể tự mở khóa'
+        : isOverdueRepeatLock
+        ? (hasOverdueDebt
+              ? 'Cần thanh toán hết dư nợ quá hạn trước khi gửi ảnh chứng minh thu nhập'
+              : isUnlockPending
+              ? 'Hồ sơ mở khóa của bạn đang chờ Quản trị viên xét duyệt'
+              : 'Gửi 1–3 ảnh chứng minh thu nhập để Quản trị viên xét duyệt mở lại')
+        : isFrozen
+        ? 'Khôi phục thanh toán QR bằng Ví trả sau'
+        : 'Ngưng chi tiêu QR tạm thời; hạn mức và lịch sử được giữ nguyên';
+
+    final bool canCloseWallet =
+        !hasDebt && !isOverdueRepeatLock && !isAdminFreeze;
 
     return SafeArea(
       top: false,
@@ -2275,37 +2654,44 @@ class _ManagePostpaidWalletSheet extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             _ManageActionTile(
-              icon: isFrozen ? Iconsax.unlock : Iconsax.lock_1,
-              iconColor: isPastDue
+              icon: isOverdueRepeatLock
+                  ? Iconsax.document_upload
+                  : isFrozen
+                  ? Iconsax.unlock
+                  : Iconsax.lock_1,
+              iconColor: !primaryActionEnabled
                   ? kTfMuted
                   : isFrozen
                   ? const Color(0xFF15803D)
                   : const Color(0xFFD97706),
-              iconBg: isPastDue
+              iconBg: !primaryActionEnabled
                   ? Colors.grey.shade100
                   : isFrozen
                   ? const Color(0xFFDCFCE7)
                   : const Color(0xFFFEF3C7),
-              title: isFrozen ? 'Mở khóa Ví trả sau' : 'Tạm khóa Ví trả sau',
-              subtitle: isPastDue
-                  ? 'Không thể tạm khóa khi ví đang có dư nợ quá hạn'
+              title: primaryTitle,
+              subtitle: primarySubtitle,
+              enabled: primaryActionEnabled,
+              onTap: isOverdueRepeatLock
+                  ? onUnlockRequestTap
                   : isFrozen
-                  ? 'Khôi phục thanh toán QR bằng Ví trả sau'
-                  : 'Ngưng chi tiêu QR tạm thời; hạn mức và lịch sử được giữ nguyên',
-              enabled: !isPastDue,
-              onTap: isFrozen ? onUnfreezeTap : onFreezeTap,
+                  ? onUnfreezeTap
+                  : onFreezeTap,
             ),
             const SizedBox(height: 10),
             _ManageActionTile(
               icon: Iconsax.close_circle,
-              iconColor: hasDebt ? kTfMuted : kPostpaidExpense,
-              iconBg: hasDebt
-                  ? Colors.grey.shade100
-                  : kPostpaidExpense.withValues(alpha: 0.1),
+              iconColor: canCloseWallet ? kPostpaidExpense : kTfMuted,
+              iconBg: canCloseWallet
+                  ? kPostpaidExpense.withValues(alpha: 0.1)
+                  : Colors.grey.shade100,
               title: 'Hủy Ví trả sau',
-              subtitle: hasDebt
+              subtitle: (isOverdueRepeatLock || isAdminFreeze)
+                  ? 'Ví đang bị khóa bởi hệ thống/Quản trị viên, không thể tự hủy ví'
+                  : hasDebt
                   ? 'Cần thanh toán hết dư nợ (${FormatUtils.formatDisplayNumber(usedAmount)}đ) trước khi hủy'
                   : 'Đóng dịch vụ Ví trả sau; vẫn có thể kích hoạt lại sau này',
+              enabled: canCloseWallet,
               onTap: onCloseTap,
             ),
           ],

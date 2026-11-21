@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:app/core/network/api_client.dart';
 import 'package:app/core/network/api_config.dart';
 import 'package:app/core/network/api_error_handler.dart';
@@ -153,5 +155,83 @@ class PostpaidService {
         'linked_bank_account_id': linkedBankAccountId,
     },
   );
+
+  Future<Map<String, dynamic>> getLatestUnlockRequest() async {
+    try {
+      final result = await api.get(ApiConfig.postpaidLatestUnlockRequest);
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'data': result.data['data'],
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> submitUnlockRequest({
+    required List<File> proofImages,
+    String? userNote,
+  }) async {
+    if (proofImages.isEmpty || proofImages.length > 3) {
+      return {
+        'is_success': false,
+        'message': 'Vui lòng chọn từ 1 đến 3 ảnh chứng minh thu nhập',
+      };
+    }
+
+    try {
+      final multipartFiles = <MultipartFile>[];
+      for (var i = 0; i < proofImages.length; i++) {
+        final file = proofImages[i];
+        if (!file.existsSync()) {
+          return {
+            'is_success': false,
+            'message': 'Tệp ảnh thứ ${i + 1} không tồn tại, vui lòng chọn lại',
+          };
+        }
+        final bytes = file.lengthSync();
+        if (bytes > 8 * 1024 * 1024) {
+          return {
+            'is_success': false,
+            'message': 'Mỗi ảnh chứng minh thu nhập không được vượt quá 8MB',
+          };
+        }
+        final lowerPath = file.path.toLowerCase();
+        final isPng = lowerPath.endsWith('.png');
+        final fileName = 'proof_${i + 1}.${isPng ? 'png' : 'jpg'}';
+        multipartFiles.add(
+          await MultipartFile.fromFile(
+            file.path,
+            filename: fileName,
+            contentType: DioMediaType('image', isPng ? 'png' : 'jpeg'),
+          ),
+        );
+      }
+
+      final cleanNote = userNote?.trim() ?? '';
+      final formData = FormData.fromMap({
+        'proof_images': multipartFiles,
+        if (cleanNote.isNotEmpty) 'user_note': cleanNote,
+      });
+
+      final result = await api.post(
+        ApiConfig.postpaidUnlockRequests,
+        data: formData,
+        options: Options(
+          contentType: 'multipart/form-data',
+          sendTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 60),
+        ),
+      );
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'data': result.data['data'],
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
 }
 

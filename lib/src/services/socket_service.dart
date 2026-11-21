@@ -61,8 +61,20 @@ class SocketService {
 
   void _registerListeners() {
     socket!.on('wallet_balance_updated', (data) {
+      if (!Get.isRegistered<UserController>() || data is! Map) return;
+      final balance = data['balance'];
+      if (balance == null) return;
+      Get.find<UserController>().balance.value = balance.toString();
+    });
+
+    socket!.on('postpaid_wallet_updated', (data) {
+      if (!Get.isRegistered<UserController>()) return;
       final userController = Get.find<UserController>();
-      userController.balance.value = data['balance'].toString();
+      if (data is Map) {
+        userController.notifyPostpaidUpdated(Map<String, dynamic>.from(data));
+      } else {
+        userController.postpaidRefreshTick.value++;
+      }
     });
 
     socket!.on('token_expired', (_) => _reauthenticate());

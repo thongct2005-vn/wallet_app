@@ -1,12 +1,16 @@
 package com.example.app
 
+import android.app.Activity
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
@@ -19,8 +23,10 @@ import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import kotlin.math.max
 
 class MainActivity : FlutterFragmentActivity() {
     private val galleryChannel = "com.example.app/gallery"
@@ -29,11 +35,19 @@ class MainActivity : FlutterFragmentActivity() {
     private val connectivityMethodChannel = "com.example.app/connectivity"
     private val connectivityEventChannel = "com.example.app/connectivity_events"
 
+    companion object {
+        private const val PICK_PROOF_IMAGES_REQUEST = 4102
+        private const val MAX_DIRECT_IMAGE_BYTES = 7 * 1024 * 1024
+        private const val MAX_SCALED_DIMENSION = 2048
+    }
+
     @Volatile
     private var keepSplashOnScreen = true
     private val mainHandler = Handler(Looper.getMainLooper())
     private val fallbackReleaseSplash = Runnable { releaseSplash() }
     private val pendingFocusWaiters = mutableListOf<Pair<MethodChannel.Result, Runnable>>()
+    private var pendingPickProofImagesResult: MethodChannel.Result? = null
+    private var pendingPickProofImagesMaxCount: Int = 3
     private var connectivityEventSink: EventChannel.EventSink? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var pendingLostCheck: Runnable? = null
@@ -74,22 +88,27 @@ class MainActivity : FlutterFragmentActivity() {
             }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, galleryChannel)
             .setMethodCallHandler { call, result ->
-                if (call.method == "saveImage") {
-                    val bytes = call.argument<ByteArray>("bytes")
-                    val fileName = call.argument<String>("fileName")
-                        ?: "lumapay_qr_${System.currentTimeMillis()}.png"
-                    if (bytes == null || bytes.isEmpty()) {
-                        result.error("INVALID_ARGS", "Empty image bytes", null)
-                        return@setMethodCallHandler
+                when (call.method) {
+                    "saveImage" -> {
+                        val bytes = call.argument<ByteArray>("bytes")
+                        val fileName = call.argument<String>("fileName")
+                            ?: "lumapay_qr_${System.currentTimeMillis()}.png"
+                        if (bytes == null || bytes.isEmpty()) {
+                            result.error("INVALID_ARGS", "Empty image bytes", null)
+                            return@setMethodCallHandler
+                        }
+                        try {
+                            val savedPath = savePngToGallery(bytes, fileName)
+                            result.success(savedPath)
+                        } catch (e: Exception) {
+                            result.error("SAVE_FAILED", e.message, null)
+                        }
                     }
-                    try {
-                        val savedPath = savePngToGallery(bytes, fileName)
-                        result.success(savedPath)
-                    } catch (e: Exception) {
-                        result.error("SAVE_FAILED", e.message, null)
+                    "pickProofImages" -> {
+                        val maxCount = (call.argument<Int>("maxCount") ?: 3).coerceIn(1, 3)
+                        launchProofImagePicker(maxCount, result)
                     }
-                } else {
-                    result.notImplemented()
+                    else -> result.notImplemented()
                 }
             }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, connectivityMethodChannel)
@@ -186,8 +205,165 @@ class MainActivity : FlutterFragmentActivity() {
         window?.decorView?.postInvalidate()
     }
 
+    private fun launchProofImagePicker(maxCount: Int, result: MethodChannel.Result) {
+        pendingPickProofImagesResult?.let { previous ->
+            try {
+                previous.success(emptyList<String>())
+            } catch (_: IllegalStateException) {}
+        }
+        pendingPickProofImagesResult = result
+        pendingPickProofImagesMaxCount = maxCount
+
+        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            type = "image/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/jpeg", "image/jpg", "image/png"))
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, maxCount > 1)
+            addCategory(Intent.CATEGORY_OPENABLE)
+        }
+        try {
+            @Suppress("DEPRECATION")
+            startActivityForResult(
+                Intent.createChooser(intent, "Chọn ảnh chứng minh thu nhập"),
+                PICK_PROOF_IMAGES_REQUEST,
+            )
+        } catch (e: Exception) {
+            pendingPickProofImagesResult = null
+            result.error("PICKER_UNAVAILABLE", e.message ?: "Không mở được thư viện ảnh", null)
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == PICK_PROOF_IMAGES_REQUEST) {
+            val pending = pendingPickProofImagesResult
+            val maxCount = pendingPickProofImagesMaxCount
+            pendingPickProofImagesResult = null
+            if (pending == null) return
+
+            if (resultCode != Activity.RESULT_OK || data == null) {
+                pending.success(emptyList<String>())
+                return
+            }
+
+            val uris = mutableListOf<Uri>()
+            val clip = data.clipData
+            if (clip != null) {
+                for (i in 0 until clip.itemCount) {
+                    clip.getItemAt(i)?.uri?.let { uris.add(it) }
+                    if (uris.size >= maxCount) break
+                }
+            } else {
+                data.data?.let { uris.add(it) }
+            }
+
+            if (uris.isEmpty()) {
+                pending.success(emptyList<String>())
+                return
+            }
+
+            Thread {
+                try {
+                    val paths = uris.take(maxCount).mapIndexedNotNull { idx, uri ->
+                        copyProofImageToCache(uri, idx)
+                    }
+                    mainHandler.post {
+                        try {
+                            pending.success(paths)
+                        } catch (_: IllegalStateException) {}
+                    }
+                } catch (e: Exception) {
+                    mainHandler.post {
+                        try {
+                            pending.error(
+                                "IMAGE_READ_FAILED",
+                                e.message ?: "Không đọc được ảnh đã chọn",
+                                null,
+                            )
+                        } catch (_: IllegalStateException) {}
+                    }
+                }
+            }.start()
+            return
+        }
+        super.onActivityResult(requestCode, resultCode, data)
+    }
+
+    private fun copyProofImageToCache(uri: Uri, index: Int): String? {
+        val resolver = applicationContext.contentResolver
+        val proofDir = File(cacheDir, "postpaid_proofs").apply {
+            if (!exists()) mkdirs()
+        }
+        // Dọn ảnh tạm quá 1 giờ để tránh tích lũy bộ nhớ cache.
+        val cutoff = System.currentTimeMillis() - 60 * 60 * 1000L
+        proofDir.listFiles()?.forEach { oldFile ->
+            if (oldFile.lastModified() < cutoff) {
+                oldFile.delete()
+            }
+        }
+
+        val rawBytes = resolver.openInputStream(uri)?.use { input ->
+            val buffer = ByteArrayOutputStream()
+            val chunk = ByteArray(16 * 1024)
+            var read: Int
+            var total = 0
+            while (input.read(chunk).also { read = it } != -1) {
+                total += read
+                if (total > 25 * 1024 * 1024) {
+                    throw IllegalStateException("Ảnh quá lớn để xử lý")
+                }
+                buffer.write(chunk, 0, read)
+            }
+            buffer.toByteArray()
+        } ?: return null
+
+        if (rawBytes.isEmpty()) return null
+
+        val mime = resolver.getType(uri)?.lowercase() ?: ""
+        val stamp = "${System.currentTimeMillis()}_$index"
+        val isSupportedDirectType =
+            mime == "image/jpeg" || mime == "image/jpg" || mime == "image/png"
+
+        if (isSupportedDirectType && rawBytes.size <= MAX_DIRECT_IMAGE_BYTES) {
+            val ext = if (mime == "image/png") "png" else "jpg"
+            val outFile = File(proofDir, "proof_$stamp.$ext")
+            FileOutputStream(outFile).use { it.write(rawBytes) }
+            return outFile.absolutePath
+        }
+
+        // Chuyển các định dạng khác (WebP/HEIC) hoặc ảnh quá 7MB sang JPEG chuẩn <= 8MB.
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, bounds)
+        val longestSide = max(bounds.outWidth, bounds.outHeight)
+        var sampleSize = 1
+        while (longestSide / sampleSize > MAX_SCALED_DIMENSION) {
+            sampleSize *= 2
+        }
+        val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+        val bitmap = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, decodeOpts)
+            ?: throw IllegalStateException("Định dạng tệp ảnh không được hỗ trợ")
+
+        try {
+            val outFile = File(proofDir, "proof_$stamp.jpg")
+            FileOutputStream(outFile).use { out ->
+                if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 88, out)) {
+                    throw IllegalStateException("Không thể chuyển đổi ảnh")
+                }
+                out.flush()
+            }
+            return outFile.absolutePath
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
     override fun onDestroy() {
         mainHandler.removeCallbacks(fallbackReleaseSplash)
+        pendingPickProofImagesResult?.let { pending ->
+            try {
+                pending.success(emptyList<String>())
+            } catch (_: IllegalStateException) {}
+        }
+        pendingPickProofImagesResult = null
         unregisterNetworkMonitor()
         connectivityEventSink = null
         flushFocusWaiters(false)
