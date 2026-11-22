@@ -436,7 +436,12 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
     } else if (ppStatus == 'PAST_DUE') {
       ppSubtitle = 'Ví đang quá hạn thanh toán';
     } else if (ppStatus != 'ACTIVE') {
-      ppSubtitle = 'Ví trả sau đang tạm khóa';
+      final lockReason = ppData?['lock_reason']?.toString();
+      ppSubtitle = lockReason == 'OVERDUE_REPEAT'
+          ? 'Khóa do quá hạn lặp lại'
+          : lockReason == 'ADMIN_FREEZE'
+          ? 'Đang bị Quản trị viên tạm khóa'
+          : 'Ví trả sau đang tạm khóa';
     } else {
       ppSubtitle = '${FormatUtils.formatDisplayNumber(ppAvailable)}đ';
     }

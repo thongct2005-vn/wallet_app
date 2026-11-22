@@ -391,51 +391,110 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
   Future<void> _confirmFreezeWallet() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dlgCtx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Text(
-          'Tạm khóa Ví trả sau?',
-          style: GoogleFonts.roboto(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: kTfText,
+      builder: (dlgCtx) => Dialog(
+        backgroundColor: Colors.white,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 24, 22, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Iconsax.lock_1,
+                  size: 26,
+                  color: Color(0xFFD97706),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Tạm khóa Ví trả sau?',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.roboto(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: kTfText,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: kTfBg,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  'Trong thời gian tạm khóa, bạn sẽ không thể dùng Ví trả sau để thanh toán QR. Hạn mức và lịch sử sao kê vẫn được giữ nguyên, và bạn vẫn có thể trả dư nợ hoặc mở khóa bất cứ lúc nào.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.roboto(
+                    fontSize: 13.5,
+                    height: 1.45,
+                    color: kTfMuted,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 46,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(dlgCtx, false),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: kTfPink,
+                          side: const BorderSide(color: kTfPink, width: 1.4),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'Để sau',
+                          style: GoogleFonts.roboto(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 46,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(dlgCtx, true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: kTfPink,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'Tạm khóa',
+                          style: GoogleFonts.roboto(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
-        content: Text(
-          'Trong thời gian tạm khóa, bạn sẽ không thể dùng Ví trả sau để thanh toán QR. Hạn mức và lịch sử sao kê vẫn được giữ nguyên, và bạn vẫn có thể thanh toán dư nợ hoặc mở khóa bất cứ lúc nào.',
-          style: GoogleFonts.roboto(
-            fontSize: 14,
-            height: 1.45,
-            color: kTfMuted,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dlgCtx, false),
-            child: Text(
-              'Hủy',
-              style: GoogleFonts.roboto(
-                fontWeight: FontWeight.w600,
-                color: kTfMuted,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dlgCtx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kTfPink,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: Text(
-              'Tiếp tục',
-              style: GoogleFonts.roboto(fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
       ),
     );
 
@@ -1144,8 +1203,12 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
                         isPastDue
                             ? 'Quá hạn thanh toán'
                             : isFrozen
-                                ? 'Đang tạm khóa'
-                                : 'Đang hoạt động',
+                            ? (lockReason == 'OVERDUE_REPEAT'
+                                  ? 'Khóa quá hạn lặp lại'
+                                  : lockReason == 'ADMIN_FREEZE'
+                                  ? 'Quản trị viên tạm khóa'
+                                  : 'Đang tạm khóa')
+                            : 'Đang hoạt động',
                         style: GoogleFonts.roboto(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w700,
@@ -1451,6 +1514,167 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
     );
   }
 
+  Widget _buildFrozenStatusCard({
+    required IconData icon,
+    required Color accentColor,
+    required Color iconBgColor,
+    required String badgeText,
+    required String title,
+    required String body,
+    String? extraHighlight,
+    String? actionLabel,
+    IconData? actionIcon,
+    VoidCallback? onActionPressed,
+    bool useOutlinedAction = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: accentColor.withValues(alpha: 0.24)),
+        boxShadow: [
+          BoxShadow(
+            color: kTfPink.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: iconBgColor,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, size: 20, color: accentColor),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: GoogleFonts.roboto(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: kTfText,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: iconBgColor,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        badgeText,
+                        style: GoogleFonts.roboto(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: accentColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            body,
+            style: GoogleFonts.roboto(
+              fontSize: 13,
+              height: 1.45,
+              color: kTfMuted,
+            ),
+          ),
+          if (extraHighlight != null && extraHighlight.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: iconBgColor.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                extraHighlight,
+                style: GoogleFonts.roboto(
+                  fontSize: 12.5,
+                  height: 1.4,
+                  fontWeight: FontWeight.w500,
+                  color: accentColor,
+                ),
+              ),
+            ),
+          ],
+          if (actionLabel != null && onActionPressed != null) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: useOutlinedAction
+                  ? OutlinedButton.icon(
+                      onPressed: _isProcessingLifecycle ? null : onActionPressed,
+                      icon: Icon(actionIcon ?? Icons.refresh_rounded, size: 18),
+                      label: Text(
+                        actionLabel,
+                        style: GoogleFonts.roboto(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: kTfPinkDark,
+                        side: BorderSide(
+                          color: kTfPink.withValues(alpha: 0.45),
+                          width: 1.3,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    )
+                  : ElevatedButton.icon(
+                      onPressed: _isProcessingLifecycle ? null : onActionPressed,
+                      icon: Icon(actionIcon ?? Iconsax.unlock, size: 18),
+                      label: Text(
+                        actionLabel,
+                        style: GoogleFonts.roboto(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kTfPink,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildFrozenBanner({
     required String? lockReason,
     required int overdueDebtTotal,
@@ -1466,254 +1690,95 @@ class _PostpaidScreenState extends State<PostpaidScreen> {
       final isRejected = reqStatus == 'REJECTED';
       final needsRepay = overdueDebtTotal > 0;
 
-      final Color bgColor = isRejected
-          ? const Color(0xFFFEF2F2)
-          : isPending
-          ? const Color(0xFFEFF6FF)
-          : const Color(0xFFFFFBEB);
-      final Color borderColor = isRejected
-          ? const Color(0xFFFECACA)
-          : isPending
-          ? const Color(0xFFBFDBFE)
-          : const Color(0xFFFDE68A);
-      final Color accentColor = isRejected
-          ? const Color(0xFFB91C1C)
-          : isPending
-          ? const Color(0xFF1D4ED8)
-          : const Color(0xFFB45309);
-      final Color textColor = isRejected
-          ? const Color(0xFF991B1B)
-          : isPending
-          ? const Color(0xFF1E3A8A)
-          : const Color(0xFF78350F);
+      if (needsRepay) {
+        return _buildFrozenStatusCard(
+          icon: Iconsax.lock_1,
+          accentColor: const Color(0xFFD97706),
+          iconBgColor: const Color(0xFFFEF3C7),
+          badgeText: 'Khóa quá hạn lặp lại',
+          title: 'Ví bị khóa do quá hạn từ lần thứ 2 trở lên',
+          body:
+              'Vui lòng thanh toán hết dư nợ kỳ quá hạn (${FormatUtils.formatDisplayNumber(overdueDebtTotal)}đ) trước khi gửi 1–3 ảnh chứng minh thu nhập cho Quản trị viên duyệt mở lại.',
+          actionLabel: 'Thanh toán dư nợ ngay',
+          actionIcon: Iconsax.wallet_check,
+          onActionPressed: _openRepaySheet,
+        );
+      }
 
-      final String title = needsRepay
-          ? 'Ví bị khóa do quá hạn từ lần thứ 2 trở lên'
-          : isPending
-          ? 'Hồ sơ mở khóa đang chờ xét duyệt'
-          : isRejected
-          ? 'Yêu cầu mở khóa trước đó bị từ chối'
-          : 'Cần gửi ảnh chứng minh thu nhập để mở lại ví';
+      if (isPending) {
+        return _buildFrozenStatusCard(
+          icon: Iconsax.document_text,
+          accentColor: kTfPinkDark,
+          iconBgColor: kTfPink.withValues(alpha: 0.1),
+          badgeText: 'Đang chờ xét duyệt',
+          title: 'Hồ sơ mở khóa đang chờ duyệt',
+          body:
+              'Bạn đã gửi $proofCount ảnh chứng minh thu nhập. Quản trị viên đang kiểm tra và sẽ phản hồi sớm.',
+          extraHighlight: userNote != null && userNote.isNotEmpty
+              ? 'Ghi chú của bạn: "$userNote"'
+              : null,
+          actionLabel: 'Kiểm tra trạng thái duyệt',
+          actionIcon: Icons.refresh_rounded,
+          onActionPressed: _refreshUnlockRequestStatus,
+          useOutlinedAction: true,
+        );
+      }
 
-      final String body = needsRepay
-          ? 'Vui lòng thanh toán hết dư nợ kỳ quá hạn (${FormatUtils.formatDisplayNumber(overdueDebtTotal)}đ) trước khi gửi 1–3 ảnh chứng minh thu nhập cho Quản trị viên duyệt mở lại.'
-          : isPending
-          ? 'Đã gửi $proofCount ảnh chứng minh thu nhập${userNote != null && userNote.isNotEmpty ? ' • Ghi chú: "$userNote"' : ''}. Quản trị viên đang kiểm tra và sẽ phản hồi sớm.'
-          : isRejected
-          ? '${adminNote != null && adminNote.isNotEmpty ? 'Lý do từ chối: $adminNote. ' : ''}Bạn có thể bổ sung 1–3 ảnh chứng minh thu nhập rõ ràng hơn để gửi lại yêu cầu.'
-          : 'Bạn đã tất toán kỳ nợ quá hạn. Vui lòng gửi 1–3 ảnh chứng minh thu nhập (bảng lương, sao kê ngân hàng...) để Quản trị viên mở khóa lại Ví trả sau.';
+      if (isRejected) {
+        return _buildFrozenStatusCard(
+          icon: Iconsax.warning_2,
+          accentColor: kPostpaidExpense,
+          iconBgColor: const Color(0xFFFEE2E2),
+          badgeText: 'Hồ sơ bị từ chối',
+          title: 'Yêu cầu mở khóa trước đó bị từ chối',
+          body:
+              'Bạn có thể chụp hoặc chọn 1–3 ảnh chứng minh thu nhập rõ ràng hơn để gửi lại yêu cầu mở khóa.',
+          extraHighlight: adminNote != null && adminNote.isNotEmpty
+              ? 'Lý do từ chối: $adminNote'
+              : null,
+          actionLabel: 'Gửi lại hồ sơ mở khóa',
+          actionIcon: Iconsax.document_upload,
+          onActionPressed: _openUnlockRequestSheet,
+        );
+      }
 
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: borderColor),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Icon(
-                isPending ? Iconsax.document_text : Iconsax.lock_1,
-                size: 20,
-                color: accentColor,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: GoogleFonts.roboto(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w700,
-                      color: accentColor,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    body,
-                    style: GoogleFonts.roboto(
-                      fontSize: 12.5,
-                      height: 1.4,
-                      color: textColor,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    height: 36,
-                    child: ElevatedButton.icon(
-                      onPressed: _isProcessingLifecycle
-                          ? null
-                          : needsRepay
-                          ? _openRepaySheet
-                          : isPending
-                          ? _refreshUnlockRequestStatus
-                          : _openUnlockRequestSheet,
-                      icon: Icon(
-                        needsRepay
-                            ? Iconsax.wallet_check
-                            : isPending
-                            ? Icons.refresh_rounded
-                            : Iconsax.document_upload,
-                        size: 16,
-                      ),
-                      label: Text(
-                        needsRepay
-                            ? 'Thanh toán dư nợ ngay'
-                            : isPending
-                            ? 'Kiểm tra trạng thái duyệt'
-                            : isRejected
-                            ? 'Gửi lại hồ sơ mở khóa'
-                            : 'Gửi ảnh chứng minh thu nhập',
-                        style: GoogleFonts.roboto(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: accentColor,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+      return _buildFrozenStatusCard(
+        icon: Iconsax.document_upload,
+        accentColor: const Color(0xFFD97706),
+        iconBgColor: const Color(0xFFFEF3C7),
+        badgeText: 'Cần xác minh thu nhập',
+        title: 'Gửi ảnh chứng minh thu nhập để mở lại ví',
+        body:
+            'Bạn đã tất toán xong kỳ nợ quá hạn. Vui lòng gửi 1–3 ảnh chứng minh thu nhập (bảng lương, sao kê ngân hàng...) để Quản trị viên mở khóa lại Ví trả sau.',
+        actionLabel: 'Gửi ảnh chứng minh thu nhập',
+        actionIcon: Iconsax.document_upload,
+        onActionPressed: _openUnlockRequestSheet,
       );
     }
 
     if (lockReason == 'ADMIN_FREEZE') {
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFEF2F2),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFFECACA)),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(top: 2),
-              child: Icon(
-                Iconsax.shield_cross,
-                size: 20,
-                color: Color(0xFFB91C1C),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Ví trả sau đang bị Quản trị viên tạm khóa',
-                    style: GoogleFonts.roboto(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF991B1B),
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    'Bạn không thể tự mở khóa hoặc thanh toán QR lúc này, nhưng vẫn có thể trả dư nợ. Vui lòng liên hệ bộ phận hỗ trợ nếu cần kiểm tra mở lại.',
-                    style: GoogleFonts.roboto(
-                      fontSize: 12.5,
-                      height: 1.4,
-                      color: const Color(0xFF7F1D1D),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+      return _buildFrozenStatusCard(
+        icon: Iconsax.shield_cross,
+        accentColor: kPostpaidExpense,
+        iconBgColor: const Color(0xFFFEE2E2),
+        badgeText: 'Quản trị viên tạm khóa',
+        title: 'Ví trả sau đang bị Quản trị viên tạm khóa',
+        body:
+            'Bạn không thể thanh toán QR hay tự mở khóa lúc này, nhưng vẫn có thể trả dư nợ hiện có. Vui lòng liên hệ bộ phận hỗ trợ nếu cần mở lại ví.',
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFBEB),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFFDE68A)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 2),
-            child: Icon(
-              Iconsax.lock_1,
-              size: 20,
-              color: Color(0xFFB45309),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Ví trả sau đang tạm khóa chi tiêu',
-                  style: GoogleFonts.roboto(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF92400E),
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  'Bạn không thể thanh toán QR lúc này. Hạn mức, lịch sử được giữ nguyên và bạn vẫn có thể trả dư nợ.',
-                  style: GoogleFonts.roboto(
-                    fontSize: 12.5,
-                    height: 1.4,
-                    color: const Color(0xFF78350F),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 34,
-                  child: ElevatedButton.icon(
-                    onPressed: _isProcessingLifecycle
-                        ? null
-                        : _confirmUnfreezeWallet,
-                    icon: const Icon(Iconsax.unlock, size: 15),
-                    label: Text(
-                      'Mở khóa ví',
-                      style: GoogleFonts.roboto(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFD97706),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return _buildFrozenStatusCard(
+      icon: Iconsax.lock_1,
+      accentColor: const Color(0xFFD97706),
+      iconBgColor: const Color(0xFFFEF3C7),
+      badgeText: 'Bạn đã tạm khóa',
+      title: 'Ví trả sau đang tạm khóa chi tiêu',
+      body:
+          'Bạn không thể thanh toán QR lúc này. Hạn mức và lịch sử sao kê vẫn được giữ nguyên, và bạn có thể mở khóa lại bất cứ lúc nào.',
+      actionLabel: 'Mở khóa ví ngay',
+      actionIcon: Iconsax.unlock,
+      onActionPressed: _confirmUnfreezeWallet,
     );
   }
 
