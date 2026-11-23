@@ -176,8 +176,6 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
     if (mounted) {
       setState(() => _isLoadingFeePreview = true);
     }
-    final isQrPayment =
-        widget.referenceCode != null && widget.referenceCode!.isNotEmpty;
     final res = await _transactionService.previewFee(
       transactionType: widget.isMerchant ? 'QR_PAYMENT' : 'TRANSFER',
       amount: numAmount,
