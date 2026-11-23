@@ -259,6 +259,7 @@ class _ScanQRScreenState extends State<ScanQRScreen>
       rawAmount: amount,
       neededAmount: needed,
       isQrPayment: true,
+      isMerchant: isMerchant,
     );
     if (!mounted || _isDisposed) return;
 

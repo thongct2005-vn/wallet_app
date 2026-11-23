@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
@@ -8,6 +9,7 @@ import 'package:app/src/topup_withdraw/topup_withdraw_screen.dart';
 import 'package:app/src/transfer/amount_input_screen.dart';
 import 'package:app/src/transfer/transfer_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
@@ -59,7 +61,10 @@ class TransactionDetailScreen extends StatelessWidget {
             : 'Ví trả sau';
     final bool isPostpaidRefund =
         transactionModel.fundingSource == 'POSTPAID' &&
-        transactionModel.postpaidAction == 'REFUND';
+        (transactionModel.postpaidAction == 'REFUND' ||
+            transactionModel.type == 'REFUND');
+    final bool isWalletRefund =
+        transactionModel.type == "REFUND" && !isPostpaidRefund;
     final bool isMerchant =
         transactionModel.type == "PAYMENT" && !isPostpaidRepay;
     final bool isTransfer =
@@ -97,7 +102,7 @@ class TransactionDetailScreen extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: TransferAppBarTitle(
-          (isMerchant || isPostpaidRepay || isPostpaidRefund)
+          (isMerchant || isPostpaidRepay || isPostpaidRefund || isWalletRefund)
               ? title
               : "Chi tiết giao dịch",
         ),
@@ -281,30 +286,20 @@ class TransactionDetailScreen extends StatelessWidget {
                       ),
                     ),
                     _infoRow("Thời gian", time),
-                    _infoRow(
+                    _copyableInfoRow(
                       "Mã giao dịch",
-                      null,
-                      trailingWidget: Flexible(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                transactionCode,
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.roboto(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  color: kTfPinkDark,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            const Icon(Iconsax.copy, size: 18, color: kTfPink),
-                          ],
-                        ),
-                      ),
+                      transactionCode,
+                      copySubject: "mã giao dịch",
                     ),
+                    if ((isPostpaidRefund || isWalletRefund) &&
+                        (transactionModel.originalTransactionId ?? '')
+                            .trim()
+                            .isNotEmpty)
+                      _copyableInfoRow(
+                        "Mã giao dịch gốc",
+                        transactionModel.originalTransactionId!.trim(),
+                        copySubject: "mã giao dịch gốc",
+                      ),
                     if (isTransfer) ...[
                       _infoRow(
                         transactionModel.fundingSource == 'BANK'
@@ -320,6 +315,27 @@ class TransactionDetailScreen extends StatelessWidget {
                     ] else if (isPostpaidRefund) ...[
                       _infoRow("Tài khoản hoàn", walletName),
                       _infoRow("Cửa hàng", transactionModel.counterpartyName),
+                      if (!isFailed &&
+                          (transactionModel.description ?? '')
+                              .trim()
+                              .isNotEmpty)
+                        _infoRow("Nội dung", transactionModel.description!),
+                      if ((transactionModel.orderId ?? '').trim().isNotEmpty)
+                        _infoRow("Mã đơn", transactionModel.orderId!),
+                    ] else if (isWalletRefund) ...[
+                      _infoRow(
+                        transactionModel.direction == 'OUT'
+                            ? "Ví hoàn tiền"
+                            : "Ví nhận hoàn",
+                        walletName,
+                      ),
+                      if (transactionModel.counterpartyName.trim().isNotEmpty)
+                        _infoRow(
+                          transactionModel.direction == 'OUT'
+                              ? "Khách hàng"
+                              : "Cửa hàng",
+                          transactionModel.counterpartyName,
+                        ),
                       if (!isFailed &&
                           (transactionModel.description ?? '')
                               .trim()
@@ -535,6 +551,23 @@ class TransactionDetailScreen extends StatelessWidget {
     );
   }
 
+  Widget _copyableInfoRow(
+    String label,
+    String value, {
+    required String copySubject,
+  }) {
+    return _infoRow(
+      label,
+      null,
+      trailingWidget: Flexible(
+        child: _CopyableCodeText(
+          value: value,
+          successMessage: 'Đã sao chép $copySubject',
+        ),
+      ),
+    );
+  }
+
   Widget _infoRow(
     String label,
     String? value, {
@@ -564,6 +597,80 @@ class TransactionDetailScreen extends StatelessWidget {
                 ),
               ),
         ],
+      ),
+    );
+  }
+}
+
+class _CopyableCodeText extends StatefulWidget {
+  final String value;
+  final String successMessage;
+
+  const _CopyableCodeText({
+    required this.value,
+    required this.successMessage,
+  });
+
+  @override
+  State<_CopyableCodeText> createState() => _CopyableCodeTextState();
+}
+
+class _CopyableCodeTextState extends State<_CopyableCodeText> {
+  bool _copied = false;
+  Timer? _resetTimer;
+
+  @override
+  void dispose() {
+    _resetTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: widget.value));
+    HapticFeedback.lightImpact();
+    _resetTimer?.cancel();
+    if (!mounted) return;
+    setState(() => _copied = true);
+    SnackbarUtils.success(context, '${widget.successMessage}: ${widget.value}');
+    _resetTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() => _copied = false);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _copy,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  widget.value,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.roboto(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: kTfPinkDark,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                _copied ? Icons.check_rounded : Iconsax.copy,
+                size: 18,
+                color: _copied ? kTfSuccess : kTfPink,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

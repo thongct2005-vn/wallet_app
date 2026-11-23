@@ -8,19 +8,38 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:app/main.dart';
 import 'package:uuid/uuid.dart';
 
+enum _RefreshStatus { refreshed, sessionExpired, transientError }
+
+class _RefreshOutcome {
+  final _RefreshStatus status;
+  final String? accessToken;
+
+  const _RefreshOutcome._(this.status, [this.accessToken]);
+
+  const _RefreshOutcome.refreshed(String token)
+      : this._(_RefreshStatus.refreshed, token);
+
+  const _RefreshOutcome.sessionExpired()
+      : this._(_RefreshStatus.sessionExpired);
+
+  const _RefreshOutcome.transientError()
+      : this._(_RefreshStatus.transientError);
+}
+
 class ApiClient {
   static final ApiClient _instance = ApiClient._internal();
   late Dio dio;
   final _storage = const FlutterSecureStorage();
   String? _cachedDeviceId;
   Future<String>? _deviceIdFuture;
+  bool _isLoggingOut = false;
 
   static const Map<String, String> _ngrokHeaders = {
     'ngrok-skip-browser-warning': 'true',
     'User-Agent': 'LumaPayWallet/2.1.0 (Flutter)',
   };
 
-  Completer<String?>? _refreshCompleter;
+  Completer<_RefreshOutcome>? _refreshCompleter;
 
   factory ApiClient() => _instance;
 
@@ -69,24 +88,48 @@ class ApiClient {
         onError: (DioException e, handler) async {
           if (e.response?.statusCode != 401 ||
               e.requestOptions.extra['skipAuth'] == true ||
+              e.requestOptions.extra['_authRetried'] == true ||
               e.requestOptions.path.contains('/auth/refresh-token')) {
             return handler.next(e);
           }
 
-          try {
-            final newAccessToken = await _getValidAccessToken();
+          final failedAuth = e.requestOptions.headers['Authorization']
+              ?.toString();
+          final failedToken =
+              (failedAuth != null && failedAuth.startsWith('Bearer '))
+              ? failedAuth.substring(7).trim()
+              : null;
 
-            if (newAccessToken == null) {
-              await _logout();
-              return handler.next(e);
-            }
+          final outcome = await _getValidAccessToken(
+            failedAccessToken: failedToken,
+          );
 
-            e.requestOptions.headers['Authorization'] =
-                'Bearer $newAccessToken';
-            final retryResponse = await dio.fetch(e.requestOptions);
-            return handler.resolve(retryResponse);
-          } catch (err) {
+          if (outcome.status == _RefreshStatus.sessionExpired) {
             await _logout();
+            return handler.next(e);
+          }
+
+          if (outcome.status != _RefreshStatus.refreshed ||
+              outcome.accessToken == null) {
+            return handler.next(e);
+          }
+
+          final requestOptions = e.requestOptions;
+          requestOptions.extra['_authRetried'] = true;
+          requestOptions.headers['Authorization'] =
+              'Bearer ${outcome.accessToken}';
+
+          try {
+            final retryResponse = await dio.fetch(requestOptions);
+            return handler.resolve(retryResponse);
+          } on DioException catch (retryErr) {
+            // Request retry thất bại do lỗi nghiệp vụ (409, 400, 404, 422, 5xx...)
+            // không phải hết hạn phiên đăng nhập nên tuyệt đối không đăng xuất.
+            if (retryErr.response?.statusCode == 401) {
+              await _logout();
+            }
+            return handler.next(retryErr);
+          } catch (_) {
             return handler.next(e);
           }
         },
@@ -94,24 +137,40 @@ class ApiClient {
     );
   }
 
-  Future<String?> _getValidAccessToken() async {
+  Future<_RefreshOutcome> _getValidAccessToken({
+    String? failedAccessToken,
+  }) async {
     if (_refreshCompleter != null) {
       return _refreshCompleter!.future;
     }
 
-    _refreshCompleter = Completer<String?>();
+    final completer = Completer<_RefreshOutcome>();
+    _refreshCompleter = completer;
 
     try {
-      final refreshToken = await _storage.read(key: 'refresh_token');
-      if (refreshToken == null) {
-        _refreshCompleter!.complete(null);
-        return null;
+      final storedAccessToken = await _storage.read(key: 'access_token');
+      if (storedAccessToken != null &&
+          storedAccessToken.isNotEmpty &&
+          failedAccessToken != null &&
+          failedAccessToken.isNotEmpty &&
+          storedAccessToken != failedAccessToken) {
+        final outcome = _RefreshOutcome.refreshed(storedAccessToken);
+        completer.complete(outcome);
+        return outcome;
       }
 
+      final refreshToken = await _storage.read(key: 'refresh_token');
+      if (refreshToken == null || refreshToken.isEmpty) {
+        const outcome = _RefreshOutcome.sessionExpired();
+        completer.complete(outcome);
+        return outcome;
+      }
+
+      final deviceId = await _getOrCreateDeviceId();
       final refreshDio = Dio(
         BaseOptions(
           baseUrl: dio.options.baseUrl,
-          headers: _ngrokHeaders,
+          headers: {..._ngrokHeaders, 'X-Device-Id': deviceId},
           connectTimeout: const Duration(seconds: 5),
           receiveTimeout: const Duration(seconds: 5),
         ),
@@ -135,35 +194,53 @@ class ApiClient {
           newAccessToken.isEmpty ||
           newRefreshToken == null ||
           newRefreshToken.isEmpty) {
-        _refreshCompleter!.complete(null);
-        return null;
+        const outcome = _RefreshOutcome.sessionExpired();
+        completer.complete(outcome);
+        return outcome;
       }
 
       await _storage.write(key: 'access_token', value: newAccessToken);
       await _storage.write(key: 'refresh_token', value: newRefreshToken);
 
-      _refreshCompleter!.complete(newAccessToken);
-      return newAccessToken;
-    } catch (e) {
-      _refreshCompleter!.complete(null);
-      return null;
+      final outcome = _RefreshOutcome.refreshed(newAccessToken);
+      completer.complete(outcome);
+      return outcome;
+    } on DioException catch (err) {
+      final code = err.response?.statusCode;
+      final outcome = (code == 401 || code == 403)
+          ? const _RefreshOutcome.sessionExpired()
+          : const _RefreshOutcome.transientError();
+      completer.complete(outcome);
+      return outcome;
+    } catch (_) {
+      const outcome = _RefreshOutcome.transientError();
+      completer.complete(outcome);
+      return outcome;
     } finally {
-      _refreshCompleter = null;
+      if (identical(_refreshCompleter, completer)) {
+        _refreshCompleter = null;
+      }
     }
   }
 
   Future<void> _logout() async {
-    SocketService().disconnect();
-    final deviceId = await _storage.read(key: 'device_id');
-    await _storage.deleteAll();
-    if (deviceId != null && deviceId.isNotEmpty) {
-      await _storage.write(key: 'device_id', value: deviceId);
-    }
-    if (navigatorKey.currentState != null) {
-      navigatorKey.currentState!.pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const LoginPhoneScreen()),
-        (route) => false,
-      );
+    if (_isLoggingOut) return;
+    _isLoggingOut = true;
+    try {
+      SocketService().disconnect();
+      final deviceId = await _storage.read(key: 'device_id');
+      await _storage.deleteAll();
+      if (deviceId != null && deviceId.isNotEmpty) {
+        await _storage.write(key: 'device_id', value: deviceId);
+      }
+      if (navigatorKey.currentState != null) {
+        navigatorKey.currentState!.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const LoginPhoneScreen()),
+          (route) => false,
+        );
+      }
+    } finally {
+      _isLoggingOut = false;
     }
   }
 }

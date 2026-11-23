@@ -70,12 +70,13 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
 
   bool get _isQrPayment =>
       widget.referenceCode != null && widget.referenceCode!.isNotEmpty;
+  bool get _canUsePostpaid => _isQrPayment && widget.isMerchant;
 
   @override
   void initState() {
     super.initState();
     _idempotencyKey = _uuid.v7();
-    if (_isQrPayment && widget.initialFundingSource == 'POSTPAID') {
+    if (_canUsePostpaid && widget.initialFundingSource == 'POSTPAID') {
       _fundingSource = 'POSTPAID';
     } else if (widget.initialFundingSource == 'BANK') {
       _fundingSource = 'BANK';
@@ -89,7 +90,7 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
       _loadLinkedBanks();
     }
     _loadFeePreview();
-    if (_isQrPayment) {
+    if (_canUsePostpaid) {
       _loadPostpaidWallet();
     }
   }
@@ -178,12 +179,10 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
     final isQrPayment =
         widget.referenceCode != null && widget.referenceCode!.isNotEmpty;
     final res = await _transactionService.previewFee(
-      transactionType: widget.isMerchant || isQrPayment
-          ? 'QR_PAYMENT'
-          : 'TRANSFER',
+      transactionType: widget.isMerchant ? 'QR_PAYMENT' : 'TRANSFER',
       amount: numAmount,
       merchantUserId: widget.isMerchant ? widget.receiverId : null,
-      referenceCode: widget.referenceCode,
+      referenceCode: widget.isMerchant ? widget.referenceCode : null,
     );
     if (!mounted) return;
     setState(() {
@@ -218,7 +217,11 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
                   ? null
                   : () => Navigator.pop(context),
             ),
-            title: const TransferAppBarTitle("Xác nhận thanh toán"),
+            title: TransferAppBarTitle(
+              widget.isMerchant
+                  ? "Xác nhận thanh toán"
+                  : "Xác nhận chuyển tiền",
+            ),
           ),
           body: Stack(
             children: [
@@ -331,7 +334,7 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
           Divider(height: 1, color: Colors.black.withValues(alpha: 0.07)),
           _buildInfoRow(
             label: 'Số tiền',
-            value: '${widget.amount}đ',
+            value: '${FormatUtils.formatRawAmountDisplay(widget.amount ?? '0')}đ',
             bold: true,
             valueColor: kTfPinkDark,
           ),
@@ -460,7 +463,7 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
         _selectedLinkedBankAccountId = bankId;
       }),
       extraSections: [
-        if (_isQrPayment) ...[
+        if (_canUsePostpaid) ...[
           const SizedBox(height: 16),
           Padding(
             padding: const EdgeInsets.fromLTRB(2, 0, 2, 10),
@@ -694,6 +697,7 @@ class _ConfirmTranferScreenState extends State<ConfirmTranferScreen> {
               widget.referenceCode!,
               _idempotencyKey,
               pinToken,
+              description: widget.description,
               fundingSource: _fundingSource,
               linkedBankAccountId: bankIdToUse,
             );

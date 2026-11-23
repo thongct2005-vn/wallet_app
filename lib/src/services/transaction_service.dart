@@ -91,14 +91,17 @@ class TransactionService {
     String referenceCode,
     String idempotencyKey,
     String pinToken, {
+    String? description,
     String fundingSource = 'MAIN_WALLET',
     String? linkedBankAccountId,
   }) async {
     try {
+      final cleanDesc = description?.trim();
       final result = await api.post(
         ApiConfig.payment,
         data: {
           'reference_code': referenceCode,
+          if (cleanDesc != null && cleanDesc.isNotEmpty) 'description': cleanDesc,
           if (fundingSource != 'MAIN_WALLET') 'funding_source': fundingSource,
           if (linkedBankAccountId != null && linkedBankAccountId.isNotEmpty)
             'linked_bank_account_id': linkedBankAccountId,

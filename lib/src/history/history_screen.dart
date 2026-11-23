@@ -218,7 +218,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
     Iterable<TransactionModel> items = _allTransactions;
 
     if (_filter.hasService) {
-      items = items.where((t) => t.type == _filter.transactionType);
+      if (_filter.transactionType == 'REFUND') {
+        items = items.where(
+          (t) => t.type == 'REFUND' || t.postpaidAction == 'REFUND',
+        );
+      } else if (_filter.transactionType == 'TRANSFER') {
+        items = items.where(
+          (t) => t.type == 'TRANSFER' && t.postpaidAction != 'REFUND',
+        );
+      } else {
+        items = items.where((t) => t.type == _filter.transactionType);
+      }
     }
 
     if (_filter.direction != null && _filter.direction!.isNotEmpty) {
@@ -273,6 +283,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
           } else {
             typeDisplay = 'thanh toán $name payment';
           }
+        } else if (t.type == 'REFUND') {
+          typeDisplay =
+              'hoàn tiền hoàn tiền từ $name hoàn từ $name hoàn tiền giao dịch ${t.fundingSource == 'POSTPAID' ? 'ví trả sau ' : ''}refund';
         }
 
         final statusKeywords = t.isFailed
@@ -1261,11 +1274,14 @@ class _PreparedTransaction {
     final isIncome = !isOut || t.type == "TOPUP";
     final isMerchantPayment = t.type == "PAYMENT";
     final isTransfer = t.type == "TRANSFER";
+    final isRefund = t.type == "REFUND";
     final isPostpaid = t.fundingSource == 'POSTPAID';
     final isBankFunded = t.fundingSource == 'BANK';
     final postpaidAction = t.postpaidAction;
     final isPostpaidPurchase = isPostpaid && postpaidAction == 'PURCHASE';
-    final isPostpaidRefund = isPostpaid && postpaidAction == 'REFUND';
+    final isPostpaidRefund =
+        isPostpaid && (postpaidAction == 'REFUND' || isRefund);
+    final isWalletRefund = isRefund && !isPostpaidRefund;
     final isPostpaidServiceFeeRepay =
         isPostpaid && postpaidAction == 'REPAY_SERVICE_FEE';
     final isPostpaidLateFeeRepay =
@@ -1308,6 +1324,10 @@ class _PreparedTransaction {
         ? postpaidRepayTitle
         : isPostpaidRefund
         ? "Hoàn tiền từ $counterpartyLabel"
+        : isWalletRefund
+        ? (isOut
+              ? 'Hoàn tiền cho $counterpartyLabel'
+              : 'Hoàn tiền từ $counterpartyLabel')
         : t.type == "TOPUP"
         ? "Nạp tiền từ $bankLabel"
         : t.type == "WITHDRAW"
@@ -1324,6 +1344,8 @@ class _PreparedTransaction {
         ? postpaidRepayTitle
         : isPostpaidRefund
         ? "Hoàn tiền Ví trả sau"
+        : isWalletRefund
+        ? "Hoàn tiền thanh toán"
         : isPostpaidPurchase
         ? "Thanh toán qua Ví trả sau"
         : isMerchantPayment
@@ -1340,6 +1362,8 @@ class _PreparedTransaction {
 
     final textBtn = (isPostpaidRepay || isPostpaidRefund)
         ? "Quản lý ví"
+        : isWalletRefund
+        ? ""
         : isMerchantPayment
         ? "Chia tiền"
         : t.type == "TOPUP"
@@ -1368,6 +1392,7 @@ class _PreparedTransaction {
           : (isBankFunded ||
                     (t.type != 'TRANSFER' &&
                         t.type != 'PAYMENT' &&
+                        t.type != 'REFUND' &&
                         !isPostpaidRepay)
                 ? bankLabel
                 : 'Ví LumaPay'),
@@ -1427,15 +1452,15 @@ class _TransactionVisualStyle {
     }
     if (isPostpaidRefund) {
       return const _TransactionVisualStyle(
-        icon: Iconsax.money_recive5,
-        badgeIcon: Icons.south_west_rounded,
-        accentColor: Color(0xFF059669),
-        badgeColor: Color(0xFF047857),
-        tintColor: Color(0xFFD1FAE5),
+        icon: Iconsax.money_change5,
+        badgeIcon: Icons.replay_rounded,
+        accentColor: Color(0xFF0D9488),
+        badgeColor: Color(0xFF0F766E),
+        tintColor: Color(0xFFCCFBF1),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF34D399), Color(0xFF059669)],
+          colors: [Color(0xFF2DD4BF), Color(0xFF0D9488)],
         ),
         shortLabel: 'Hoàn trả sau',
       );
@@ -1497,6 +1522,20 @@ class _TransactionVisualStyle {
             colors: [Color(0xFFFB923C), Color(0xFFEA580C)],
           ),
           shortLabel: 'Rút tiền',
+        );
+      case 'REFUND':
+        return const _TransactionVisualStyle(
+          icon: Iconsax.money_change5,
+          badgeIcon: Icons.replay_rounded,
+          accentColor: Color(0xFF0D9488),
+          badgeColor: Color(0xFF0F766E),
+          tintColor: Color(0xFFCCFBF1),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF2DD4BF), Color(0xFF0D9488)],
+          ),
+          shortLabel: 'Hoàn tiền',
         );
       case 'TRANSFER':
         if (isOut) {

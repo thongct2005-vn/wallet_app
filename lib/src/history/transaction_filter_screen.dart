@@ -16,8 +16,8 @@ class TransactionFilterCriteria {
   final int? minAmount;
   final int? maxAmount;
   final String? fundingSource; // 'LUMAPAY' | 'POSTPAID'
-  final String? transactionType; // 'TOPUP' | 'WITHDRAW' | 'TRANSFER' | 'PAYMENT'
-  final String? direction; // 'IN' | 'OUT' (khi transactionType == 'TRANSFER')
+  final String? transactionType; // 'TOPUP' | 'WITHDRAW' | 'TRANSFER' | 'PAYMENT' | 'REFUND'
+  final String? direction; // 'IN' | 'OUT' (khi transactionType == 'TRANSFER' hoặc 'REFUND')
   final String? status; // 'SUCCESS' | 'FAILED' | 'PENDING'
 
   const TransactionFilterCriteria({
@@ -160,6 +160,13 @@ class TransactionFilterScreen extends StatefulWidget {
       label: 'Thanh toán',
       icon: Icons.storefront_rounded,
       color: Color(0xFF7C3AED),
+    ),
+    _FilterServiceOption(
+      type: 'REFUND',
+      direction: null,
+      label: 'Hoàn tiền',
+      icon: Iconsax.money_change5,
+      color: Color(0xFF0D9488),
     ),
   ];
 

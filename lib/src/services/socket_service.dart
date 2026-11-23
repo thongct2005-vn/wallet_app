@@ -99,7 +99,11 @@ class SocketService {
   }
 
   Future<void> _handleForceLogout(String reason) async {
+    final deviceId = await _storage.read(key: 'device_id');
     await _storage.deleteAll();
+    if (deviceId != null && deviceId.isNotEmpty) {
+      await _storage.write(key: 'device_id', value: deviceId);
+    }
 
     Future.microtask(() => disconnect());
 

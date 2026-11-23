@@ -117,6 +117,7 @@ Future<TransferFundingResolution> evaluateTransferFundingBeforeConfirm({
   required String rawAmount,
   required num neededAmount,
   required bool isQrPayment,
+  bool isMerchant = false,
   num? transactionAmount,
 }) async {
   final result = await walletService.checkTransferEligibility(rawAmount);
@@ -147,7 +148,7 @@ Future<TransferFundingResolution> evaluateTransferFundingBeforeConfirm({
   }
 
   bool canUsePostpaid = false;
-  if (!walletEligible && isQrPayment) {
+  if (!walletEligible && isQrPayment && isMerchant) {
     final ppRes = await (postpaidService ?? PostpaidService()).getWallet();
     final ppData = ppRes['is_success'] == true && ppRes['data'] is Map
         ? ppRes['data'] as Map

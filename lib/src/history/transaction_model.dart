@@ -14,6 +14,7 @@ class TransactionModel {
   final num balanceAfter;
   final String bankName;
   final String? orderId;
+  final String? originalTransactionId;
   final String fundingSource;
   final String? postpaidAction;
   final String? userMessage;
@@ -34,6 +35,7 @@ class TransactionModel {
     required this.balanceAfter,
     required this.bankName,
     this.orderId,
+    this.originalTransactionId,
     this.fundingSource = 'MAIN_WALLET',
     this.postpaidAction,
     this.userMessage,
@@ -45,6 +47,12 @@ class TransactionModel {
   factory TransactionModel.fromJson(Map<String, dynamic> json) {
     final direction = (json['direction'] ?? 'OUT').toString();
     final isOut = direction == 'OUT';
+    final rawSnapshot = json['fee_rate_snapshot'];
+    final snapshotOriginalTxId = rawSnapshot is Map
+        ? rawSnapshot['reversal_of_transaction_id']?.toString()
+        : null;
+    final rawOriginalTxId =
+        (json['original_transaction_id'] ?? snapshotOriginalTxId)?.toString().trim();
     return TransactionModel(
       id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
       type: (json['transaction_type'] ?? '').toString(),
@@ -71,6 +79,10 @@ class TransactionModel {
           num.tryParse(json['balance_after']?.toString() ?? '') ?? 0,
       bankName: (json['bank_name'] ?? '').toString(),
       orderId: json['order_id']?.toString(),
+      originalTransactionId:
+          (rawOriginalTxId != null && rawOriginalTxId.isNotEmpty)
+              ? rawOriginalTxId
+              : null,
       fundingSource: (json['funding_source'] ?? 'MAIN_WALLET').toString(),
       postpaidAction: json['postpaid_action']?.toString(),
       userMessage: json['user_message']?.toString(),

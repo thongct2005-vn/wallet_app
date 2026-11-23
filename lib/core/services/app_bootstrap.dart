@@ -67,7 +67,11 @@ Future<Widget> resolveInitialScreen({
         userResult['user_id'] == null ||
         userKyc['is_success'] != true ||
         userKyc['data'] == null) {
-      await _clearAuthTokens(storage);
+      final userCode = userResult['status_code'];
+      final kycCode = userKyc['status_code'];
+      if (userCode == 401 || userCode == 403 || kycCode == 401 || kycCode == 403) {
+        await _clearAuthTokens(storage);
+      }
       return const LoginPhoneScreen();
     }
 
@@ -88,7 +92,6 @@ Future<Widget> resolveInitialScreen({
     final isKyc = userKyc['data']['is_kyc'] == true;
     return isKyc ? const HomeScreen() : const KycGuideScreen();
   } catch (_) {
-    await _clearAuthTokens(storage);
     return const LoginPhoneScreen();
   }
 }

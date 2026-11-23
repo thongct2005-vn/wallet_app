@@ -24,6 +24,21 @@ class FormatUtils {
     return amountNum;
   }
 
+  /// Chuẩn hóa chuỗi số tiền thô (`100000`, `100000.00`, `100.000`) sang dạng có dấu chấm (`100.000`).
+  static String formatRawAmountDisplay(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return '';
+    final num parsed;
+    if (RegExp(r'^\d+$').hasMatch(trimmed)) {
+      parsed = num.tryParse(trimmed) ?? 0;
+    } else if (RegExp(r'^\d+\.\d{1,2}$').hasMatch(trimmed)) {
+      parsed = (double.tryParse(trimmed) ?? 0).round();
+    } else {
+      parsed = formatAmountToNum(trimmed);
+    }
+    return parsed > 0 ? formatDisplayNumber(parsed) : trimmed;
+  }
+
   static final DateFormat _dateTimeFmt = DateFormat('HH:mm - dd/MM/yyyy');
 
   static String formatDateTime(DateTime parsedDate) {

@@ -128,7 +128,9 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
   @override
   void initState() {
     super.initState();
-    final initialAmount = _isFixedAmount ? widget.amount! : '';
+    final initialAmount = _isFixedAmount
+        ? FormatUtils.formatRawAmountDisplay(widget.amount!)
+        : '';
     _lastMeasuredAmountText = initialAmount;
     _amountWidthNotifier = ValueNotifier<double>(
       _measureAmountWidth(initialAmount),
@@ -766,6 +768,7 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
                               rawAmount: _amountController.text,
                               neededAmount: needed,
                               isQrPayment: isQr,
+                              isMerchant: widget.isMerchant,
                             );
                         _walletBalance = resolution.walletBalance;
                         if (!resolution.canProceed) {

@@ -152,15 +152,15 @@ class PostpaidEntryVisualStyle {
         );
       case 'REFUND':
         return const PostpaidEntryVisualStyle(
-          icon: Iconsax.money_recive5,
-          badgeIcon: Icons.south_west_rounded,
-          accentColor: Color(0xFF059669),
-          badgeColor: Color(0xFF047857),
-          tintColor: Color(0xFFD1FAE5),
+          icon: Iconsax.money_change5,
+          badgeIcon: Icons.replay_rounded,
+          accentColor: Color(0xFF0D9488),
+          badgeColor: Color(0xFF0F766E),
+          tintColor: Color(0xFFCCFBF1),
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF34D399), Color(0xFF059669)],
+            colors: [Color(0xFF2DD4BF), Color(0xFF0D9488)],
           ),
           shortLabel: 'Hoàn trả sau',
         );
@@ -557,17 +557,7 @@ Future<void> showPostpaidEntryDetailSheet(
                     ),
                     if (copyable) ...[
                       const SizedBox(width: 6),
-                      InkWell(
-                        onTap: () {
-                          Clipboard.setData(ClipboardData(text: value));
-                          SnackbarUtils.success(sheetCtx, 'Đã sao chép');
-                        },
-                        child: const Icon(
-                          Icons.copy_rounded,
-                          size: 15,
-                          color: kPostpaidPinkDark,
-                        ),
-                      ),
+                      _SheetCopyButton(value: value, sheetContext: sheetCtx),
                     ],
                   ],
                 ),
@@ -663,5 +653,72 @@ Future<void> showPostpaidEntryDetailSheet(
       );
     },
   );
+}
+
+class _SheetCopyButton extends StatefulWidget {
+  final String value;
+  final BuildContext sheetContext;
+
+  const _SheetCopyButton({
+    required this.value,
+    required this.sheetContext,
+  });
+
+  @override
+  State<_SheetCopyButton> createState() => _SheetCopyButtonState();
+}
+
+class _SheetCopyButtonState extends State<_SheetCopyButton> {
+  bool _copied = false;
+
+  Future<void> _handleCopy() async {
+    await Clipboard.setData(ClipboardData(text: widget.value));
+    HapticFeedback.lightImpact();
+    if (!mounted) return;
+    setState(() => _copied = true);
+    if (widget.sheetContext.mounted) {
+      SnackbarUtils.success(widget.sheetContext, 'Đã sao chép ${widget.value}');
+    }
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() => _copied = false);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _handleCopy,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _copied ? Icons.check_rounded : Icons.copy_rounded,
+                size: 15,
+                color: _copied ? kPostpaidIncome : kPostpaidPinkDark,
+              ),
+              if (_copied) ...[
+                const SizedBox(width: 3),
+                Text(
+                  'Đã chép',
+                  style: GoogleFonts.roboto(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: kPostpaidIncome,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 

@@ -56,7 +56,7 @@ class _PostpaidEntriesScreenState extends State<PostpaidEntriesScreen> {
     _EntryActionFilter(
       action: 'REFUND',
       label: 'Hoàn tiền',
-      icon: Iconsax.money_recive5,
+      icon: Iconsax.money_change5,
     ),
     _EntryActionFilter(
       action: 'SERVICE_FEE',
