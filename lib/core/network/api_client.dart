@@ -201,6 +201,7 @@ class ApiClient {
 
       await _storage.write(key: 'access_token', value: newAccessToken);
       await _storage.write(key: 'refresh_token', value: newRefreshToken);
+      SocketService().syncAuthToken(newAccessToken).catchError((_) {});
 
       final outcome = _RefreshOutcome.refreshed(newAccessToken);
       completer.complete(outcome);

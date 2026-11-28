@@ -83,11 +83,15 @@ Future<Widget> resolveInitialScreen({
       newHasPin: homeData['has_pin'] == true,
     );
 
+    // Đọc lại access_token mới nhất phòng trường hợp Future.wait vừa silent refresh token.
+    final latestAccessToken =
+        (await storage.read(key: 'access_token')) ?? accessToken;
+
     // Kích hoạt socket & FCM dưới nền để không chặn việc tắt Native Splash.
     final authHook =
         onAuthenticated ??
         (token) => _startBackgroundServices(token, resolvedUserService);
-    unawaited(authHook(accessToken));
+    unawaited(authHook(latestAccessToken));
 
     final isKyc = userKyc['data']['is_kyc'] == true;
     return isKyc ? const HomeScreen() : const KycGuideScreen();

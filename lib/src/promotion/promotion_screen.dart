@@ -3,22 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 import '../../core/utils/snackbar_utils.dart';
 import '../transfer/transfer_ui.dart';
-
-class PromotionItemData {
-  final String name;
-  final String imagePath;
-  final int discountPercent;
-  final String originalPrice;
-  final String discountedPrice;
-
-  const PromotionItemData({
-    required this.name,
-    required this.imagePath,
-    required this.discountPercent,
-    required this.originalPrice,
-    required this.discountedPrice,
-  });
-}
+import 'promo_item_card.dart';
 
 class TelecomPackageData {
   final String name;
@@ -62,6 +47,8 @@ class _PromotionScreenState extends State<PromotionScreen> {
       discountPercent: 5,
       originalPrice: '100.000đ',
       discountedPrice: '95.000đ',
+      rating: '9/10',
+      ageRating: '12+',
     ),
     PromotionItemData(
       name: 'Doraemon',
@@ -69,6 +56,8 @@ class _PromotionScreenState extends State<PromotionScreen> {
       discountPercent: 7,
       originalPrice: '100.000đ',
       discountedPrice: '93.000đ',
+      rating: '9.3/10',
+      ageRating: '6+',
     ),
     PromotionItemData(
       name: 'Dragon Ball',
@@ -76,6 +65,8 @@ class _PromotionScreenState extends State<PromotionScreen> {
       discountPercent: 10,
       originalPrice: '100.000đ',
       discountedPrice: '90.000đ',
+      rating: '9.1/10',
+      ageRating: '18+',
     ),
     PromotionItemData(
       name: 'One Piece',
@@ -83,6 +74,8 @@ class _PromotionScreenState extends State<PromotionScreen> {
       discountPercent: 15,
       originalPrice: '100.000đ',
       discountedPrice: '85.000đ',
+      rating: '9.4/10',
+      ageRating: '16+',
     ),
   ];
 
@@ -93,6 +86,8 @@ class _PromotionScreenState extends State<PromotionScreen> {
       discountPercent: 10,
       originalPrice: '110.000đ',
       discountedPrice: '99.000đ',
+      rating: '9/10',
+      ageRating: '18+',
     ),
     PromotionItemData(
       name: 'Godzilla',
@@ -100,6 +95,8 @@ class _PromotionScreenState extends State<PromotionScreen> {
       discountPercent: 15,
       originalPrice: '120.000đ',
       discountedPrice: '102.000đ',
+      rating: '8.8/10',
+      ageRating: '18+',
     ),
     PromotionItemData(
       name: 'King Kong',
@@ -107,6 +104,8 @@ class _PromotionScreenState extends State<PromotionScreen> {
       discountPercent: 5,
       originalPrice: '100.000đ',
       discountedPrice: '95.000đ',
+      rating: '8.9/10',
+      ageRating: '18+',
     ),
     PromotionItemData(
       name: 'Venom',
@@ -114,6 +113,8 @@ class _PromotionScreenState extends State<PromotionScreen> {
       discountPercent: 10,
       originalPrice: '120.000đ',
       discountedPrice: '108.000đ',
+      rating: '9.1/10',
+      ageRating: '18+',
     ),
   ];
 
@@ -284,30 +285,34 @@ class _PromotionScreenState extends State<PromotionScreen> {
                     children: [
                       _buildSectionTitle('Anime movie'),
                       const SizedBox(height: 10),
-                      _buildHorizontalPromoList(
+                      PromoHorizontalList(
                         items: _movieTickets,
                         buttonLabel: 'Đặt vé',
+                        onActionTap: _showDevelopingNotification,
                       ),
                       const SizedBox(height: 22),
                       _buildSectionTitle('Phim bom tấn'),
                       const SizedBox(height: 10),
-                      _buildHorizontalPromoList(
+                      PromoHorizontalList(
                         items: _hotMovieTickets,
                         buttonLabel: 'Đặt vé',
+                        onActionTap: _showDevelopingNotification,
                       ),
                       const SizedBox(height: 22),
                       _buildSectionTitle('Nước uống'),
                       const SizedBox(height: 10),
-                      _buildHorizontalPromoList(
+                      PromoHorizontalList(
                         items: _drinkItems,
                         buttonLabel: 'Mua ngay',
+                        onActionTap: _showDevelopingNotification,
                       ),
                       const SizedBox(height: 22),
                       _buildSectionTitle('Đồ ăn'),
                       const SizedBox(height: 10),
-                      _buildHorizontalPromoList(
+                      PromoHorizontalList(
                         items: _foodItems,
                         buttonLabel: 'Mua ngay',
+                        onActionTap: _showDevelopingNotification,
                       ),
                       const SizedBox(height: 22),
                       _buildSectionTitle('Nạp gói cước'),
@@ -426,197 +431,6 @@ class _PromotionScreenState extends State<PromotionScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildHorizontalPromoList({
-    required List<PromotionItemData> items,
-    required String buttonLabel,
-  }) {
-    const double spacing = 8.0;
-    const double listHeight = 196.0;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Hiển thị tối đa đúng 3 thẻ trên khung nhìn, kéo ngang để xem thẻ thứ 4
-        final double cardWidth = (constraints.maxWidth - (spacing * 2)) / 3;
-
-        return SizedBox(
-          height: listHeight,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            itemCount: items.length,
-            separatorBuilder: (_, _) => const SizedBox(width: spacing),
-            itemBuilder: (context, index) {
-              final item = items[index];
-              return SizedBox(
-                width: cardWidth,
-                child: _buildPromoCard(
-                  item: item,
-                  buttonLabel: buttonLabel,
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildPromoCard({
-    required PromotionItemData item,
-    required String buttonLabel,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: _kPink.withValues(alpha: 0.12),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(11),
-              ),
-              child: Image.asset(
-                item.imagePath,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: _kPinkSoft,
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Iconsax.image,
-                      color: _kPink,
-                      size: 28,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(7, 6, 7, 7),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  item.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.roboto(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: _kText,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  item.originalPrice,
-                                  style: GoogleFonts.roboto(
-                                    fontSize: 10,
-                                    color: _kMuted,
-                                    decoration: TextDecoration.lineThrough,
-                                    decorationColor: _kMuted,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                    vertical: 1,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _kPinkSoft,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    '-${item.discountPercent}%',
-                                    style: GoogleFonts.roboto(
-                                      fontSize: 9.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: _kPinkDark,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              item.discountedPrice,
-                              style: GoogleFonts.roboto(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: _kPinkDark,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Material(
-                      color: _kPink,
-                      borderRadius: BorderRadius.circular(7),
-                      child: InkWell(
-                        onTap: _showDevelopingNotification,
-                        borderRadius: BorderRadius.circular(7),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 5,
-                          ),
-                          child: Text(
-                            buttonLabel,
-                            style: GoogleFonts.roboto(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 

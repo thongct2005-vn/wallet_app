@@ -75,11 +75,6 @@ class TopUpWithdrawScreen extends StatefulWidget {
 }
 
 class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
-  static final TextStyle _titleStyle = GoogleFonts.roboto(
-    fontSize: 22,
-    fontWeight: FontWeight.w700,
-    color: _kText,
-  );
   static final TextStyle _sectionLabelStyle = GoogleFonts.roboto(
     fontSize: 14,
     fontWeight: FontWeight.w500,
@@ -332,9 +327,11 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
                             }
                           },
                         ),
-                        const SizedBox(width: 12),
-                        Text("Nạp/Rút", style: _titleStyle),
-                        const Spacer(),
+                        const Expanded(
+                          child: Center(
+                            child: TransferAppBarTitle("Nạp/Rút"),
+                          ),
+                        ),
                         _circleButton(
                           icon: Iconsax.home_2,
                           onPressed: () {

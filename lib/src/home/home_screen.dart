@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:app/core/controller/user_controller.dart';
 import 'package:app/core/network/api_error_handler.dart';
 import 'package:app/core/services/connectivity_service.dart';
@@ -7,6 +9,7 @@ import 'package:app/core/widgets/pin_bottomsheet/create_pin_bottom_sheet.dart';
 import 'package:app/src/history/history_screen.dart';
 import 'package:app/src/postpaid/postpaid_screen.dart';
 import 'package:app/src/profile/profile_screen.dart';
+import 'package:app/src/promotion/promo_item_card.dart';
 import 'package:app/src/promotion/promotion_screen.dart';
 import 'package:app/src/qr/qr_main_screen.dart';
 import 'package:app/src/services/app_data_service.dart';
@@ -43,22 +46,90 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
+/// Đặt nút QR giữa thanh bottom nhưng hạ thấp xuống, chỉ cao hơn mép trên thanh bottom 10% chiều cao nút.
+class _LowCenterDockedFabLocation extends StandardFabLocation
+    with FabCenterOffsetX, FabDockedOffsetY {
+  const _LowCenterDockedFabLocation({this.protrusionFraction = 0.10});
+
+  final double protrusionFraction;
+
+  @override
+  double getOffsetY(
+    ScaffoldPrelayoutGeometry scaffoldGeometry,
+    double adjustment,
+  ) {
+    final double baseY = super.getOffsetY(scaffoldGeometry, adjustment);
+    if (scaffoldGeometry.minInsets.bottom > 0.0 ||
+        scaffoldGeometry.snackBarSize.height > 0.0 ||
+        scaffoldGeometry.bottomSheetSize.height > 0.0) {
+      return baseY;
+    }
+
+    final double fabHeight = scaffoldGeometry.floatingActionButtonSize.height;
+    final double loweredY = baseY + fabHeight * (0.5 - protrusionFraction);
+    final double maxFabY =
+        scaffoldGeometry.scaffoldSize.height -
+        fabHeight -
+        scaffoldGeometry.minViewPadding.bottom;
+    return math.min(maxFabY, loweredY);
+  }
+}
+
 class _HomeScreenState extends State<HomeScreen> {
+  static const List<PromotionItemData> _weeklyWatchMovies = [
+    PromotionItemData(
+      name: 'Mẹ Mìn',
+      imagePath: 'assets/me-min.png',
+      discountPercent: 10,
+      originalPrice: '100.000đ',
+      discountedPrice: '90.000đ',
+      rating: '9/10',
+      ageRating: '18+',
+    ),
+    PromotionItemData(
+      name: 'Trại Giam Hạnh Phúc',
+      imagePath: 'assets/trai-giam-hanh-phuc.png',
+      discountPercent: 15,
+      originalPrice: '110.000đ',
+      discountedPrice: '93.500đ',
+      rating: '9.2/10',
+      ageRating: '18+',
+    ),
+    PromotionItemData(
+      name: 'Bò Sữa Bay',
+      imagePath: 'assets/bo-sua-bay.png',
+      discountPercent: 10,
+      originalPrice: '100.000đ',
+      discountedPrice: '90.000đ',
+      rating: '8.9/10',
+      ageRating: '16+',
+    ),
+    PromotionItemData(
+      name: 'Ngày Con Còn Mẹ',
+      imagePath: 'assets/ngay-con-con-me.png',
+      discountPercent: 10,
+      originalPrice: '95.000đ',
+      discountedPrice: '85.500đ',
+      rating: '9.1/10',
+      ageRating: '16+',
+    ),
+  ];
+
   final UserService _userService = UserService();
   final AppDataService _appDataService = AppDataService();
   final UserController _userController = Get.find<UserController>();
   String _fullName = '';
   bool _isHidenWalletBalance = false;
-  String _balance = '0';
   bool _hasPin = false;
   int _selectedIndex = 0;
+
+  String get _liveBalance =>
+      '${FormatUtils.formatDisplayNumber(num.tryParse(_userController.balance.value) ?? 0)}đ';
 
   @override
   void initState() {
     super.initState();
     _fullName = _userController.fullName.value;
-    _balance =
-        '${FormatUtils.formatDisplayNumber(num.tryParse(_userController.balance.value) ?? 0)}đ';
     _hasPin = _userController.hasPin.value;
   }
 
@@ -157,7 +228,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+        floatingActionButtonLocation: const _LowCenterDockedFabLocation(
+          protrusionFraction: 0.10,
+        ),
         bottomNavigationBar: BottomAppBar(
           color: Colors.white,
           elevation: 12,
@@ -208,28 +281,12 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 22),
             _buildUtilList(context),
             const SizedBox(height: 22),
-            _buildSectionTitle("Ưu đãi dành cho bạn"),
+            _buildSectionTitle("Đáng xem tuần này"),
             const SizedBox(height: 12),
-            GestureDetector(
-              onTap: () => _showDevelopingNotification(context),
-              child: Container(
-                width: double.infinity,
-                height: 150,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(22),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.12),
-                      blurRadius: 18,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(22),
-                  child: Image.asset('assets/uu_dai.jpg', fit: BoxFit.cover),
-                ),
-              ),
+            PromoHorizontalList(
+              items: _weeklyWatchMovies,
+              buttonLabel: 'Đặt vé',
+              onActionTap: () => _showDevelopingNotification(context),
             ),
           ],
         ),
@@ -437,8 +494,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       onPressed: () {
                         setState(() {
                           _isHidenWalletBalance = !_isHidenWalletBalance;
-                          _balance =
-                              '${FormatUtils.formatDisplayNumber(num.tryParse(_userController.balance.value) ?? 0)}đ';
                         });
                       },
                       icon: Icon(
@@ -452,15 +507,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
 
-                Text(
-                  _isHidenWalletBalance ? "• • • • • • • •" : _balance,
-                  style: GoogleFonts.roboto(
-                    color: Colors.white,
-                    fontSize: 32,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: _isHidenWalletBalance ? 2 : 0,
-                  ),
-                ),
+                Obx(() {
+                  return Text(
+                    _isHidenWalletBalance ? "• • • • • • • •" : _liveBalance,
+                    style: GoogleFonts.roboto(
+                      color: Colors.white,
+                      fontSize: 32,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: _isHidenWalletBalance ? 2 : 0,
+                    ),
+                  );
+                }),
               ],
             ),
           ),
@@ -488,7 +545,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   context,
                   MaterialPageRoute(
                     builder: (context) => TopUpWithdrawScreen(
-                      walletBalance: _balance,
+                      walletBalance: _liveBalance,
                       isTopUpTab: true,
                       checkBankLinkOnOpen: true,
                     ),
@@ -510,7 +567,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   context,
                   MaterialPageRoute(
                     builder: (context) => TopUpWithdrawScreen(
-                      walletBalance: _balance,
+                      walletBalance: _liveBalance,
                       isTopUpTab: false,
                       checkBankLinkOnOpen: true,
                     ),
@@ -829,8 +886,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
       setState(() {
         _fullName = _userController.fullName.value;
-        _balance =
-            '${FormatUtils.formatDisplayNumber(num.tryParse(_userController.balance.value) ?? 0)}đ';
         _hasPin = _userController.hasPin.value;
       });
     } catch (e) {

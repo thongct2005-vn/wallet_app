@@ -1,4 +1,5 @@
 import 'package:app/core/controller/user_controller.dart';
+import 'package:app/core/network/api_error_handler.dart';
 import 'package:app/core/utils/format_utils.dart';
 import 'package:app/core/utils/route_transition_utils.dart';
 import 'package:app/src/services/user_service.dart';
@@ -267,59 +268,51 @@ class _ContactListScreenState extends State<ContactListScreen> {
     );
   }
 
-  Widget _buildErrorState() {
+  Widget _buildMaintenanceLikeErrorState({
+    required String message,
+    required String actionLabel,
+    required VoidCallback onPressed,
+  }) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Iconsax.info_circle,
-                color: Colors.redAccent,
-                size: 30,
-              ),
+            const Icon(
+              Iconsax.warning_2,
+              size: 48,
+              color: kTfPink,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             Text(
-              _errMsg,
+              message,
               textAlign: TextAlign.center,
-              style: GoogleFonts.roboto(fontSize: 16, color: kTfText),
-            ),
-            if (_permanentlyDenied) ...[
-              const SizedBox(height: 18),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kTfPink,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 14,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                onPressed: () => openAppSettings(),
-                child: Text(
-                  "Mở Cài đặt",
-                  style: GoogleFonts.roboto(
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
+              style: GoogleFonts.roboto(
+                fontSize: 15,
+                color: kTfText,
               ),
-            ],
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kTfPink,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: onPressed,
+              child: Text(actionLabel),
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return _buildMaintenanceLikeErrorState(
+      message: _errMsg,
+      actionLabel: _permanentlyDenied ? 'Mở Cài đặt' : 'Thử lại',
+      onPressed: _permanentlyDenied ? () => openAppSettings() : _loadContact,
     );
   }
 
@@ -398,6 +391,17 @@ class _ContactListScreenState extends State<ContactListScreen> {
           phone: _findPhone,
           userId: _foundUser!['user_id'],
         ),
+      );
+    }
+    final isConnectionOrMaintenanceError =
+        _findMsg == ApiErrorHandler.maintenanceMessage ||
+        _findMsg == ApiErrorHandler.offlineMessage ||
+        _findMsg == ApiErrorHandler.timeoutMessage;
+    if (isConnectionOrMaintenanceError) {
+      return _buildMaintenanceLikeErrorState(
+        message: _findMsg,
+        actionLabel: 'Thử lại',
+        onPressed: () => _findUser(_findPhone, ++_findSeq),
       );
     }
     return _buildEmptyState(

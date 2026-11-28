@@ -27,6 +27,30 @@ class SocketService {
         });
   }
 
+  String? _currentAuthToken;
+
+  /// Đồng bộ token mới cho socket đang chạy (qua `refresh_auth` hoặc khởi tạo lại nếu đang mất kết nối).
+  Future<void> syncAuthToken(String accessToken) async {
+    if (accessToken.isEmpty || socket == null) {
+      return;
+    }
+
+    if (socket!.connected) {
+      if (_currentAuthToken == accessToken) {
+        return;
+      }
+      _currentAuthToken = accessToken;
+      socket!.emit('refresh_auth', {'token': accessToken});
+      final options = socket!.io.options;
+      if (options is Map) {
+        options['auth'] = {'token': accessToken};
+      }
+      return;
+    }
+
+    await _connectInternal(accessToken: accessToken);
+  }
+
   Future<void> _connectInternal({String? accessToken}) async {
     final token = accessToken ?? await _storage.read(key: 'access_token');
     if (token == null) {
@@ -34,9 +58,16 @@ class SocketService {
     }
 
     if (socket != null && socket!.connected) {
+      await syncAuthToken(token);
       return;
     }
 
+    if (socket != null) {
+      socket!.dispose();
+      socket = null;
+    }
+
+    _currentAuthToken = token;
     socket = sk.io(
       ApiConfig.socketUrl,
       sk.OptionBuilder()
@@ -47,8 +78,6 @@ class SocketService {
           .build(),
     );
 
-    socket!.connect();
-
     socket!.onConnect((_) {});
 
     socket!.onConnectError((err) {});
@@ -57,6 +86,8 @@ class SocketService {
 
     socket!.onDisconnect((_) {});
     _registerListeners();
+
+    socket!.connect();
   }
 
   void _registerListeners() {

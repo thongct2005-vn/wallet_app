@@ -21,6 +21,7 @@ const Color _kText = Color(0xFF1F1B24);
 const Color _kMuted = Color(0xFF8A8590);
 const Color _kIncome = Color(0xFF2E9E5B);
 const Color _kExpense = Color(0xFFE53935);
+const Color _kPending = Color(0xFFD97706);
 
 class HistoryScreen extends StatefulWidget {
   final TransactionService? transactionService;
@@ -1104,6 +1105,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget _buildTransactionTile(_PreparedTransaction item, {bool isLast = false}) {
     final t = item.raw;
     final style = item.style;
+    final String? tileStatusText = item.isFailed
+        ? 'THẤT BẠI'
+        : (item.isPending ? 'ĐANG XỬ LÝ' : null);
+    final Color tileStatusColor = item.isFailed ? _kExpense : _kPending;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 0, 16, isLast ? 14 : 10),
@@ -1199,6 +1204,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           ? _tileIncomeAmountStyle.copyWith(
                               color: const Color(0xFF9CA3AF),
                             )
+                          : item.isPending
+                          ? _tileIncomeAmountStyle.copyWith(color: _kPending)
                           : (item.isIncome
                                 ? _tileIncomeAmountStyle
                                 : _tileExpenseAmountStyle),
@@ -1208,14 +1215,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       item.formattedBalance,
                       style: _tileBalanceStyle,
                     ),
-                    if (item.isFailed) ...[
+                    if (tileStatusText != null) ...[
                       const SizedBox(height: 4),
                       Text(
-                        'THẤT BẠI',
+                        tileStatusText,
                         style: GoogleFonts.roboto(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w800,
-                          color: _kExpense,
+                          color: tileStatusColor,
                           letterSpacing: 0.3,
                         ),
                       ),
@@ -1236,6 +1243,7 @@ class _PreparedTransaction {
   final _TransactionVisualStyle style;
   final bool isIncome;
   final bool isFailed;
+  final bool isPending;
   final String statusLabel;
   final String title;
   final String titleDetail;
@@ -1252,6 +1260,7 @@ class _PreparedTransaction {
     required this.style,
     required this.isIncome,
     required this.isFailed,
+    required this.isPending,
     required this.statusLabel,
     required this.title,
     required this.titleDetail,
@@ -1301,7 +1310,9 @@ class _PreparedTransaction {
       isPostpaidRepay: isPostpaidRepay,
     );
 
-    final amountPrefix = isFailed ? '' : (isIncome ? '+' : '-');
+    final amountPrefix = (isFailed || isPending)
+        ? ''
+        : (isIncome ? '+' : '-');
     final statusLabel = isFailed
         ? 'Thất bại'
         : (isPending ? 'Đang xử lý' : 'Thành công');
@@ -1381,6 +1392,7 @@ class _PreparedTransaction {
       style: style,
       isIncome: isIncome,
       isFailed: isFailed,
+      isPending: isPending,
       statusLabel: statusLabel,
       title: title,
       titleDetail: titleDetail,
