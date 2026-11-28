@@ -536,7 +536,11 @@ class _AmountInputScreenState extends State<AmountInputScreen> {
             ),
           ),
           if (!_isFixedDescription) ...[
-            const SizedBox(height: 14),
+            TransferCharacterCounter(
+              controller: _descriptionController,
+              maxLength: 100,
+            ),
+            const SizedBox(height: 10),
             ValueListenableBuilder<int>(
               valueListenable: _selectedDesHint,
               builder: (context, selectedHint, _) {

@@ -2083,7 +2083,7 @@ class _PostpaidInfoSheetState extends State<_PostpaidInfoSheet> {
             'Phí thanh toán QR bằng Ví trả sau: ${formatFee(qrPaymentFee)}',
             'Phí thanh toán dư nợ: ${formatFee(repaymentFee)}',
             for (final tier in tiers)
-              'Phí chậm trả bậc ${tier['tier']} (${tier['label']}): ${tier['percent_text'] ?? tier['percent']}% tổng dư nợ kỳ sao kê',
+              'Phí trễ hạn bậc ${tier['tier']} (${tier['label']}): ${tier['percent_text'] ?? tier['percent']}% tổng dư nợ kỳ sao kê',
             if ((feeRules['summary'] ?? '').toString().isNotEmpty)
               feeRules['summary'].toString(),
           ],

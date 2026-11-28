@@ -29,7 +29,6 @@ class SocketService {
 
   String? _currentAuthToken;
 
-  /// Đồng bộ token mới cho socket đang chạy (qua `refresh_auth` hoặc khởi tạo lại nếu đang mất kết nối).
   Future<void> syncAuthToken(String accessToken) async {
     if (accessToken.isEmpty || socket == null) {
       return;

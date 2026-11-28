@@ -1,10 +1,9 @@
-import 'package:app/core/utils/currency_formatter.dart';
 import 'package:app/core/utils/format_utils.dart';
 import 'package:app/core/widgets/date_range_picker_sheet.dart';
+import 'package:app/core/widgets/history_filter_widgets.dart';
 import 'package:app/src/home/home_screen.dart';
 import 'package:app/src/transfer/transfer_ui.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
@@ -440,290 +439,53 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _sectionTitle('Thời gian'),
+                          const HistoryFilterSectionTitle('Thời gian'),
                           const SizedBox(height: 8),
-                          _buildTimeCard(
+                          HistoryFilterTimeCard(
                             fromDateText: fromDateText,
                             toDateText: toDateText,
                             hasCustomDate: hasCustomDate,
+                            onPickDateRange: _pickDateRange,
+                            infoText:
+                                'Hỗ trợ tra cứu giao dịch trong 12 tháng gần nhất',
                           ),
                           const SizedBox(height: 18),
-                          _sectionTitle('Số tiền'),
+                          const HistoryFilterSectionTitle('Số tiền'),
                           const SizedBox(height: 8),
-                          _buildAmountCard(),
+                          HistoryFilterAmountCard(
+                            minCtrl: _minCtrl,
+                            maxCtrl: _maxCtrl,
+                            isMinActive: _minAmount != null,
+                            isMaxActive: _maxAmount != null,
+                            amountError: _amountError,
+                            onAmountChanged: _onAmountChanged,
+                          ),
                           const SizedBox(height: 18),
-                          _sectionTitle('Tài khoản/thẻ'),
+                          const HistoryFilterSectionTitle('Tài khoản/thẻ'),
                           const SizedBox(height: 8),
                           _buildAccountSection(),
                           const SizedBox(height: 18),
-                          _sectionTitle('Dịch vụ'),
+                          const HistoryFilterSectionTitle('Dịch vụ'),
                           const SizedBox(height: 8),
                           _buildServicesGrid(),
                           const SizedBox(height: 18),
-                          _sectionTitle('Trạng thái'),
+                          const HistoryFilterSectionTitle('Trạng thái'),
                           const SizedBox(height: 8),
                           _buildStatusSection(),
                         ],
                       ),
                     ),
                   ),
-                  _buildBottomBar(),
+                  HistoryFilterBottomBar(
+                    hasAnyFilter: _hasAnyFilter,
+                    onClearAll: _clearAll,
+                    onApply: _apply,
+                  ),
                 ],
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _sectionTitle(String text) {
-    return Text(
-      text,
-      style: GoogleFonts.roboto(
-        fontSize: 16,
-        fontWeight: FontWeight.w700,
-        color: kTfText,
-      ),
-    );
-  }
-
-  Widget _buildTimeCard({
-    required String fromDateText,
-    required String toDateText,
-    required bool hasCustomDate,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: _whiteCardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _dateSelectorBox(
-                  label: 'Từ ngày',
-                  valueText: fromDateText,
-                  isActive: hasCustomDate,
-                  onTap: _pickDateRange,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _dateSelectorBox(
-                  label: 'Đến ngày',
-                  valueText: toDateText,
-                  isActive: hasCustomDate,
-                  onTap: _pickDateRange,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Icon(Iconsax.info_circle, size: 14, color: kTfMuted),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'Hỗ trợ tra cứu giao dịch trong 12 tháng gần nhất',
-                  style: GoogleFonts.roboto(fontSize: 12, color: kTfMuted),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _dateSelectorBox({
-    required String label,
-    required String valueText,
-    required bool isActive,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: isActive ? const Color(0xFFFFF1F6) : const Color(0xFFFAF8FA),
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isActive ? kTfPink : const Color(0xFFEAE2E7),
-              width: isActive ? 1.4 : 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: GoogleFonts.roboto(
-                        fontSize: 11.5,
-                        color: isActive ? kTfPinkDark : kTfMuted,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      valueText,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.roboto(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w600,
-                        color: isActive ? kTfText : kTfMuted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.keyboard_arrow_down_rounded,
-                size: 20,
-                color: isActive ? kTfPinkDark : kTfMuted,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAmountCard() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: _whiteCardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _amountInputBox(
-                  label: 'Từ',
-                  hint: '0đ',
-                  controller: _minCtrl,
-                  isActive: _minAmount != null,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _amountInputBox(
-                  label: 'Đến',
-                  hint: 'Không giới hạn',
-                  controller: _maxCtrl,
-                  isActive: _maxAmount != null,
-                ),
-              ),
-            ],
-          ),
-          if (_amountError != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              _amountError!,
-              style: GoogleFonts.roboto(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: const Color(0xFFE53935),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _amountInputBox({
-    required String label,
-    required String hint,
-    required TextEditingController controller,
-    required bool isActive,
-  }) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
-      decoration: BoxDecoration(
-        color: isActive ? const Color(0xFFFFF1F6) : const Color(0xFFFAF8FA),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: _amountError != null
-              ? const Color(0xFFE53935)
-              : (isActive ? kTfPink : const Color(0xFFEAE2E7)),
-          width: isActive || _amountError != null ? 1.4 : 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.roboto(
-              fontSize: 11.5,
-              color: isActive ? kTfPinkDark : kTfMuted,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    LengthLimitingTextInputFormatter(15),
-                    CurrencyFormatter(),
-                  ],
-                  onChanged: (_) => _onAmountChanged(),
-                  cursorColor: kTfPink,
-                  style: GoogleFonts.roboto(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w600,
-                    color: kTfText,
-                  ),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    contentPadding: EdgeInsets.zero,
-                    border: InputBorder.none,
-                    hintText: hint,
-                    hintStyle: GoogleFonts.roboto(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: kTfMuted,
-                    ),
-                    suffixText: controller.text.isNotEmpty ? 'đ' : null,
-                    suffixStyle: GoogleFonts.roboto(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: kTfText,
-                    ),
-                  ),
-                ),
-              ),
-              if (controller.text.isNotEmpty)
-                GestureDetector(
-                  onTap: () {
-                    controller.clear();
-                    _onAmountChanged();
-                  },
-                  child: const Icon(
-                    Icons.close_rounded,
-                    size: 16,
-                    color: kTfMuted,
-                  ),
-                ),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -735,7 +497,7 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
         for (int i = 0; i < opts.length; i++) ...[
           if (i > 0) const SizedBox(width: 10),
           Expanded(
-            child: _selectablePill(
+            child: HistoryFilterSelectablePill(
               label: opts[i].label,
               icon: opts[i].icon,
               accent: opts[i].color,
@@ -764,8 +526,10 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
             for (final s in services)
               SizedBox(
                 width: tileWidth,
-                child: _serviceTile(
-                  option: s,
+                child: HistoryFilterGridTile(
+                  label: s.label,
+                  icon: s.icon,
+                  color: s.color,
                   selected:
                       _transactionType == s.type && _direction == s.direction,
                   onTap: () => setState(() {
@@ -787,67 +551,6 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
     );
   }
 
-  Widget _serviceTile({
-    required _FilterServiceOption option,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: selected ? const Color(0xFFFFF1F6) : Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: selected ? kTfPink : const Color(0xFFEDE2E8),
-              width: selected ? 1.6 : 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: selected
-                    ? kTfPink.withValues(alpha: 0.14)
-                    : Colors.black.withValues(alpha: 0.03),
-                blurRadius: selected ? 10 : 6,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: option.color.withValues(alpha: selected ? 0.16 : 0.11),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(option.icon, color: option.color, size: 21),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                option.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.roboto(
-                  fontSize: 13,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  color: selected ? kTfPinkDark : kTfText,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildStatusSection() {
     const statuses = TransactionFilterScreen._statusOptions;
     return Column(
@@ -855,7 +558,7 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
         Row(
           children: [
             Expanded(
-              child: _selectablePill(
+              child: HistoryFilterSelectablePill(
                 label: statuses[0].label,
                 icon: statuses[0].icon,
                 accent: statuses[0].color,
@@ -868,7 +571,7 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: _selectablePill(
+              child: HistoryFilterSelectablePill(
                 label: statuses[1].label,
                 icon: statuses[1].icon,
                 accent: statuses[1].color,
@@ -885,7 +588,7 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
         Row(
           children: [
             Expanded(
-              child: _selectablePill(
+              child: HistoryFilterSelectablePill(
                 label: statuses[2].label,
                 icon: statuses[2].icon,
                 accent: statuses[2].color,
@@ -903,159 +606,4 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
       ],
     );
   }
-
-  Widget _selectablePill({
-    required String label,
-    required IconData icon,
-    required Color accent,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: selected ? const Color(0xFFFFF1F6) : Colors.white,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: selected ? kTfPink : const Color(0xFFEDE2E8),
-              width: selected ? 1.6 : 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: selected
-                    ? kTfPink.withValues(alpha: 0.12)
-                    : Colors.black.withValues(alpha: 0.025),
-                blurRadius: selected ? 8 : 5,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 17, color: selected ? kTfPinkDark : accent),
-              const SizedBox(width: 7),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.roboto(
-                    fontSize: 13.5,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                    color: selected ? kTfPinkDark : kTfText,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomBar() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: const Border(top: BorderSide(color: Color(0xFFEDE2E8))),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          if (_hasAnyFilter) ...[
-            Expanded(
-              child: SizedBox(
-                height: 48,
-                child: OutlinedButton(
-                  onPressed: _clearAll,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: kTfText,
-                    side: const BorderSide(color: Color(0xFFDDD2D8)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: Text(
-                    'Xóa bộ lọc',
-                    style: GoogleFonts.roboto(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-          ],
-          Expanded(
-            child: SizedBox(
-              height: 48,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [kTfPink, kTfPinkDark],
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: kTfPink.withValues(alpha: 0.28),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: ElevatedButton(
-                  onPressed: _apply,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: Text(
-                    'Áp dụng',
-                    style: GoogleFonts.roboto(
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  BoxDecoration _whiteCardDecoration() => BoxDecoration(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(18),
-    border: Border.all(color: const Color(0xFFEDE2E8)),
-    boxShadow: [
-      BoxShadow(
-        color: kTfPink.withValues(alpha: 0.06),
-        blurRadius: 14,
-        offset: const Offset(0, 4),
-      ),
-    ],
-  );
 }

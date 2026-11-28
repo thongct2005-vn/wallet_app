@@ -78,10 +78,6 @@ class _CreateQRScreenState extends State<CreateQRScreen> {
     fontSize: 16,
     color: kTfMuted,
   );
-  static final TextStyle _counterTextStyle = GoogleFonts.roboto(
-    fontSize: 12,
-    color: kTfMuted,
-  );
   static final List<CurrencyFormatter> _currencyFormatters = [
     CurrencyFormatter(),
   ];
@@ -698,17 +694,9 @@ class _CreateQRScreenState extends State<CreateQRScreen> {
                         ),
                       ),
                     ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: ValueListenableBuilder<int>(
-                          valueListenable: _desLengthNotifier,
-                          builder: (context, length, _) {
-                            return Text("$length/50", style: _counterTextStyle);
-                          },
-                        ),
-                      ),
+                    TransferCharacterCounter(
+                      controller: _desController,
+                      maxLength: 50,
                     ),
                     const SizedBox(height: 18),
                     RepaintBoundary(

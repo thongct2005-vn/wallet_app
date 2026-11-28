@@ -464,3 +464,40 @@ class _KeyboardTranslateState extends State<KeyboardTranslate>
   }
 }
 
+/// Hiển thị số ký tự đã nhập / tối đa bên dưới ô lời nhắn.
+class TransferCharacterCounter extends StatelessWidget {
+  final TextEditingController controller;
+  final int maxLength;
+
+  const TransferCharacterCounter({
+    super.key,
+    required this.controller,
+    required this.maxLength,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 5, right: 6),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: ValueListenableBuilder<TextEditingValue>(
+          valueListenable: controller,
+          builder: (context, value, _) {
+            final int length = value.text.characters.length;
+            final bool isAtLimit = length >= maxLength;
+            return Text(
+              '$length/$maxLength',
+              style: GoogleFonts.roboto(
+                fontSize: 11.5,
+                fontWeight: isAtLimit ? FontWeight.w600 : FontWeight.w500,
+                color: isAtLimit ? kTfPinkDark : kTfMuted,
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+

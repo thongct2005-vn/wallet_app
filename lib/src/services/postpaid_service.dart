@@ -112,6 +112,9 @@ class PostpaidService {
     int limit = 20,
     String? keyword,
     String? action,
+    String? direction,
+    int? minAmount,
+    int? maxAmount,
     DateTime? startDate,
     DateTime? endDate,
   }) async {
@@ -124,9 +127,39 @@ class PostpaidService {
           if (keyword != null && keyword.trim().isNotEmpty)
             'keyword': keyword.trim(),
           if (action != null && action.isNotEmpty) 'action': action,
+          if (direction != null && direction.isNotEmpty)
+            'direction': direction,
+          'min_amount': ?minAmount,
+          'max_amount': ?maxAmount,
           if (startDate != null) 'start_date': _dateOnly(startDate),
           if (endDate != null) 'end_date': _dateOnly(endDate),
         },
+      );
+      return {
+        'is_success': true,
+        'message': result.data['message'],
+        'data': result.data['data'],
+      };
+    } catch (e) {
+      return ApiErrorHandler.handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> exportEntriesToEmail({
+    required DateTime startDate,
+    required DateTime endDate,
+    String? keyword,
+  }) async {
+    try {
+      final result = await api.post(
+        ApiConfig.postpaidExportEmail,
+        data: {
+          'start_date': _dateOnly(startDate),
+          'end_date': _dateOnly(endDate),
+          if (keyword != null && keyword.trim().isNotEmpty)
+            'keyword': keyword.trim(),
+        },
+        options: Options(receiveTimeout: const Duration(seconds: 30)),
       );
       return {
         'is_success': true,

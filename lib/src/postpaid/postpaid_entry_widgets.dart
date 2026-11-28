@@ -61,18 +61,6 @@ String formatPostpaidCycleNote(String? rawNote) {
       );
 }
 
-String removePostpaidDiacritics(String str) {
-  const withDia =
-      'áàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ';
-  const noDia =
-      'aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyydAAAAAAAAAAAAAAAAAEEEEEEEEEEEIIIIIOOOOOOOOOOOOOOOOOUUUUUUUUUUUYYYYYD';
-  var result = str;
-  for (int i = 0; i < withDia.length; i++) {
-    result = result.replaceAll(withDia[i], noDia[i]);
-  }
-  return result;
-}
-
 class PostpaidEntryVisualStyle {
   final IconData icon;
   final IconData? badgeIcon;

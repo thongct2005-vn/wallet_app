@@ -327,9 +327,11 @@ class _TopUpWithdrawScreenState extends State<TopUpWithdrawScreen> {
                             }
                           },
                         ),
-                        const Expanded(
+                        Expanded(
                           child: Center(
-                            child: TransferAppBarTitle("Nạp/Rút"),
+                            child: TransferAppBarTitle(
+                              _isTopUpTab ? 'Nạp tiền' : 'Rút tiền',
+                            ),
                           ),
                         ),
                         _circleButton(

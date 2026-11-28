@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:app/core/utils/dialog_utils.dart';
 import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/date_range_picker_sheet.dart';
+import 'package:app/core/widgets/history_filter_widgets.dart';
 import 'package:app/src/history/transaction_detail_screen.dart';
 import 'package:app/src/history/transaction_filter_screen.dart';
 import 'package:app/src/services/transaction_service.dart';
@@ -40,7 +41,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Timer? _debounce;
 
   final List<TransactionModel> _allTransactions = [];
-  List<TransactionModel> _filteredTransactions = [];
   List<TransactionModel>? _preparedSource;
   List<MapEntry<String, List<_PreparedTransaction>>> _groupedMonths = const [];
   String? _nextCursor;
@@ -124,7 +124,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   bool get _hasActiveFilters =>
       _searchKeyword.isNotEmpty || !_filter.isEmpty;
 
-  Future<void> _fetchMore({bool reset = false}) async {
+  Future<void> _fetchMore({bool reset = false, bool clearCurrent = false}) async {
     if (!reset && _isLoading) return;
     if (reset) {
       _hasMore = true;
@@ -134,7 +134,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
 
     final int generation = ++_fetchGeneration;
-    setState(() => _isLoading = true);
+    setState(() {
+      if (clearCurrent) {
+        _allTransactions.clear();
+        _syncGroupedMonths();
+      }
+      _isLoading = true;
+    });
 
     final result = await _transactionService.getTransferHistory(
       _nextCursor,
@@ -163,7 +169,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           _allTransactions.clear();
         }
         _allTransactions.addAll(newItems);
-        _applyFilter();
+        _syncGroupedMonths();
         _nextCursor = result['data']['next_cursor']?.toString();
         _hasMore = result['data']['next_cursor'] != null;
         _isLoading = false;
@@ -179,9 +185,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
     setState(() {
       _searchKeyword = '';
       _filter = TransactionFilterCriteria.empty;
-      _applyFilter();
     });
-    _fetchMore(reset: true);
+    _fetchMore(reset: true, clearCurrent: true);
   }
 
   Future<void> _fetchSummary() async {
@@ -200,150 +205,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
       final trimmed = value.trim().toLowerCase();
       if (_searchKeyword == trimmed) return;
       _searchKeyword = trimmed;
-      _applyFilter();
-      _fetchMore(reset: true);
+      _fetchMore(reset: true, clearCurrent: true);
     });
-  }
-
-  static String _removeDiacritics(String str) {
-    var withDia = 'áàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ';
-    var noDia   = 'aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyydAAAAAAAAAAAAAAAAAEEEEEEEEEEEIIIIIOOOOOOOOOOOOOOOOOUUUUUUUUUUUYYYYYD';
-    var result = str;
-    for (int i = 0; i < withDia.length; i++) {
-      result = result.replaceAll(withDia[i], noDia[i]);
-    }
-    return result;
-  }
-
-  void _applyFilter() {
-    Iterable<TransactionModel> items = _allTransactions;
-
-    if (_filter.hasService) {
-      if (_filter.transactionType == 'REFUND') {
-        items = items.where(
-          (t) => t.type == 'REFUND' || t.postpaidAction == 'REFUND',
-        );
-      } else if (_filter.transactionType == 'TRANSFER') {
-        items = items.where(
-          (t) => t.type == 'TRANSFER' && t.postpaidAction != 'REFUND',
-        );
-      } else {
-        items = items.where((t) => t.type == _filter.transactionType);
-      }
-    }
-
-    if (_filter.direction != null && _filter.direction!.isNotEmpty) {
-      items = items.where((t) => t.direction == _filter.direction);
-    }
-
-    if (_filter.hasFundingSource) {
-      if (_filter.fundingSource == 'POSTPAID') {
-        items = items.where((t) => t.fundingSource == 'POSTPAID');
-      } else {
-        items = items.where((t) => t.fundingSource != 'POSTPAID');
-      }
-    }
-
-    if (_filter.hasStatus) {
-      items = items.where((t) => t.status.toUpperCase() == _filter.status);
-    }
-
-    if (_filter.minAmount != null) {
-      items = items.where((t) => t.amount >= _filter.minAmount!);
-    }
-
-    if (_filter.maxAmount != null) {
-      items = items.where((t) => t.amount <= _filter.maxAmount!);
-    }
-
-    if (_searchKeyword.isNotEmpty) {
-      final cleanKeyword = _removeDiacritics(_searchKeyword);
-      items = items.where((t) {
-        final desc = (t.description ?? '').toLowerCase();
-        final name = t.counterpartyName.toLowerCase();
-        final bank = t.bankName.toLowerCase();
-        final phone = t.counterpartyPhone.toLowerCase();
-        final idStr = t.id.toString();
-        final orderId = (t.orderId ?? '').toLowerCase();
-
-        String typeDisplay = '';
-        if (t.type == 'TOPUP') {
-          typeDisplay =
-              'nạp tiền nạp tiền vào ví nạp từ $bank nạp tiền từ $bank topup';
-        } else if (t.type == 'WITHDRAW') {
-          typeDisplay =
-              'rút tiền rút tiền từ ví rút về $bank rút tiền về $bank withdraw';
-        } else if (t.type == 'TRANSFER') {
-          typeDisplay = t.direction == 'OUT'
-              ? 'chuyển tiền chuyển đến $name transfer'
-              : 'nhận tiền nhận từ $name transfer';
-        } else if (t.type == 'PAYMENT') {
-          if (t.fundingSource == 'POSTPAID') {
-            typeDisplay =
-                'ví trả sau thanh toán dư nợ phí dịch vụ phí trễ hạn thanh toán phí dịch vụ ví trả sau postpaid payment';
-          } else {
-            typeDisplay = 'thanh toán $name payment';
-          }
-        } else if (t.type == 'REFUND') {
-          typeDisplay =
-              'hoàn tiền hoàn tiền từ $name hoàn từ $name hoàn tiền giao dịch ${t.fundingSource == 'POSTPAID' ? 'ví trả sau ' : ''}refund';
-        }
-
-        final statusKeywords = t.isFailed
-            ? 'thất bại failed loi error'
-            : (t.isPending
-                ? 'đang xử lý pending'
-                : 'thành công completed');
-
-        final combined =
-            '$desc $name $bank $phone $idStr $orderId $typeDisplay $statusKeywords';
-        final combinedClean = _removeDiacritics(combined);
-
-        return combined.contains(_searchKeyword) ||
-            combinedClean.contains(cleanKeyword);
-      });
-    }
-
-    if (_filter.hasDateRange) {
-      final start = DateTime(
-        _filter.startDate!.year,
-        _filter.startDate!.month,
-        _filter.startDate!.day,
-      );
-      final end = DateTime(
-        _filter.endDate!.year,
-        _filter.endDate!.month,
-        _filter.endDate!.day,
-        23,
-        59,
-        59,
-      );
-      items = items.where(
-        (t) =>
-            t.createdAt.isAfter(start.subtract(const Duration(seconds: 1))) &&
-            t.createdAt.isBefore(end.add(const Duration(seconds: 1))),
-      );
-    }
-
-    _filteredTransactions = items.toList();
-    _syncGroupedMonths();
   }
 
   void _syncGroupedMonths() {
     final Map<String, List<_PreparedTransaction>> grouped = {};
-    for (final t in _filteredTransactions) {
+    for (final t in _allTransactions) {
       final key = 'Tháng ${t.createdAt.month}/${t.createdAt.year}';
       grouped
           .putIfAbsent(key, () => [])
           .add(_PreparedTransaction.fromModel(t, _tileBadgeBaseStyle));
     }
     _groupedMonths = grouped.entries.toList(growable: false);
-    _preparedSource = _filteredTransactions;
+    _preparedSource = _allTransactions;
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!identical(_preparedSource, _filteredTransactions)) {
+    if (!identical(_preparedSource, _allTransactions)) {
       _syncGroupedMonths();
     }
     final groupedMonths = _groupedMonths;
@@ -531,7 +411,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ),
                     if (!_filter.isEmpty)
                       SliverToBoxAdapter(child: _buildActiveFilterChips()),
-                    if (_filteredTransactions.isEmpty && !_isLoading)
+                    if (_allTransactions.isEmpty && !_isLoading)
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
@@ -764,7 +644,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     if (_filter.hasDateRange) {
       chips.add(
-        _activeFilterChip(
+        HistoryActiveFilterChip(
           icon: Iconsax.calendar_1,
           label:
               '${fmt.format(_filter.startDate!)} - ${fmt.format(_filter.endDate!)}',
@@ -781,7 +661,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ? '${FormatUtils.formatDisplayNumber(_filter.maxAmount!)}đ'
           : 'Không giới hạn';
       chips.add(
-        _activeFilterChip(
+        HistoryActiveFilterChip(
           icon: Iconsax.money_2,
           label: '$fromText - $toText',
           onDeleted: () => _updateFilter(_filter.copyWith(clearAmount: true)),
@@ -793,7 +673,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         TransactionFilterScreen.labelForAccount(_filter.fundingSource);
     if (accLabel != null) {
       chips.add(
-        _activeFilterChip(
+        HistoryActiveFilterChip(
           icon: Iconsax.wallet_2,
           label: accLabel,
           onDeleted: () =>
@@ -808,7 +688,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
     if (svcLabel != null) {
       chips.add(
-        _activeFilterChip(
+        HistoryActiveFilterChip(
           icon: Iconsax.category_2,
           label: svcLabel,
           onDeleted: () => _updateFilter(_filter.copyWith(clearService: true)),
@@ -819,7 +699,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final stLabel = TransactionFilterScreen.labelForStatus(_filter.status);
     if (stLabel != null) {
       chips.add(
-        _activeFilterChip(
+        HistoryActiveFilterChip(
           icon: Iconsax.tick_circle,
           label: stLabel,
           onDeleted: () => _updateFilter(_filter.copyWith(clearStatus: true)),
@@ -830,31 +710,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
       child: Wrap(spacing: 8, runSpacing: 6, children: chips),
-    );
-  }
-
-  Widget _activeFilterChip({
-    required IconData icon,
-    required String label,
-    required VoidCallback onDeleted,
-  }) {
-    return Chip(
-      avatar: Icon(icon, size: 15, color: _kPink),
-      label: Text(
-        label,
-        style: GoogleFonts.roboto(
-          fontSize: 12.5,
-          color: _kPinkDark,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-      backgroundColor: _kPink.withValues(alpha: 0.1),
-      side: BorderSide.none,
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      visualDensity: VisualDensity.compact,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      deleteIcon: const Icon(Icons.close, size: 15, color: _kPinkDark),
-      onDeleted: onDeleted,
     );
   }
 
@@ -969,9 +824,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
     _unfocusSearch();
     setState(() {
       _filter = next;
-      _applyFilter();
     });
-    _fetchMore(reset: true);
+    _fetchMore(reset: true, clearCurrent: true);
   }
 
   Future<void> _openFilterScreen() async {

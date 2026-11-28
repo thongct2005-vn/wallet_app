@@ -44,6 +44,8 @@ class ApiConfig {
   static const String postpaidUnfreeze = '$baseUrl/postpaid/unfreeze';
   static const String postpaidClose = '$baseUrl/postpaid/close';
   static const String postpaidEntries = '$baseUrl/postpaid/entries';
+  static const String postpaidExportEmail =
+      '$baseUrl/postpaid/entries/export-email';
   static const String postpaidRepay = '$baseUrl/postpaid/repay';
   static const String postpaidUnlockRequests = '$baseUrl/postpaid/unlock-requests';
   static const String postpaidLatestUnlockRequest =

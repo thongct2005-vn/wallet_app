@@ -1,12 +1,18 @@
 import 'dart:async';
+import 'package:app/core/utils/dialog_utils.dart';
+import 'package:app/core/utils/format_utils.dart';
+import 'package:app/core/utils/snackbar_utils.dart';
 import 'package:app/core/widgets/date_range_picker_sheet.dart';
+import 'package:app/core/widgets/history_filter_widgets.dart';
 import 'package:app/src/postpaid/postpaid_entry_widgets.dart';
+import 'package:app/src/postpaid/postpaid_filter_screen.dart';
 import 'package:app/src/services/postpaid_service.dart';
 import 'package:app/src/transfer/transfer_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_sticky_header/flutter_sticky_header.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:intl/intl.dart';
 
 class PostpaidEntriesScreen extends StatefulWidget {
   const PostpaidEntriesScreen({super.key});
@@ -23,62 +29,17 @@ class _PostpaidEntriesScreenState extends State<PostpaidEntriesScreen> {
   Timer? _debounce;
 
   final List<Map<String, dynamic>> _allEntries = [];
-  List<Map<String, dynamic>> _filteredEntries = [];
   List<Map<String, dynamic>>? _preparedSource;
   List<MapEntry<String, List<Map<String, dynamic>>>> _groupedMonths = const [];
 
   String? _nextCursor;
   bool _isLoading = false;
   bool _hasMore = true;
+  bool _isExporting = false;
   String? _errorMsg;
   String _searchKeyword = '';
-  String? _selectedAction;
-  DateTime? _startDate;
-  DateTime? _endDate;
+  PostpaidFilterCriteria _filter = PostpaidFilterCriteria.empty;
   int _fetchGeneration = 0;
-
-  static const List<_EntryActionFilter> _actionFilters = [
-    _EntryActionFilter(
-      action: null,
-      label: 'Tất cả',
-      icon: Iconsax.receipt_item5,
-    ),
-    _EntryActionFilter(
-      action: 'PURCHASE',
-      label: 'Thanh toán',
-      icon: Icons.credit_score_rounded,
-    ),
-    _EntryActionFilter(
-      action: 'REPAY',
-      label: 'Trả nợ',
-      icon: Icons.account_balance_wallet_rounded,
-    ),
-    _EntryActionFilter(
-      action: 'REFUND',
-      label: 'Hoàn tiền',
-      icon: Iconsax.money_change5,
-    ),
-    _EntryActionFilter(
-      action: 'SERVICE_FEE',
-      label: 'Phí dịch vụ',
-      icon: Icons.receipt_long_rounded,
-    ),
-    _EntryActionFilter(
-      action: 'LATE_FEE',
-      label: 'Phí trễ hạn',
-      icon: Icons.event_busy_rounded,
-    ),
-    _EntryActionFilter(
-      action: 'STATEMENT_CLOSE',
-      label: 'Chốt sao kê',
-      icon: Icons.event_note_rounded,
-    ),
-    _EntryActionFilter(
-      action: 'LIMIT_ADJUST',
-      label: 'Điều chỉnh HM',
-      icon: Icons.tune_rounded,
-    ),
-  ];
 
   @override
   void initState() {
@@ -108,11 +69,9 @@ class _PostpaidEntriesScreenState extends State<PostpaidEntriesScreen> {
   }
 
   bool get _hasActiveFilters =>
-      _selectedAction != null ||
-      _searchKeyword.isNotEmpty ||
-      (_startDate != null && _endDate != null);
+      _searchKeyword.isNotEmpty || !_filter.isEmpty;
 
-  Future<void> _fetchMore({bool reset = false}) async {
+  Future<void> _fetchMore({bool reset = false, bool clearCurrent = false}) async {
     if (!reset && _isLoading) return;
     if (reset) {
       _hasMore = true;
@@ -123,6 +82,10 @@ class _PostpaidEntriesScreenState extends State<PostpaidEntriesScreen> {
 
     final int generation = ++_fetchGeneration;
     setState(() {
+      if (clearCurrent) {
+        _allEntries.clear();
+        _syncGroupedMonths();
+      }
       _isLoading = true;
       _errorMsg = null;
     });
@@ -131,9 +94,12 @@ class _PostpaidEntriesScreenState extends State<PostpaidEntriesScreen> {
       cursorId: _nextCursor,
       limit: 20,
       keyword: _searchKeyword.isEmpty ? null : _searchKeyword,
-      action: _selectedAction,
-      startDate: _startDate,
-      endDate: _endDate,
+      action: _filter.action,
+      direction: _filter.deltaDirection,
+      minAmount: _filter.minAmount,
+      maxAmount: _filter.maxAmount,
+      startDate: _filter.startDate,
+      endDate: _filter.endDate,
     );
 
     if (!mounted || generation != _fetchGeneration) return;
@@ -150,7 +116,7 @@ class _PostpaidEntriesScreenState extends State<PostpaidEntriesScreen> {
           _allEntries.clear();
         }
         _allEntries.addAll(newItems);
-        _applyFilter();
+        _syncGroupedMonths();
         _nextCursor = result['data']['next_cursor']?.toString();
         _hasMore = result['data']['next_cursor'] != null;
         _isLoading = false;
@@ -159,7 +125,7 @@ class _PostpaidEntriesScreenState extends State<PostpaidEntriesScreen> {
       setState(() {
         if (reset) {
           _allEntries.clear();
-          _applyFilter();
+          _syncGroupedMonths();
         }
         _isLoading = false;
         _errorMsg =
@@ -168,27 +134,14 @@ class _PostpaidEntriesScreenState extends State<PostpaidEntriesScreen> {
     }
   }
 
-  void _selectActionFilter(_EntryActionFilter filter) {
-    _unfocusSearch();
-    if (_selectedAction == filter.action) return;
-    setState(() {
-      _selectedAction = filter.action;
-      _applyFilter();
-    });
-    _fetchMore(reset: true);
-  }
-
   void _clearAllFilters() {
     _unfocusSearch();
     _searchController.clear();
     setState(() {
       _searchKeyword = '';
-      _selectedAction = null;
-      _startDate = null;
-      _endDate = null;
-      _applyFilter();
+      _filter = PostpaidFilterCriteria.empty;
     });
-    _fetchMore(reset: true);
+    _fetchMore(reset: true, clearCurrent: true);
   }
 
   void _onSearchChanged(String value) {
@@ -197,94 +150,13 @@ class _PostpaidEntriesScreenState extends State<PostpaidEntriesScreen> {
       final trimmed = value.trim().toLowerCase();
       if (_searchKeyword == trimmed) return;
       _searchKeyword = trimmed;
-      _applyFilter();
-      _fetchMore(reset: true);
+      _fetchMore(reset: true, clearCurrent: true);
     });
-  }
-
-  static String _formatDateLabel(DateTime d) =>
-      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
-
-  static bool _isSameCalendarDate(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
-
-  bool _matchesActionFilter(String entryAction) {
-    if (_selectedAction == null || _selectedAction!.isEmpty) return true;
-    if (_selectedAction == 'REPAY') {
-      return entryAction == 'REPAY_PRINCIPAL' ||
-          entryAction == 'REPAY_SERVICE_FEE' ||
-          entryAction == 'REPAY_LATE_FEE';
-    }
-    return entryAction == _selectedAction;
-  }
-
-  void _applyFilter() {
-    Iterable<Map<String, dynamic>> items = _allEntries;
-
-    if (_selectedAction != null && _selectedAction!.isNotEmpty) {
-      items = items.where(
-        (e) => _matchesActionFilter((e['action'] ?? '').toString()),
-      );
-    }
-
-    if (_searchKeyword.isNotEmpty) {
-      final cleanKeyword = removePostpaidDiacritics(_searchKeyword);
-      final isTimeOrCycleQuery =
-          _searchKeyword.contains('/') ||
-          _searchKeyword.contains(':') ||
-          _searchKeyword.contains('-');
-      items = items.where((e) {
-        final action = (e['action'] ?? '').toString().toLowerCase();
-        final actionLabel = (e['action_label'] ?? '').toString().toLowerCase();
-        final note = (e['note'] ?? '').toString().toLowerCase();
-        final counterparty =
-            (e['counterparty_name'] ?? '').toString().toLowerCase();
-        final txId = (e['tx_id'] ?? '').toString().toLowerCase();
-        final refTxId = (e['ref_tx_id'] ?? '').toString().toLowerCase();
-        final orderId = (e['order_id'] ?? '').toString().toLowerCase();
-        final cycleMonth = (e['cycle_month'] ?? '').toString().toLowerCase();
-        final cycleDisplay = formatPostpaidCycleMonth(cycleMonth);
-        final cycleDash = cycleDisplay.replaceAll('/', '-');
-        final amountStr = (e['amount'] ?? '').toString();
-        final title = buildPostpaidEntryTitle(e).toLowerCase();
-        final timeStr = isTimeOrCycleQuery
-            ? formatPostpaidEntryTime(e['created_at']?.toString()).toLowerCase()
-            : '';
-
-        final combined =
-            '$action $actionLabel $note $counterparty $txId $refTxId $orderId $cycleMonth $cycleDisplay $cycleDash $amountStr $title $timeStr';
-        final combinedClean = removePostpaidDiacritics(combined);
-        return combined.contains(_searchKeyword) ||
-            combinedClean.contains(cleanKeyword);
-      });
-    }
-
-    if (_startDate != null && _endDate != null) {
-      // Compare in UTC wall-clock domain to match parsePostpaidVnDate (UTC+7).
-      final start = DateTime.utc(
-        _startDate!.year,
-        _startDate!.month,
-        _startDate!.day,
-      );
-      final endExclusive = DateTime.utc(
-        _endDate!.year,
-        _endDate!.month,
-        _endDate!.day + 1,
-      );
-      items = items.where((e) {
-        final vnDate = parsePostpaidVnDate(e['created_at']?.toString());
-        if (vnDate == null) return false;
-        return !vnDate.isBefore(start) && vnDate.isBefore(endExclusive);
-      });
-    }
-
-    _filteredEntries = items.toList();
-    _syncGroupedMonths();
   }
 
   void _syncGroupedMonths() {
     final Map<String, List<Map<String, dynamic>>> grouped = {};
-    for (final entry in _filteredEntries) {
+    for (final entry in _allEntries) {
       final vnDate = parsePostpaidVnDate(entry['created_at']?.toString());
       final key = vnDate != null
           ? 'Tháng ${vnDate.month}/${vnDate.year}'
@@ -292,48 +164,99 @@ class _PostpaidEntriesScreenState extends State<PostpaidEntriesScreen> {
       grouped.putIfAbsent(key, () => []).add(entry);
     }
     _groupedMonths = grouped.entries.toList(growable: false);
-    _preparedSource = _filteredEntries;
+    _preparedSource = _allEntries;
   }
 
-  Future<void> _showDateFilterDialog() async {
+  void _updateFilter(PostpaidFilterCriteria next) {
     _unfocusSearch();
-    final vnNow = DateTime.now().toUtc().add(const Duration(hours: 7));
-    final today = DateTime(vnNow.year, vnNow.month, vnNow.day);
-    final oneYearAgo = DateTime(vnNow.year - 1, vnNow.month, vnNow.day);
+    setState(() {
+      _filter = next;
+    });
+    _fetchMore(reset: true, clearCurrent: true);
+  }
 
-    final result = await DateRangePickerSheet.show(
+  Future<void> _openFilterScreen() async {
+    _unfocusSearch();
+    final result = await Navigator.push<PostpaidFilterCriteria>(
       context,
-      title: 'Lọc theo ngày',
-      confirmText: 'Áp dụng',
-      firstDate: oneYearAgo,
-      lastDate: today,
-      initialRange: _startDate != null && _endDate != null
-          ? DateTimeRange(start: _startDate!, end: _endDate!)
-          : null,
+      MaterialPageRoute(
+        builder: (_) => PostpaidFilterScreen(initialCriteria: _filter),
+      ),
     );
 
-    if (result != null) {
-      setState(() {
-        _startDate = result.start;
-        _endDate = result.end;
-        _applyFilter();
-      });
-      _fetchMore(reset: true);
+    if (result != null && mounted) {
+      _updateFilter(result);
     }
   }
 
-  void _clearDateFilter() {
-    setState(() {
-      _startDate = null;
-      _endDate = null;
-      _applyFilter();
-    });
-    _fetchMore(reset: true);
+  // ===== Xuất Excel =====
+
+  Future<void> _exportExcel() async {
+    _unfocusSearch();
+    if (_isExporting) return;
+
+    final vnNow = DateTime.now().toUtc().add(const Duration(hours: 7));
+    final today = DateTime(vnNow.year, vnNow.month, vnNow.day);
+
+    final range = await DateRangePickerSheet.show(
+      context,
+      title: 'Xuất lịch sử biến động',
+      confirmText: 'Tiếp tục',
+      firstDate: DateTime(vnNow.year - 1, vnNow.month, vnNow.day),
+      lastDate: today,
+      initialRange: _filter.hasDateRange
+          ? DateTimeRange(start: _filter.startDate!, end: _filter.endDate!)
+          : DateTimeRange(
+              start: DateTime(today.year, today.month, 1),
+              end: today,
+            ),
+    );
+    if (range == null || !mounted) return;
+
+    final fmt = DateFormat('dd/MM/yyyy');
+    await DialogUtils.showConfirmation(
+      context,
+      title: 'Xuất file Excel',
+      message:
+          'Bạn có muốn nhận file Excel lịch sử biến động Ví trả sau từ ngày ${fmt.format(range.start)} đến ngày ${fmt.format(range.end)} qua email đã liên kết không?',
+      confirmText: 'Gửi file',
+      onConfirm: () => _sendExportEmail(range),
+    );
+  }
+
+  void _sendExportEmail(DateTimeRange range) {
+    if (!mounted || _isExporting) return;
+    _isExporting = true;
+
+    DialogUtils.showNotification(
+      context,
+      title: 'Đã tiếp nhận yêu cầu',
+      message:
+          'Hệ thống sẽ gửi file Excel lịch sử biến động Ví trả sau qua email đã liên kết của bạn. Vui lòng kiểm tra hộp thư (bao gồm cả mục thư rác).',
+    );
+
+    unawaited(
+      _postpaidService
+          .exportEntriesToEmail(startDate: range.start, endDate: range.end)
+          .then((result) {
+            if (!mounted) return;
+            if (result['is_success'] != true) {
+              SnackbarUtils.failure(
+                context,
+                result['message']?.toString() ??
+                    'Không gửi được file, vui lòng thử lại',
+              );
+            }
+          })
+          .whenComplete(() {
+            _isExporting = false;
+          }),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!identical(_preparedSource, _filteredEntries)) {
+    if (!identical(_preparedSource, _allEntries)) {
       _syncGroupedMonths();
     }
     final groupedMonths = _groupedMonths;
@@ -437,9 +360,15 @@ class _PostpaidEntriesScreenState extends State<PostpaidEntriesScreen> {
                 const SizedBox(width: 10),
                 _appBarCircleButton(
                   icon: Iconsax.filter,
-                  tooltip: 'Lọc theo ngày',
-                  onPressed: _showDateFilterDialog,
-                  hasBadge: _startDate != null && _endDate != null,
+                  tooltip: 'Bộ lọc biến động',
+                  onPressed: _openFilterScreen,
+                  badgeCount: _filter.activeCount,
+                ),
+                const SizedBox(width: 8),
+                _appBarCircleButton(
+                  icon: Icons.file_download_outlined,
+                  tooltip: 'Xuất Excel',
+                  onPressed: _exportExcel,
                 ),
               ],
             ),
@@ -476,13 +405,7 @@ class _PostpaidEntriesScreenState extends State<PostpaidEntriesScreen> {
                   slivers: [
                     SliverToBoxAdapter(
                       child: Padding(
-                        padding: const EdgeInsets.only(top: 10, bottom: 12),
-                        child: _buildActionFilterBar(),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 2, 16, 8),
+                        padding: const EdgeInsets.fromLTRB(20, 12, 16, 8),
                         child: Row(
                           children: [
                             Container(
@@ -530,52 +453,9 @@ class _PostpaidEntriesScreenState extends State<PostpaidEntriesScreen> {
                         ),
                       ),
                     ),
-                    if (_startDate != null && _endDate != null)
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 4,
-                          ),
-                          child: Row(
-                            children: [
-                              Flexible(
-                                child: Chip(
-                                  avatar: const Icon(
-                                    Iconsax.calendar_1,
-                                    size: 16,
-                                    color: kPostpaidPink,
-                                  ),
-                                  label: Text(
-                                    _isSameCalendarDate(_startDate!, _endDate!)
-                                        ? _formatDateLabel(_startDate!)
-                                        : '${_formatDateLabel(_startDate!)} - ${_formatDateLabel(_endDate!)}',
-                                    overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.roboto(
-                                      fontSize: 13,
-                                      color: kPostpaidPinkDark,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  backgroundColor:
-                                      kPostpaidPink.withValues(alpha: 0.1),
-                                  side: BorderSide.none,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  deleteIcon: const Icon(
-                                    Icons.close,
-                                    size: 16,
-                                    color: kPostpaidPinkDark,
-                                  ),
-                                  onDeleted: _clearDateFilter,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    if (_errorMsg != null && _filteredEntries.isEmpty && !_isLoading)
+                    if (!_filter.isEmpty)
+                      SliverToBoxAdapter(child: _buildActiveFilterChips()),
+                    if (_errorMsg != null && _allEntries.isEmpty && !_isLoading)
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
@@ -617,7 +497,7 @@ class _PostpaidEntriesScreenState extends State<PostpaidEntriesScreen> {
                           ),
                         ),
                       )
-                    else if (_filteredEntries.isEmpty && !_isLoading)
+                    else if (_allEntries.isEmpty && !_isLoading)
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
@@ -734,88 +614,64 @@ class _PostpaidEntriesScreenState extends State<PostpaidEntriesScreen> {
     );
   }
 
-  Widget _buildActionFilterBar() {
-    return SizedBox(
-      height: 44,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _actionFilters.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final item = _actionFilters[index];
-          final isSelected = _selectedAction == item.action;
-          final visual = item.action == null
-              ? null
-              : PostpaidEntryVisualStyle.fromAction(
-                  item.action == 'REPAY' ? 'REPAY_PRINCIPAL' : item.action!,
-                );
-          final Color accent = visual?.accentColor ?? kPostpaidPinkDark;
-          final Gradient? gradient = isSelected
-              ? (visual?.gradient ??
-                    const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFFF06292), kPostpaidPinkDark],
-                    ))
-              : null;
+  Widget _buildActiveFilterChips() {
+    final fmt = DateFormat('dd/MM/yyyy');
+    final chips = <Widget>[];
 
-          return Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => _selectActionFilter(item),
-              borderRadius: BorderRadius.circular(22),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 9,
-                ),
-                decoration: BoxDecoration(
-                  gradient: gradient,
-                  color: isSelected ? null : Colors.white,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(
-                    color: isSelected
-                        ? Colors.transparent
-                        : const Color(0xFFEDE2E8),
-                    width: 1,
-                  ),
-                  boxShadow: isSelected
-                      ? [
-                          BoxShadow(
-                            color: accent.withValues(alpha: 0.28),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      item.icon,
-                      size: 16,
-                      color: isSelected ? Colors.white : accent,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      item.label,
-                      style: GoogleFonts.roboto(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                        color: isSelected ? Colors.white : kPostpaidText,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
+    if (_filter.hasDateRange) {
+      chips.add(
+        HistoryActiveFilterChip(
+          icon: Iconsax.calendar_1,
+          label:
+              '${fmt.format(_filter.startDate!)} - ${fmt.format(_filter.endDate!)}',
+          onDeleted: () => _updateFilter(_filter.copyWith(clearDate: true)),
+        ),
+      );
+    }
+
+    if (_filter.hasAmountRange) {
+      final fromText = _filter.minAmount != null
+          ? '${FormatUtils.formatDisplayNumber(_filter.minAmount!)}đ'
+          : '0đ';
+      final toText = _filter.maxAmount != null
+          ? '${FormatUtils.formatDisplayNumber(_filter.maxAmount!)}đ'
+          : 'Không giới hạn';
+      chips.add(
+        HistoryActiveFilterChip(
+          icon: Iconsax.money_2,
+          label: '$fromText - $toText',
+          onDeleted: () => _updateFilter(_filter.copyWith(clearAmount: true)),
+        ),
+      );
+    }
+
+    final dirLabel =
+        PostpaidFilterScreen.labelForDirection(_filter.deltaDirection);
+    if (dirLabel != null) {
+      chips.add(
+        HistoryActiveFilterChip(
+          icon: Icons.swap_vert_rounded,
+          label: dirLabel,
+          onDeleted: () =>
+              _updateFilter(_filter.copyWith(clearDeltaDirection: true)),
+        ),
+      );
+    }
+
+    final actionLabel = PostpaidFilterScreen.labelForAction(_filter.action);
+    if (actionLabel != null) {
+      chips.add(
+        HistoryActiveFilterChip(
+          icon: Iconsax.category_2,
+          label: actionLabel,
+          onDeleted: () => _updateFilter(_filter.copyWith(clearAction: true)),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+      child: Wrap(spacing: 8, runSpacing: 6, children: chips),
     );
   }
 
@@ -870,7 +726,7 @@ class _PostpaidEntriesScreenState extends State<PostpaidEntriesScreen> {
     required String tooltip,
     required VoidCallback onPressed,
     double iconSize = 21,
-    bool hasBadge = false,
+    int badgeCount = 0,
   }) {
     return Stack(
       clipBehavior: Clip.none,
@@ -893,37 +749,41 @@ class _PostpaidEntriesScreenState extends State<PostpaidEntriesScreen> {
             padding: EdgeInsets.zero,
             tooltip: tooltip,
             onPressed: onPressed,
-            icon: Icon(icon, size: iconSize, color: kPostpaidText),
+            icon: Icon(
+              icon,
+              size: iconSize,
+              color: badgeCount > 0 ? kPostpaidPinkDark : kPostpaidText,
+            ),
           ),
         ),
-        if (hasBadge)
+        if (badgeCount > 0)
           Positioned(
-            right: 2,
-            top: 2,
-            child: Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: kPostpaidPinkDark,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 1.5),
+            right: -2,
+            top: -2,
+            child: IgnorePointer(
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: kPostpaidPinkDark,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  '$badgeCount',
+                  style: GoogleFonts.roboto(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    height: 1.0,
+                  ),
+                ),
               ),
             ),
           ),
       ],
     );
   }
-}
-
-class _EntryActionFilter {
-  final String? action;
-  final String label;
-  final IconData icon;
-
-  const _EntryActionFilter({
-    required this.action,
-    required this.label,
-    required this.icon,
-  });
 }
 
